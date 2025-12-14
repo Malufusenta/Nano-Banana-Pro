@@ -30,6 +30,9 @@ IGNORED_TEXTS = [
     "📸 Примеры работ", "👤 Профиль", "👤 Мой профиль", "💬 Поддержка",
     "🍌 Купить бананы", "Фарминг🍌", "ℹ️ О нас", "ℹ️ Что умеет бот?",
     "/start", "/help", "/admin", "/stats", "/clear"
+    # 👇 КОМАНДЫ БОКОВОГО МЕНЮ
+    "/start", "/help", "/admin", "/stats", "/clear",
+    "/profile", "/free", "/about", "/support", "/guide"
 ]
 
 class GenState(StatesGroup):

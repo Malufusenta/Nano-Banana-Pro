@@ -46,6 +46,7 @@ def get_banana_suffix(count):
 # 🎁 РАЗДЕЛ ХАЛЯВЫ (Обновленный текст)
 # =====================================================================
 @router.message(F.text == "Заработать🍌")
+@router.message(Command("free")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def show_freebies(message: types.Message, bot: Bot):
     user_id = message.from_user.id
     bot_info = await bot.me()
@@ -327,6 +328,7 @@ async def show_profile(message: types.Message):
 # 👇 ЗАМЕНИТЬ ФУНКЦИЮ cmd_guide НА ЭТУ 👇
 
 @router.message(F.text == "ℹ️ О нас") 
+@router.message(Command("about")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def cmd_about(message: types.Message):
     text = (
         "ℹ️ <b>О сервисе Nano Banana Pro</b>\n"
@@ -414,6 +416,7 @@ async def process_successful_payment(message: types.Message, bot: Bot):
 # 👇 ВСТАВИТЬ ЭТУ ФУНКЦИЮ В app/handlers/payment.py (ВМЕСТО СТАРОЙ cmd_guide)
 
 @router.message(F.text == "📚 Гайд") 
+@router.message(Command("guide")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def cmd_guide(message: types.Message):
     # Твой новый ID картинки
     guide_image_id = "AgACAgIAAxkBAAINf2k-n4BsQHY-hpG5xWHmjyDS878NAAI4C2sbbRj4Sbbtx_VnA3xWAQADAgADeAADNgQ" 
@@ -485,6 +488,7 @@ async def cmd_guide(message: types.Message):
 
     # 👇 ОБРАБОТЧИК КНОПКИ "ПОДДЕРЖКА"
 @router.message(F.text == "💬 Поддержка")
+@router.message(Command("support")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def cmd_support(message: types.Message):
     text = (
         "💬 <b>Возникли вопросы или проблемы?</b>\n\n"
