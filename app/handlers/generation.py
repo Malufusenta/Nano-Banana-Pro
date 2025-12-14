@@ -416,6 +416,25 @@ async def cmd_start_creating(message: types.Message, state: FSMContext):
     )
     await message.answer(text, parse_mode="Markdown")
 
+    # 👇 ВСТАВИТЬ ЭТО ПОСЛЕ cmd_start_creating 👇
+
+@router.callback_query(F.data == "start_creation_from_guide")
+async def cb_start_from_guide(callback: types.CallbackQuery, state: FSMContext):
+    """Запуск режима творчества из кнопки Гайда"""
+    await callback.answer()
+    
+    # 1. Включаем режим
+    await state.set_state(GenState.free_mode)
+    
+    # 2. Шлем то же самое сообщение, что и в главном меню
+    text = (
+        "**Я готов творить!**\n"
+        "Напиши, что создать, или пришли **от 1 до 4 фото**, которые нужно изменить или объединить 👇"
+    )
+    await callback.message.answer(text, parse_mode="Markdown")
+
+# 👆 КОНЕЦ ВСТАВКИ 👆
+
     # 👇 ВСТАВИТЬ ЭТОТ БЛОК ПЕРЕД handle_free_text 👇
 
 @router.message(StateFilter(GenState.preflight_check, GenState.selecting_ratio), F.text)
