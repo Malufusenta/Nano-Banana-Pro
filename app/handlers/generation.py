@@ -695,7 +695,6 @@ async def handle_edit_instruction(message: types.Message, state: FSMContext, bot
         await state.clear()
         return
     
-    await message.answer("🎨 Принято! Открываю настройки...")
     await start_preflight_check(message, state, instruction, [img_url])
 
 # =====================================================================
