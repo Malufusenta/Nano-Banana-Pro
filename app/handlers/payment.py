@@ -410,3 +410,29 @@ async def process_successful_payment(message: types.Message, bot: Bot):
         f"Спасибо за покупку! 🎨",
         parse_mode="HTML"
     )
+
+    # 👇 ОБРАБОТЧИК КНОПКИ "ГАЙД"
+@router.message(F.text == "📚 Гайд") 
+async def cmd_guide(message: types.Message):
+    text = (
+        "📚 <b>Как создавать шедевры?</b>\n\n"
+        "Пришлите текст или фото от 1 до 4 с вашим запросом.\n\n"
+        "💡 <i>Совет: Чем подробнее описание, тем круче результат!</i>"
+    )
+    
+    # Кнопка со ссылкой на полный гайд
+    builder = InlineKeyboardBuilder()
+    # Замени ссылку на свою (Telegraph или пост в канале)
+    builder.button(text="📖 Читать полный гайд", url="https://t.me/nanobanana_ai") 
+    
+    await message.answer(text, parse_mode="HTML", reply_markup=builder.as_markup())
+
+    # 👇 ОБРАБОТЧИК КНОПКИ "ПОДДЕРЖКА"
+@router.message(F.text == "💬 Поддержка")
+async def cmd_support(message: types.Message):
+    text = (
+        "💬 <b>Возникли вопросы или проблемы?</b>\n\n"
+        "Напишите нам, мы поможем:\n"
+        "@nan0banana_help"
+    )
+    await message.answer(text, parse_mode="HTML")

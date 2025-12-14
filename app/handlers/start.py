@@ -21,10 +21,16 @@ def get_banana_word(n: int) -> str:
 
 # 👇 МЕНЮ
 def get_main_kb():
+    # 👇 ВСТАВЬ ЭТО ВНУТРЬ get_main_kb
     kb = [
+        # Ряд 1: Самая главная
         [KeyboardButton(text="✨ Начать творить")],
+        
+        # Ряд 2: Коммерция и Личное
         [KeyboardButton(text="🍌 Купить бананы"), KeyboardButton(text="👤 Профиль")],
-        [KeyboardButton(text="Заработать🍌"), KeyboardButton(text="ℹ️ О нас")]
+        
+        # Ряд 3: Помощь и Обучение
+        [KeyboardButton(text="📚 Гайд"), KeyboardButton(text="💬 Поддержка")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, input_field_placeholder="Пиши сюда ")
 
