@@ -39,37 +39,53 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     await state.clear()
     user_id = message.from_user.id
     
-    # 1. ПРОВЕРЯЕМ РЕФЕРАЛЬНУЮ ССЫЛКУ
+    # 🕵️‍♂️ ОПРЕДЕЛЯЕМ ИСТОЧНИК (DeepLink)
     referrer_id = None
-    args = command.args
-    if args and args.isdigit():
-        possible_ref = int(args)
-        if possible_ref != user_id:
-            referrer_id = possible_ref
+    source = None
+    args = command.args # То, что написано после ?start=
+    
+    if args:
+        # Вариант А: Это ЦИФРЫ -> значит ID друга (Рефералка)
+        if args.isdigit():
+            possible_ref = int(args)
+            if possible_ref != user_id: # Нельзя пригласить самого себя
+                referrer_id = possible_ref
+                source = "ref_friend" 
+        # Вариант Б: Это ТЕКСТ -> значит Рекламная метка (например: mts_ads)
+        else:
+            source = args # Сохраняем название кампании как источник
 
     async with async_session() as session:
         user = await get_user(session, user_id)
         
         # 🆕 СЦЕНАРИЙ: НОВЫЙ ПОЛЬЗОВАТЕЛЬ
         if not user:
-            await create_user(session, telegram_id=user_id, username=message.from_user.username, full_name=message.from_user.full_name, referrer_id=referrer_id)
+            # 1. Создаем пользователя, записывая и РЕФЕРЕРА, и ИСТОЧНИК
+            await create_user(
+                session, 
+                telegram_id=user_id, 
+                username=message.from_user.username, 
+                full_name=message.from_user.full_name, 
+                referrer_id=referrer_id,
+                source=source # ✅ Вот сюда пишется метка
+            )
 
-            # 👇 ДОБАВИТЬ ЛОГГЕР
-            # args - это deeplink параметр (например рефка)
+            # 2. Логируем админу (передаем исходный args, чтобы ты видел конкретный ID или название метки)
             await log_new_user(bot, message.from_user, deep_link=args)
 
+            # 3. Начисляем бонус новичку (+2)
             welcome_bonus = 2
             await admin_change_balance(session, user_id, welcome_bonus)
             
-            # Бонус другу
+            # 4. Начисляем бонус другу (+2), если он есть
             if referrer_id:
                 try:
                     await admin_change_balance(session, referrer_id, 2)
                     await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 Тебе начислено: +2 банана", parse_mode="Markdown")
                 except: pass
 
+            # Текст приветствия (оставляем твой)
             word = get_banana_word(welcome_bonus)
-            # 👇 Твой текст (без изменений, Markdown)
             text = (
                     f"👋 Привет! Я *Nano Banana Pro 🍌* — твой карманный AI-фотошоп.\n\n"
                     f"🎁 *Тебе уже начислено {welcome_bonus} подарочных {word}*\n"
@@ -83,9 +99,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     await message.answer_photo(WELCOME_PHOTO, caption=text, parse_mode="Markdown", reply_markup=get_main_kb())
                 else: 
                     await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
-            except Exception as e:
-                print(f"Ошибка фото: {e}")
-                # Если фото не грузится, шлем текст
+            except Exception as e: 
                 await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
 
         # 👴 СЦЕНАРИЙ: СТАРЫЙ ПОЛЬЗОВАТЕЛЬ

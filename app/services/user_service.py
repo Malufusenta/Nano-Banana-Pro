@@ -274,12 +274,15 @@ async def get_user(session, telegram_id: int):
     result = await session.execute(query)
     return result.scalars().first()
 
-async def create_user(session, telegram_id: int, username: str, full_name: str, referrer_id: int = None):
+# 👇 ЗАМЕНИ ФУНКЦИЮ create_user НА ЭТУ ВЕРСИЮ:
+
+async def create_user(session, telegram_id: int, username: str, full_name: str, referrer_id: int = None, source: str = None):
     new_user = User(
         telegram_id=telegram_id, 
         username=username, 
         full_name=full_name,
-        referrer_id=referrer_id, # Записываем ID пригласившего
+        referrer_id=referrer_id,
+        source=source, # ✅ ТЕПЕРЬ ЗАПИСЫВАЕМ ИСТОЧНИК
         generations_balance=0 
     )
     session.add(new_user)

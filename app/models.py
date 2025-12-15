@@ -24,6 +24,7 @@ class User(Base):
     is_channel_sub_claimed: Mapped[bool] = mapped_column(Boolean, default=False) # Канал
     is_chat_sub_claimed: Mapped[bool] = mapped_column(Boolean, default=False)    # Чат
     referrer_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # Кто пригласил
+    source: Mapped[str | None] = mapped_column(String, nullable=True) # Источник трафика
 
     
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
