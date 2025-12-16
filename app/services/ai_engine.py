@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 import io
 import base64
 import requests
@@ -33,6 +34,18 @@ async def _run_google_async(bot: Bot, prompt: str, image_urls=None, aspect_ratio
     print("⚠️ Запрос в Google пропущен (режим Kie Only).")
     return None
 
+
+# 👇 ВСТАВИТЬ ПЕРЕД def _run_kie(...)
+
+def sanitize_prompt(text: str) -> str:
+    """Убирает переносы строк и мусор, чтобы API не ломался"""
+    if not text: return ""
+    # Меняем Enter на пробел
+    text = text.replace("\n", " ").replace("\r", " ")
+    # Убираем двойные пробелы
+    text = re.sub(' +', ' ', text)
+    # Обрезаем до 1500 символов (на всякий случай)
+    return text[:1500].strip()
 # ==============================================================================
 # 2. ДВИЖОК KIE.AI (ОСНОВНОЙ)
 # ==============================================================================
@@ -52,6 +65,8 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
             text_content = msg.content if msg.content != "Image generated" else "[Image]"
             context_str += f"{role}: {text_content}. "
         final_prompt = f"Context: {context_str} \nCURRENT TASK: {prompt}"
+        # 👇 ДОБАВЬ ЭТУ СТРОКУ
+        final_prompt = sanitize_prompt(final_prompt)
 
     # --- ВЫБОР МОДЕЛИ ---
     if use_pro:
@@ -101,8 +116,9 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
         
         resp_json = resp.json()
         if resp_json.get("code") != 200:
-             print(f"❌ Kie Logic Error: {resp_json.get('msg')}")
-             return None
+             # 👇 ВЫЗЫВАЕМ ОШИБКУ, ЧТОБЫ ОНА ПОПАЛА В ЛОГИ
+             error_msg = resp_json.get('msg')
+             raise Exception(f"API Error: {error_msg}")
 
         task_id = resp_json["data"]["taskId"]
         
@@ -121,13 +137,17 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
                 return BufferedInputFile(img_resp.content, filename=f"kie_{model}.png"), url
             
             elif data and data.get("state") == "fail":
-                print(f"❌ Kie Failed: {data.get('failMsg')}")
-                return None
+                # Получаем текст ошибки от нейросети
+                fail_msg = data.get("failMsg", "Unknown error")
+                
+                # 🔥 ВЫЗЫВАЕМ ИСКЛЮЧЕНИЕ (ЧТОБЫ ОНО УЛЕТЕЛО В ЛОГИ)
+                # Бот поймает это в handlers/generation.py и отправит тебе в канал
+                raise Exception(f"Kie REJECT: {fail_msg}")
             time.sleep(2)
             
     except Exception as e:
-        print(f"❌ Kie Exception: {e}")
-    return None
+        # 👇 ПРОБРАСЫВАЕМ ЛЮБУЮ ДРУГУЮ ОШИБКУ (СЕТЬ, ТАЙМАУТ)
+        raise e
 
 # ==============================================================================
 # 3. ГЛАВНЫЙ РОУТЕР
