@@ -986,12 +986,12 @@ async def process_generation(
                 except: 
                     pass
             
-            # 6. Формирование caption
-            safe_prompt = html.quote(prompt[:50])
+# 6. Формирование caption (НОВЫЙ ВАРИАНТ)
             caption = (
                 f"🍌 <b>Готово!</b>\n"
-                f"💬 <i>«{safe_prompt}...»</i>\n"
                 f"🔋 Осталось: <b>{balance_left}</b> 🍌\n\n"
+                f"✨ Получилось круто? Похвастайся результатом в <a href='https://t.me/nanabanana_chat'>нашем чате</a>!\n"
+                f"Авторов лучших работ награждаем бананами 🍌\n\n"
                 f"Сгенерировано в @nan0banana_bot"
             )
             
