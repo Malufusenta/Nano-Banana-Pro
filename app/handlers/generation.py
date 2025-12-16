@@ -1021,15 +1021,13 @@ async def process_generation(
                 else sent_msg.document.file_id
             )
 
-            # 👇👇👇 🟢 1. ЛОГГЕР: УСПЕШНАЯ ГЕНЕРАЦИЯ 👇👇👇
             await log_generation(
                 bot, 
-                message.from_user, 
+                message.chat, # ✅ Берем данные из ЧАТА (это всегда юзер)
                 prompt=prompt, 
                 model="PRO" if use_pro_model else "Standard", 
                 photo_file_id=sent_file_id
             )
-            # 👆👆👆 -------------------------------------
             
             meta_data = json.dumps({
                 "prompt": prompt,
@@ -1062,15 +1060,13 @@ async def process_generation(
             # ❌ NULL ОТВЕТ - ВОЗВРАТ ДЕНЕГ
             print("❌ API вернул NULL")
 
-            # 👇👇👇 🔴 2. ЛОГГЕР: ОШИБКА API 👇👇👇
             await log_error(
                 bot, 
-                message.from_user.id, 
-                message.from_user.username, 
+                user_id,               # ✅ Берем ID из аргумента функции (он точный)
+                message.chat.username, # ✅ Берем юзернейм из чата
                 prompt, 
                 error_text="API returned NULL (Blocked?)"
             )
-            # 👆👆👆 ------------------------------
 
             async with async_session() as session: 
                 await admin_change_balance(session, user_id, cost)
@@ -1094,15 +1090,13 @@ async def process_generation(
         # ❌ КРИТИЧЕСКАЯ ОШИБКА - ВОЗВРАТ ДЕНЕГ
         print(f"❌ Критическая ошибка: {e}")
 
-        # 👇👇👇 🔴 3. ЛОГГЕР: CRASH 👇👇👇
         await log_error(
             bot, 
-            message.from_user.id, 
-            message.from_user.username, 
+            user_id,               # ✅ ID из аргумента
+            message.chat.username, # ✅ Юзернейм из чата
             prompt, 
             error_text=f"CRASH: {str(e)[:50]}"
         )
-        # 👆👆👆 --------------------------
         
         import traceback
         traceback.print_exc()
