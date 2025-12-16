@@ -88,10 +88,8 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
              if isinstance(image_urls, str): image_urls = [image_urls]
              input_data["image_input"] = image_urls
     else:
-        if image_urls:
-            input_data["image_size"] = "auto"
-        else:
-            input_data["image_size"] = aspect_ratio
+        # 👇 ИСПРАВЛЕНО: Убрали принудительный "auto"
+        input_data["image_size"] = aspect_ratio
 
     headers = {"Authorization": f"Bearer {config.KIE_API_KEY}", "Content-Type": "application/json"}
     
