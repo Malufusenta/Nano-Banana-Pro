@@ -2,7 +2,7 @@ from aiogram import Router, types, F, Bot
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from app.services.admin_logger import log_new_user
+from app.services.admin_logger import log_new_user, log_referral
 from app.database import async_session
 from app.services.user_service import get_user, create_user, admin_change_balance
 from app import config
@@ -82,6 +82,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 try:
                     await admin_change_balance(session, referrer_id, 2)
                     await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 Тебе начислено: +2 банана", parse_mode="Markdown")
+                    await log_referral(bot, referrer_id, message.from_user)
                 except: pass
 
             # Текст приветствия (оставляем твой)

@@ -138,3 +138,18 @@ async def log_error(bot: Bot, user_id: int, username: str, prompt: str, error_te
         "#error"
     )
     asyncio.create_task(send_log(bot, text))
+
+
+# 🤝 ТИП 6: РЕФЕРАЛ
+async def log_referral(bot: Bot, referrer_id: int, new_user):
+    new_user_name = f"@{new_user.username}" if new_user.username else f"ID:{new_user.id}"
+    
+    text = (
+        "🤝 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"📢 Кто пригласил: <a href='tg://user?id={referrer_id}'>{referrer_id}</a>\n"
+        f"👤 Кто пришел: {new_user_name}\n"
+        "🎁 Бонус: <b>+2 банана</b> (другу)\n"
+        "#referral"
+    )
+    asyncio.create_task(send_log(bot, text))
