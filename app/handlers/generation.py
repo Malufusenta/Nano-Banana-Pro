@@ -990,7 +990,7 @@ async def process_generation(
             caption = (
                 f"🍌 <b>Готово!</b>\n"
                 f"🔋 Осталось: <b>{balance_left}</b> 🍌\n\n"
-                f"✨ Получилось круто? Похвастайся результатом в <a href='https://t.me/nanabanana_chat'>нашем чате</a>!\n"
+                f"✨ Получилось круто? <b>Похвастайся результатом </b>в <a href='https://t.me/nanabanan_chat'>нашем чате</a>!\n"
                 f"Авторов лучших работ награждаем бананами 🍌\n\n"
                 f"Сгенерировано в @nan0banana_bot"
             )
