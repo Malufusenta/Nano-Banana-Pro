@@ -8,6 +8,9 @@ from app.database import async_session
 from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance
 from app.services.payment_service import confirm_purchase
 from app.handlers.start import get_main_kb
+# 👇 ДОБАВИТЬ ЭТИ ИМПОРТЫ
+from sqlalchemy import select, func
+from app.models import User, Purchase
 
 router = Router()
 
@@ -77,18 +80,36 @@ async def cmd_admin(message: types.Message):
 # =====================================================================
 @router.callback_query(F.data == "admin_stats")
 async def cb_stats(callback: types.CallbackQuery):
-    """Показывает статистику бота"""
+    """Показывает статистику с живым подсчетом кассы"""
     async with async_session() as session:
-        stats = await get_bot_stats(session)
+        # 1. Считаем пользователей (Count ID)
+        result = await session.execute(select(func.count(User.id)))
+        users_count = result.scalar()
+        
+        # 2. Считаем генерации (Сумма total_generations_used)
+        # (используем try, вдруг колонка пустая)
+        try:
+            res_gens = await session.execute(select(func.sum(User.total_generations_used)))
+            gens_count = res_gens.scalar() or 0
+        except:
+            gens_count = 0
+
+        # 3. 🔥 СЧИТАЕМ КАССУ (Сумма price из таблицы purchases)
+        try:
+            res_money = await session.execute(select(func.sum(Purchase.price)))
+            money_total = res_money.scalar() or 0
+        except:
+            money_total = 0
 
     text = (
         "📊 **Статистика Бота**\n\n"
-        f"👥 Людей: **{stats['users']}**\n"
-        f"🎨 Генераций: **{stats['gens']}**\n"
-        f"💰 Касса: **{stats['money']}₽**"
+        f"👥 Людей: **{users_count}**\n"
+        f"🎨 Генераций: **{gens_count}**\n"
+        f"💰 Касса: **{money_total}₽**"
     )
     
     builder = InlineKeyboardBuilder()
+    # Оставляем твою кнопку возврата
     builder.button(text="🔙 Меню", callback_data="admin_menu")
     
     await callback.message.edit_text(
