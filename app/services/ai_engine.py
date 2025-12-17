@@ -143,7 +143,7 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
                 # 🔥 ВЫЗЫВАЕМ ИСКЛЮЧЕНИЕ (ЧТОБЫ ОНО УЛЕТЕЛО В ЛОГИ)
                 # Бот поймает это в handlers/generation.py и отправит тебе в канал
                 raise Exception(f"Kie REJECT: {fail_msg}")
-            time.sleep(2)
+            time.sleep(5)
             
     except Exception as e:
         # 👇 ПРОБРАСЫВАЕМ ЛЮБУЮ ДРУГУЮ ОШИБКУ (СЕТЬ, ТАЙМАУТ)
