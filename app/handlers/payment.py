@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.database import async_session
 from app.services.user_service import get_user_profile_data, claim_subscription_bonus, admin_change_balance, get_user_balance, get_user_financial_stats
-from app.services.payment_service import create_purchase_record
+from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded
 from app import config
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
 from app.services.admin_logger import log_payment
@@ -32,6 +32,15 @@ STARS_PACKAGES = {
     "stars_60": {"bananas": 60, "stars": 350, "emoji": "🍌"},
     "stars_120": {"bananas": 120, "stars": 650, "emoji": "🍌"},
 }
+
+# 👇 ВСТАВИТЬ В НАЧАЛО ФАЙЛА (после списков PACKAGES)
+
+def get_banana_word(n: int) -> str:
+    """Склоняет слово банан в зависимости от числа"""
+    n = abs(n)
+    if n % 10 == 1 and n % 100 != 11: return "банан"
+    if 2 <= n % 10 <= 4 and (n % 100 < 10 or n % 100 >= 20): return "банана"
+    return "бананов"
 
 def get_banana_suffix(count):
     """Возвращает правильное окончание для слова 'банан'"""
@@ -255,6 +264,7 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
         
         if status == "succeeded":
             async with async_session() as session:
+                await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'])
                 # Начисляем бананы
                 await admin_change_balance(session, callback.from_user.id, package['gens'])
                 
@@ -394,10 +404,15 @@ async def process_pre_checkout(pre_checkout: PreCheckoutQuery, bot: Bot):
 @router.message(F.successful_payment)
 async def process_successful_payment(message: types.Message, bot: Bot):
     payment = message.successful_payment
+    
+    # ✅ FIX 1: Определяем переменную total_amount, которой не хватало
+    total_amount = payment.total_amount
+    
     payload = payment.invoice_payload
-    user_id = message.from_user.id # Берем ID из сообщения надежнее
+    user_id = message.from_user.id 
     
     # Пытаемся распарсить payload
+    package = None
     try:
         parts = payload.split("_")
         # Ожидаем формат stars_pack_120 (кол-во бананов)
@@ -406,18 +421,26 @@ async def process_successful_payment(message: types.Message, bot: Bot):
         # Ищем пакет по количеству бананов
         package = next((p for p in STARS_PACKAGES if p["gens"] == bananas_count), None)
     except:
-        package = None
+        pass
+
+    # Если по payload не нашли, ищем по цене (Plan B)
+    if not package:
+        package = next((p for p in STARS_PACKAGES if p["price"] == total_amount), None)
 
     if not package:
         await message.answer("❌ Ошибка обработки платежа (Тариф не найден)")
         return
     
-    suffix = get_banana_suffix(package['gens'])
+    # ✅ FIX 2: Используем правильную функцию (get_banana_word)
+    suffix = get_banana_word(package['gens'])
     
     # Начисляем бананы
     async with async_session() as session:
         # Записываем покупку в историю
-        await create_purchase_record(session, user_id, payment.total_amount, package['gens'])
+        await create_purchase_record(session, user_id, total_amount, package['gens'])
+        
+        # ✅ FIX 3: Отмечаем статус как успех (Stars приходят сразу)
+        await mark_purchase_as_succeeded(session, user_id, total_amount)
         
         # Начисляем баланс
         await admin_change_balance(session, user_id, package['gens'])
@@ -425,14 +448,14 @@ async def process_successful_payment(message: types.Message, bot: Bot):
         # Логируем платеж С АНАЛИТИКОЙ
         try:
             new_bal = await get_user_balance(session, user_id)
-            # 👇 1. Получаем статистику
+            
+            # 👇 ПОЛУЧАЕМ СТАТИСТИКУ ДЛЯ ЛОГА
             stats = await get_user_financial_stats(session, user_id)
             
-            # 👇 2. Передаем в логгер
             await log_payment(
                 bot, 
                 message.from_user, 
-                f"{payment.total_amount} ⭐️", 
+                f"{total_amount} ⭐️", 
                 f"{package['gens']} {suffix} (Stars)", 
                 new_bal, 
                 stats=stats
@@ -442,7 +465,7 @@ async def process_successful_payment(message: types.Message, bot: Bot):
     
     await message.answer(
         f"✅ <b>Оплата прошла успешно!</b>\n\n"
-        f"🍌 Начислено: <b>{package['gens']} {suffix}</b>\n"
+        f"🍌 Начислено: <b>+{package['gens']} {suffix}</b>\n"
         f"Спасибо за покупку! 🎨",
         parse_mode="HTML"
     )

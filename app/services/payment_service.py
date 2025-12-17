@@ -1,4 +1,4 @@
-from sqlalchemy import select, update
+from sqlalchemy import select, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Purchase, User
 
@@ -59,3 +59,26 @@ async def fulfill_payment(session: AsyncSession, user_id: int, gens_amount: int)
         await session.commit()
         return user.generations_balance
     return None
+
+# 👇 ВСТАВИТЬ В КОНЕЦ ФАЙЛА app/services/payment_service.py
+
+async def mark_purchase_as_succeeded(session, user_id: int, price: int):
+    """
+    Находит последнюю запись 'pending' с такой ценой и меняет статус на 'succeeded'
+    """
+    # 1. Ищем последнюю неоплаченную покупку этого юзера на эту сумму
+    stmt = select(Purchase).where(
+        Purchase.user_id == user_id,
+        Purchase.price == price,
+        Purchase.status == "pending"
+    ).order_by(desc(Purchase.created_at)).limit(1)
+    
+    result = await session.execute(stmt)
+    purchase = result.scalars().first()
+    
+    # 2. Если нашли — обновляем статус
+    if purchase:
+        purchase.status = "succeeded"
+        await session.commit()
+        return True
+    return False
