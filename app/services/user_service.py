@@ -327,7 +327,7 @@ async def get_user_financial_stats(session, user_id: int):
 
     # 2. Считаем покупки
     # (func.count - количество, func.sum - сумма денег)
-    stmt = select(func.count(Purchase.id), func.sum(Purchase.price)).where(Purchase.user_id == user_id)
+    stmt = select(func.count(Purchase.id), func.sum(Purchase.price)).where(Purchase.user_id == user_id, Purchase.status == "succeeded")
     result = await session.execute(stmt)
     count, total_spent = result.fetchone()
 

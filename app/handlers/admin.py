@@ -94,9 +94,12 @@ async def cb_stats(callback: types.CallbackQuery):
         except:
             gens_count = 0
 
-        # 3. 🔥 СЧИТАЕМ КАССУ (Сумма price из таблицы purchases)
+# 3. 🔥 СЧИТАЕМ КАССУ (Только успешные!)
         try:
-            res_money = await session.execute(select(func.sum(Purchase.price)))
+            # Складываем price, ГДЕ status == 'succeeded'
+            res_money = await session.execute(
+                select(func.sum(Purchase.price)).where(Purchase.status == "succeeded")
+            )
             money_total = res_money.scalar() or 0
         except:
             money_total = 0
