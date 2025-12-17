@@ -311,3 +311,28 @@ async def claim_subscription_bonus(session, user_id: int, bonus_type: str, amoun
     user.generations_balance += amount
     await session.commit()
     return True
+
+# 👇 ВСТАВИТЬ В КОНЕЦ ФАЙЛА user_service.py
+
+async def get_user_financial_stats(session, user_id: int):
+    """
+    Возвращает статистику по деньгам юзера:
+    - Кол-во покупок
+    - Общая сумма трат
+    - Источник трафика
+    """
+    # 1. Данные о юзере (источник)
+    user = await get_user(session, user_id)
+    source = user.source if user and user.source else "Органика"
+
+    # 2. Считаем покупки
+    # (func.count - количество, func.sum - сумма денег)
+    stmt = select(func.count(Purchase.id), func.sum(Purchase.price)).where(Purchase.user_id == user_id)
+    result = await session.execute(stmt)
+    count, total_spent = result.fetchone()
+
+    return {
+        "count": count or 0,
+        "total_spent": total_spent or 0,
+        "source": source
+    }

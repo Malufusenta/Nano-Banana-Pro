@@ -68,16 +68,33 @@ async def log_new_user(bot: Bot, user, deep_link: str = None):
     )
     asyncio.create_task(send_log(bot, text))
 
-# 💰 ТИП 2: ФИНАНСЫ
-async def log_payment(bot: Bot, user, amount, item_name: str, new_balance: int):
+# 👇 ЗАМЕНИТЬ ФУНКЦИЮ log_payment НА ЭТУ
+
+async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dict = None):
     username = f"@{user.username}" if user.username else "Нет"
+    
+    # Анализируем статус
+    count = stats.get("count", 1) if stats else 1
+    total = stats.get("total_spent", amount) if stats else amount
+    source = stats.get("source", "Неизвестно") if stats else "Неизвестно"
+
+    if count == 1:
+        status_line = "Покупка №: 1 (Новичок 👶)"
+    elif count < 5:
+        status_line = f"Покупка №: {count} (Растем 📈)"
+    else:
+        status_line = f"Покупка №: {count} (Постоянник! 🔥)"
+
     text = (
-        "💸 <b>УСПЕШНАЯ ОПЛАТА</b>\n"
+        "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
         "➖➖➖➖➖➖➖\n"
-        f"Кто: {username} (<a href='tg://user?id={user.id}'>Ссылка</a>)\n"
-        f"Сумма: <b>{amount}</b>\n"
+        f"Клиент: {username} (<a href='tg://user?id={user.id}'>ID</a>)\n"
+        f"Сумма: <b>{amount}₽</b>\n"
         f"Товар: {item_name}\n"
-        f"Баланс после: {new_balance} 🍌\n"
+        f"----------------\n"
+        f"{status_line}\n"
+        f"Источник: <code>{source}</code>\n"
+        f"Всего принес денег: <b>{total}₽</b>\n"
         "#payment"
     )
     asyncio.create_task(send_log(bot, text))

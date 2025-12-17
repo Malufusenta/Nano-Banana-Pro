@@ -3,7 +3,7 @@ from aiogram.types import LabeledPrice, PreCheckoutQuery
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.database import async_session
-from app.services.user_service import get_user_profile_data, claim_subscription_bonus, admin_change_balance, get_user_balance
+from app.services.user_service import get_user_profile_data, claim_subscription_bonus, admin_change_balance, get_user_balance, get_user_financial_stats
 from app.services.payment_service import create_purchase_record
 from app import config
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
@@ -250,18 +250,31 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
     if not package: return
 
     try:
-        # Проверяем статус в ЮКассе через API
+        # Проверяем статус в ЮКассе
         status = check_yoo_payment(payment_id)
         
         if status == "succeeded":
             async with async_session() as session:
-                # Начисляем
+                # Начисляем бананы
                 await admin_change_balance(session, callback.from_user.id, package['gens'])
-                # Логируем
+                
+                # Логируем С АНАЛИТИКОЙ
                 try:
                     new_bal = await get_user_balance(session, callback.from_user.id)
-                    await log_payment(bot, callback.from_user, package['price'], f"{package['gens']} Бананов", new_bal)
-                except: pass
+                    # 👇 1. Получаем статистику по юзеру
+                    stats = await get_user_financial_stats(session, callback.from_user.id)
+                    
+                    # 👇 2. Передаем её в логгер (параметр stats)
+                    await log_payment(
+                        bot, 
+                        callback.from_user, 
+                        package['price'], 
+                        f"{package['gens']} Бананов", 
+                        new_bal, 
+                        stats=stats 
+                    )
+                except Exception as e: 
+                    print(f"Log Error: {e}")
 
             # Поздравляем
             await callback.message.edit_text(
@@ -382,33 +395,54 @@ async def process_pre_checkout(pre_checkout: PreCheckoutQuery, bot: Bot):
 async def process_successful_payment(message: types.Message, bot: Bot):
     payment = message.successful_payment
     payload = payment.invoice_payload
+    user_id = message.from_user.id # Берем ID из сообщения надежнее
     
-    # Извлекаем pkg_key и user_id из payload
-    parts = payload.split("_")
-    pkg_key = f"{parts[0]}_{parts[1]}"  # stars_4, stars_12 и т.д.
-    user_id = int(parts[2])
-    
-    package = STARS_PACKAGES.get(pkg_key)
+    # Пытаемся распарсить payload
+    try:
+        parts = payload.split("_")
+        # Ожидаем формат stars_pack_120 (кол-во бананов)
+        bananas_count = int(parts[2]) 
+        
+        # Ищем пакет по количеству бананов
+        package = next((p for p in STARS_PACKAGES if p["gens"] == bananas_count), None)
+    except:
+        package = None
+
     if not package:
-        await message.answer("❌ Ошибка обработки платежа")
+        await message.answer("❌ Ошибка обработки платежа (Тариф не найден)")
         return
     
-    suffix = get_banana_suffix(package['bananas'])
+    suffix = get_banana_suffix(package['gens'])
     
     # Начисляем бананы
     async with async_session() as session:
-        await admin_change_balance(session, user_id, package['bananas'])
+        # Записываем покупку в историю
+        await create_purchase_record(session, user_id, payment.total_amount, package['gens'])
         
-        # Логируем платеж
+        # Начисляем баланс
+        await admin_change_balance(session, user_id, package['gens'])
+        
+        # Логируем платеж С АНАЛИТИКОЙ
         try:
             new_bal = await get_user_balance(session, user_id)
-            await log_payment(bot, message.from_user, package['stars'], f"{package['bananas']} {suffix} (Stars)", new_bal)
-        except:
-            pass
+            # 👇 1. Получаем статистику
+            stats = await get_user_financial_stats(session, user_id)
+            
+            # 👇 2. Передаем в логгер
+            await log_payment(
+                bot, 
+                message.from_user, 
+                f"{payment.total_amount} ⭐️", 
+                f"{package['gens']} {suffix} (Stars)", 
+                new_bal, 
+                stats=stats
+            )
+        except Exception as e:
+            print(f"Log Stars Error: {e}")
     
     await message.answer(
         f"✅ <b>Оплата прошла успешно!</b>\n\n"
-        f"🍌 Начислено: <b>{package['bananas']} {suffix}</b>\n"
+        f"🍌 Начислено: <b>{package['gens']} {suffix}</b>\n"
         f"Спасибо за покупку! 🎨",
         parse_mode="HTML"
     )
