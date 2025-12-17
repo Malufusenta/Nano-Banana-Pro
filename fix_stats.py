@@ -2,7 +2,7 @@ import sqlite3
 import os
 
 # Имя файла базы данных (проверь, как он называется на сервере, обычно banana.db)
-DB_NAME = "banana.db"
+DB_NAME = "bot.db"
 
 def fix_history():
     print(f"🛠 Подключаюсь к базе {DB_NAME}...")
