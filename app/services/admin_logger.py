@@ -18,6 +18,63 @@ CALLBACK_ICONS = {
     "goto_": "👉 Переход"
 }
 
+# 👇 ВСТАВИТЬ ПОСЛЕ CALLBACK_ICONS = { ... }
+
+def translate_callback(code: str) -> str:
+    """Переводит технический код кнопки в человеческий язык"""
+    
+    # 1. Точные совпадения (статичные кнопки)
+    translations = {
+        "pf_start": "🚀 Запуск генерации",
+        "pf_toggle_model": "💎 Смена модели",
+        "pf_toggle_quality": "🌟 Смена качества",
+        "pf_select_ratio": "📐 Меню форматов",
+        "pf_back": "🔙 Назад",
+        "goto_shop": "💰 Переход в магазин",
+        "goto_free": "🎁 Переход в 'Заработать'",
+        "check_channel": "📢 Проверка подписки (Канал)",
+        "check_chat": "💬 Проверка подписки (Чат)",
+        "admin_stats": "📊 Просмотр статистики",
+        "admin_add_balance": "💰 Выдача баланса",
+        "close_admin": "❌ Выход из админки",
+        "open_stars_menu": "⭐️ Меню Stars",
+        "open_rub_menu": "₽ Меню Рублей",
+        "cancel_wizard": "❌ Отмена действия"
+    }
+    
+    if code in translations:
+        return translations[code]
+
+    # 2. Динамические кнопки (с параметрами)
+    if code.startswith("set_ratio_"):
+        return f"📐 Выбрал формат {code.split('_')[2]}"
+    
+    if code.startswith("buy_stars_"):
+        count = code.split('_')[2]
+        return f"⭐️ Выбор пакета: {count} бананов (Stars)"
+        
+    if code.startswith("buy_"):
+        tariff = code.split('_')[1].upper()
+        return f"💳 Выбор тарифа: {tariff}"
+        
+    if code.startswith("invoice_"):
+        return "🧾 Запросил счет на оплату"
+        
+    if code.startswith("check_"):
+        return "✅ Нажал 'Я оплатил'"
+        
+    if code.startswith("reroll_"):
+        return "🔄 Нажал 'Ещё раз'"
+        
+    if code.startswith("edit_"):
+        return "🎨 Нажал 'Изменить'"
+        
+    if code.startswith("download_"):
+        return "📥 Нажал 'Скачать'"
+
+    # Если перевода нет, возвращаем код как есть
+    return code
+
 async def send_log(bot: Bot, text: str, disable_notification: bool = False):
     """Базовая функция отправки текста в канал"""
     if not hasattr(config, "ADMIN_CHANNEL_ID") or not config.ADMIN_CHANNEL_ID:
@@ -114,29 +171,33 @@ async def log_generation(bot: Bot, user, prompt: str, model: str, photo_file_id:
     )
     asyncio.create_task(send_photo_log(bot, photo_file_id, caption))
 
-# 👣 ТИП 4: ДЕЙСТВИЯ (Без звука)
+# 👇 ЗАМЕНИТЬ ФУНКЦИЮ log_action НА ЭТУ 👇
+
 async def log_action(bot: Bot, user_id: int, username: str, action: str, is_message: bool = False):
     u_name = f"@{username}" if username else f"ID:{user_id}"
     
     if is_message:
-        # Если это сообщение пользователя
+        # Сообщения пользователя оставляем как есть
         text = f"💬 Сообщение: {action}\n👤 {u_name}\n#message"
     else:
-        # Если это КНОПКА (Callback) - делаем красиво
-        # В action приходит строка "Нажал кнопку [ data=... ]"
+        # КНОПКИ: Делаем красиво
         try:
             if "data=" in action:
+                # Извлекаем сырой код: "Нажал кнопку [ data=buy_mini ]" -> "buy_mini"
                 raw_code = action.split("data=")[1].strip(" ]")
                 
-                # Ищем красивую иконку
+                # 1. Ищем иконку категории
                 prefix_label = "👣 Кнопка"
                 for prefix, label in CALLBACK_ICONS.items():
                     if raw_code.startswith(prefix):
                         prefix_label = label
                         break
                 
-                # Формируем читаемый лог
-                text = f"{prefix_label}: <code>{raw_code}</code>\n👤 {u_name}\n#action"
+                # 2. Переводим код в текст
+                readable_text = translate_callback(raw_code)
+                
+                # Формируем лог: "💳 Покупка: Выбор тарифа MINI"
+                text = f"{prefix_label}: {readable_text}\n👤 {u_name}\n#action"
             else:
                 text = f"👣 Действие: {action}\n👤 {u_name}\n#action"
         except:
