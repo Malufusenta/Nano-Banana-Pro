@@ -1087,34 +1087,57 @@ async def process_generation(
                 )
                 
     except Exception as e:
-        # ❌ КРИТИЧЕСКАЯ ОШИБКА - ВОЗВРАТ ДЕНЕГ
+        # 1. Логируем ошибку в консоль и админу
         print(f"❌ Критическая ошибка: {e}")
-
+        
+        # Отправляем в канал логов (чтобы ты видел реальную причину)
         await log_error(
             bot, 
-            user_id,               # ✅ ID из аргумента
-            message.chat.username, # ✅ Юзернейм из чата
+            user_id,               
+            message.chat.username, 
             prompt, 
-            error_text=f"CRASH: {str(e)[:50]}"
+            error_text=f"CRASH: {str(e)[:100]}"
         )
         
-        import traceback
-        traceback.print_exc()
-        
+        # 2. Возвращаем деньги
         async with async_session() as session: 
             await admin_change_balance(session, user_id, cost)
         
+        # 3. 🛡️ ПЕРЕВОДЧИК ОШИБОК ДЛЯ ПОЛЬЗОВАТЕЛЯ
+        err_msg = str(e).lower()
+        
+        # Сценарий А: NSFW / Цензура
+        if "sensitive" in err_msg or "nsfw" in err_msg or "safety" in err_msg:
+            user_friendly_text = (
+                "🔞 <b>Сработал фильтр контента!</b>\n"
+                "Нейросеть посчитала запрос недопустимым (18+, насилие или запрещенные темы).\n"
+                "Пожалуйста, измените формулировку запроса."
+            )
+        
+        # Сценарий Б: Тайм-аут (долго думал)
+        elif "timeout" in err_msg:
+            user_friendly_text = (
+                "🐢 <b>Время ожидания истекло.</b>\n"
+                "Сервер перегружен сложными задачами (например, 2K + много лиц).\n"
+                "Попробуйте позже или выберите качество Standard."
+            )
+            
+        # Сценарий В: Перегрузка (Busy)
+        elif "busy" in err_msg or "queue" in err_msg:
+            user_friendly_text = (
+                "🚦 <b>Высокая нагрузка.</b>\n"
+                "Все графические процессоры заняты.\n"
+                "Пожалуйста, повторите попытку через минуту."
+            )
+            
+        # Сценарий Г: Остальные технические ошибки
+        else:
+            user_friendly_text = f"⚠️ <b>Техническая ошибка:</b>\n<code>{str(e)[:100]}</code>"
+
+        # 4. Отправляем красивое сообщение
+        final_text = f"{user_friendly_text}\n\n💰 <b>{cost} 🍌 возвращены на баланс.</b>"
+
         try: 
-            await wait_msg.edit_text(
-                f"⚠️ <b>Техническая ошибка</b>\n\n"
-                f"<code>{str(e)[:100]}</code>\n\n"
-                f"💰 {cost} 🍌 возвращены на баланс.",
-                parse_mode="HTML"
-            )
+            await wait_msg.edit_text(final_text, parse_mode="HTML")
         except: 
-            await message.answer(
-                f"⚠️ <b>Техническая ошибка</b>\n\n"
-                f"<code>{str(e)[:100]}</code>\n\n"
-                f"💰 {cost} 🍌 возвращены на баланс.",
-                parse_mode="HTML"
-            )
+            await message.answer(final_text, parse_mode="HTML")
