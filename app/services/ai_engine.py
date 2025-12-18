@@ -122,31 +122,53 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
 
         task_id = resp_json["data"]["taskId"]
         
-        # Ждем до 10 минут
+        # ✅ ОБНОВЛЕННЫЙ ЦИКЛ ОЖИДАНИЯ
+        # 300 раз * 5 сек = 25 минут
         for _ in range(300): 
-            r = requests.get(f"{config.KIE_URL}/recordInfo", headers=headers, params={"taskId": task_id})
-            data = r.json()["data"]
-            
-            if data and data.get("state") == "success":
-                result_obj = json.loads(data["resultJson"])
-                url = result_obj.get("resultUrls", [])[0]
-                print(f"✨ Kie: Успех! (Task {task_id})")
+            try:
+                r = requests.get(f"{config.KIE_URL}/recordInfo", headers=headers, params={"taskId": task_id})
+                data = r.json().get("data")
                 
-                img_resp = requests.get(url)
-                # Возвращаем (файл, ссылка)
-                return BufferedInputFile(img_resp.content, filename=f"kie_{model}.png"), url
-            
-            elif data and data.get("state") == "fail":
-                # Получаем текст ошибки от нейросети
-                fail_msg = data.get("failMsg", "Unknown error")
+                if not data:
+                    time.sleep(5)
+                    continue
+
+                state = data.get("state")
+
+                if state == "success":
+                    # Защита от смены формата JSON (строка или словарь)
+                    result_json = data.get("resultJson")
+                    if isinstance(result_json, str):
+                        result_obj = json.loads(result_json)
+                    else:
+                        result_obj = result_json
+                    
+                    # Проверка на пустой список (Soft Filter)
+                    urls = result_obj.get("resultUrls", [])
+                    if not urls:
+                        raise Exception("No images found in AI response (Possible Soft Filter)")
+                    
+                    url = urls[0]
+                    print(f"✨ Kie: Успех! (Task {task_id})")
+                    
+                    img_resp = requests.get(url)
+                    return BufferedInputFile(img_resp.content, filename=f"kie_{model}.png"), url
                 
-                # 🔥 ВЫЗЫВАЕМ ИСКЛЮЧЕНИЕ (ЧТОБЫ ОНО УЛЕТЕЛО В ЛОГИ)
-                # Бот поймает это в handlers/generation.py и отправит тебе в канал
-                raise Exception(f"Kie REJECT: {fail_msg}")
+                elif state == "fail":
+                    fail_msg = data.get("failMsg", "Unknown error")
+                    # ✅ Пробрасываем реальную причину (NSFW, Timeout) наверх
+                    raise Exception(f"Kie REJECT: {fail_msg}")
+            
+            except Exception as loop_e:
+                # Если поймали нашу ошибку - кидаем её дальше, чтобы остановить всё
+                if "Kie REJECT" in str(loop_e) or "No images" in str(loop_e):
+                    raise loop_e
+                print(f"⚠️ Loop Warning: {loop_e}")
+            
             time.sleep(5)
             
     except Exception as e:
-        # 👇 ПРОБРАСЫВАЕМ ЛЮБУЮ ДРУГУЮ ОШИБКУ (СЕТЬ, ТАЙМАУТ)
+        # ✅ Пробрасываем ошибку в generation.py, чтобы показать красивое сообщение
         raise e
 
 # ==============================================================================
