@@ -1131,7 +1131,7 @@ async def process_generation(
             )
 
         # 🆕 Сценарий Д: Пустой ответ (Скрытый фильтр)
-        elif "no images found" in err_msg or "empty" in err_msg:
+        elif "no image" in err_msg or "empty" in err_msg or "content found" in err_msg:
             user_friendly_text = (
                 "🫥 <b>Нейросеть не выдала результат.</b>\n"
                 "Задача завершилась, но картинка исчезла.\n"
