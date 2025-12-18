@@ -222,7 +222,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         f"🎨 **Параметры генерации**\n\n"
         f"📝 **Запрос:** {prompt[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"**Настрой параметры и жми \"Сгенерировать\"**👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
+        f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     await message.answer(text, reply_markup=get_preflight_kb(pref_model, "1:1", "hd"), parse_mode="Markdown")
 
@@ -245,7 +245,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
         f"🎨 **Параметры генерации**\n\n"
         f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"**Настрой параметры и жми \"Сгенерировать\"**👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
+        f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     
     await callback.message.edit_text(
@@ -296,7 +296,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
         f"🎨 **Параметры генерации**\n\n"
         f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"**Настрой параметры и жми \"Сгенерировать\"**👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
+        f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     
     await callback.message.edit_text(
