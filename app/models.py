@@ -67,3 +67,32 @@ class GenerationTask(Base):
     cost: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String, default="processing")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # 5. Таблица Рассылок
+class Broadcast(Base):
+    __tablename__ = "broadcasts"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    admin_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # Кто создал
+    
+    # Контент рассылки
+    message_text: Mapped[str | None] = mapped_column(Text, nullable=True)  # Текст сообщения
+    media_type: Mapped[str | None] = mapped_column(String, nullable=True)  # photo, video, album, None
+    media_file_ids: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON массив file_id
+    
+    # Кнопки (JSON)
+    buttons: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: [{"text": "...", "type": "url/callback", "data": "..."}]
+    
+    # Для Type B кнопок - скрытый промпт
+    hidden_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Статистика
+    status: Mapped[str] = mapped_column(String, default="draft")  # draft, sending, completed
+    total_users: Mapped[int] = mapped_column(Integer, default=0)
+    sent_count: Mapped[int] = mapped_column(Integer, default=0)
+    delivered_count: Mapped[int] = mapped_column(Integer, default=0)
+    blocked_count: Mapped[int] = mapped_column(Integer, default=0)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
