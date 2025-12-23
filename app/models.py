@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text
+from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from datetime import datetime
@@ -85,6 +85,7 @@ class Broadcast(Base):
     
     # Для Type B кнопок - скрытый промпт
     hidden_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aspect_ratio = Column(String(10), default="1:1")
     
     # Статистика
     status: Mapped[str] = mapped_column(String, default="draft")  # draft, sending, completed

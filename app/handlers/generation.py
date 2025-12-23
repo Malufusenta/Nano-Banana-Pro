@@ -10,7 +10,7 @@ from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
 from app.services.admin_logger import log_generation, log_error
-
+from app.models import Broadcast  # 👈 Добавь Broadcast
 from app.database import async_session
 from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
@@ -507,6 +507,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
     """Обработка одиночного фото"""
     if message.media_group_id: 
         return  # Обработается в handle_album_input
+    
     print(f"🔥🔥🔥 МОЙ FILE ID: {message.photo[-1].file_id}")
     url = await get_photo_url(bot, message.photo[-1].file_id)
     
@@ -514,6 +515,47 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
         await message.answer("❌ Не удалось получить фото.")
         return
     
+    # 🔥 ПРОВЕРКА BROADCAST ПРОМПТА 🔥
+    data = await state.get_data()
+    
+    if data.get('from_broadcast') and data.get('broadcast_prompt'):
+        print(f"🔥 DEBUG: Нашёл broadcast промпт!")
+        prompt = data.get('broadcast_prompt')
+        ratio = data.get('broadcast_ratio', '1:1')
+        
+        print(f"🔥 DEBUG: Используем формат: {ratio}")
+        
+        # Очищаем флаги
+        await state.update_data(from_broadcast=False, broadcast_prompt=None, broadcast_ratio=None)
+        
+        # Сохраняем данные для preflight
+        await state.update_data(
+            pf_prompt=prompt,
+            pf_image_urls=[url],
+            pf_ratio=ratio,  # 👈 ФОРМАТ ИЗ РАССЫЛКИ
+            pf_model="standard",
+            pf_quality="2k"
+        )
+        await state.set_state(GenState.preflight_check)
+        
+        # Показываем preflight с ЗАДАННЫМ форматом
+        cost = config.COST_STANDARD
+        text = (
+            f"🎨 **Параметры генерации**\n\n"
+            f"📝 **Запрос:** {prompt[:100]}...\n"
+            f"📐 **Формат:** {ratio} (из рассылки)\n"
+            f"💰 **Стоимость:** {cost} банан(а)\n\n"
+            f"*Настрой параметры и жми \"Сгенерировать\"*👇"
+        )
+        await message.answer(
+            text,
+            reply_markup=get_preflight_kb("standard", ratio, "2k"),
+            parse_mode="Markdown"
+        )
+        return
+    # 🔥 КОНЕЦ НОВОГО КОДА 🔥
+    
+    # Обычный флоу
     if message.caption:
         await start_preflight_check(message, state, message.caption, [url])
     else:
@@ -523,7 +565,6 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
             "📸 **Фото принято!** Напиши, что с ним сделать.", 
             parse_mode="Markdown"
         )
-
 @router.message(GenState.waiting_for_caption, F.text)
 async def handle_delayed_caption(message: types.Message, state: FSMContext):
     """Обработка отложенного текста после фото"""
@@ -758,79 +799,6 @@ async def cb_select_category(callback: types.CallbackQuery, state: FSMContext):
             parse_mode="Markdown"
         )
 
-# =====================================================================
-# МАСТЕР ЗАМЕНЫ ОБЪЕКТА
-# =====================================================================
-@router.message(GenState.waiting_for_base_image, F.photo)
-async def wizard_step_1(message: types.Message, state: FSMContext):
-    """Шаг 1: Базовое фото"""
-    await state.update_data(base_image_id=message.photo[-1].file_id)
-    await state.set_state(GenState.waiting_for_ref_image)
-    await message.reply(
-        "👍 Основа есть! **Шаг 2/3:** Пришли **фото-донор**.", 
-        reply_markup=get_cancel_kb(), 
-        parse_mode="Markdown"
-    )
-
-@router.message(GenState.waiting_for_ref_image, F.photo)
-async def wizard_step_2(message: types.Message, state: FSMContext):
-    """Шаг 2: Фото-донор"""
-    await state.update_data(ref_image_id=message.photo[-1].file_id)
-    await state.set_state(GenState.waiting_for_replace_object_text)
-    await message.reply(
-        "👍 Донор есть! **Шаг 3/3:** Напиши **объект**.", 
-        reply_markup=get_cancel_kb(), 
-        parse_mode="Markdown"
-    )
-
-@router.message(GenState.waiting_for_replace_object_text, F.text)
-async def wizard_step_3(message: types.Message, state: FSMContext, bot: Bot):
-    """Шаг 3: Описание объекта"""
-    data = await state.get_data()
-    
-    base_id = data.get("base_image_id")
-    ref_id = data.get("ref_image_id")
-    
-    # ✅ ПРОВЕРКА
-    if not base_id or not ref_id:
-        await message.answer("❌ Ошибка: потеряны фото из предыдущих шагов.")
-        await state.clear()
-        return
-    
-    base_url = await get_photo_url(bot, base_id)
-    ref_url = await get_photo_url(bot, ref_id)
-    
-    if not base_url or not ref_url:
-        await message.answer("❌ Не удалось получить фото.")
-        await state.clear()
-        return
-    
-    final_prompt = (
-        f"Replace the {message.text} in the first image with content from the second. "
-        f"Seamless blending, maintain natural lighting and perspective."
-    )
-    
-    await start_preflight_check(message, state, final_prompt, [base_url, ref_url])
-
-@router.message(GenState.waiting_for_category_input)
-async def handle_category_input(message: types.Message, state: FSMContext, bot: Bot):
-    """Обработка ввода в выбранной категории"""
-    data = await state.get_data()
-    category = data.get("selected_category", "free")
-    
-    photo_id = message.photo[-1].file_id if message.photo else data.get("stored_photo_id")
-    user_text = message.text or message.caption or ""
-    
-    if not photo_id and not user_text:
-        await message.answer("❌ Пришли фото или текст.")
-        return
-    
-    image_url = await get_photo_url(bot, photo_id) if photo_id else None
-    
-    # ✅ ИСПРАВЛЕНО: передаём список или None
-    image_urls_list = [image_url] if image_url else None
-    
-    await start_preflight_check(message, state, user_text, image_urls_list)
 
 # ==============================================================================
 # 🔥 ГЛАВНАЯ ФУНКЦИЯ ГЕНЕРАЦИИ
@@ -1149,3 +1117,42 @@ async def process_generation(
             await wait_msg.edit_text(final_text, parse_mode="HTML")
         except: 
             await message.answer(final_text, parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("bc_"))
+async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка нажатия кнопки генерации из рассылки"""
+    
+    broadcast_id = int(callback.data.split("_")[1])
+    
+    # Получаем промпт И ФОРМАТ из БД
+    async with async_session() as session:
+        from sqlalchemy import select
+        result = await session.execute(
+            select(Broadcast).where(Broadcast.id == broadcast_id)
+        )
+        broadcast = result.scalar_one_or_none()
+    
+    if not broadcast or not broadcast.hidden_prompt:
+        await callback.answer("⚠️ Ошибка: промпт не найден", show_alert=True)
+        return
+    
+    # Сохраняем промпт И ФОРМАТ в state
+    await state.update_data(
+        broadcast_prompt=broadcast.hidden_prompt,
+        broadcast_ratio=broadcast.aspect_ratio or "1:1",
+        from_broadcast=True
+    )
+    
+    print(f"🔥 DEBUG: Промпт: {broadcast.hidden_prompt[:50]}...")
+    print(f"🔥 DEBUG: Формат: {broadcast.aspect_ratio}")
+    
+    await state.set_state(GenState.free_mode)
+    
+    await callback.message.answer(
+        f"🔥 <b>Отлично!</b>\n\n"
+        f"Отправьте фото, к которому применить эффект.\n\n"
+        f"💡 <i>Промпт уже подготовлен - просто пришлите изображение!</i>",
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
