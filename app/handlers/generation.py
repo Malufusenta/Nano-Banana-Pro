@@ -1150,7 +1150,7 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     
     await callback.message.answer(
         f"🔥 <b>Отлично!</b>\n\n"
-        f"Отправьте фото, к которому применить этот образ.\n\n"
+        f"Отправьте фото, чтобы увидеть себя в этом образе.\n\n"
         f"💡 <i>Промпт уже применен - просто пришлите фото!</i>",
         parse_mode="HTML"
     )
