@@ -5,6 +5,7 @@ from app.database import engine, Base
 from app.handlers import start, generation, payment, menu_actions, admin
 from app.middlewares.album import AlbumMiddleware # <--- ИМПОРТ
 from app.middlewares.admin_spy import AdminSpyMiddleware
+from app.middlewares.antifraud import AntiFraudMiddleware
 
 from app import config
 
@@ -16,6 +17,10 @@ async def main():
 
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
+
+    # ✅ Подключение (Первым делом!)
+    dp.message.middleware(AntiFraudMiddleware())
+    dp.callback_query.middleware(AntiFraudMiddleware())
     
     dp.message.middleware(AdminSpyMiddleware())
     dp.callback_query.middleware(AdminSpyMiddleware()) # И для кнопок тоже!
