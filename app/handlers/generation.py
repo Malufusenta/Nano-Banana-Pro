@@ -219,7 +219,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     
     cost = config.COST_PRO if pref_model == "pro" else config.COST_STANDARD
     text = (
-        f"🎨 **Параметры генерации**\n\n"
+        f"🎨 *Параметры генерации*\n\n"
         f"📝 **Запрос:** {prompt[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
         f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
@@ -240,9 +240,20 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
     ratio = data.get("pf_ratio", "1:1")
     quality = data.get("pf_quality", "hd")
     cost = config.COST_PRO if new_model == "pro" else config.COST_STANDARD
+
+    # 🔥 ПРОВЕРЯЕМ ФЛАГ BROADCAST 🔥
+    is_broadcast = data.get("is_broadcast_gen", False)
     
-    text = (
-        f"🎨 **Параметры генерации**\n\n"
+    if is_broadcast:
+        # Упрощённый текст для broadcast
+        text = (
+            f"🎨 *Параметры генерации*\n\n"
+            f"Выбери модель и жми \"Сгенерировать\"👇"
+        )
+    else:
+    
+        text = (
+        f"🎨 *Параметры генерации*\n\n"
         f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
         f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
@@ -291,9 +302,20 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(GenState.preflight_check)
     data = await state.get_data()
     cost = config.COST_PRO if data.get("pf_model") == "pro" else config.COST_STANDARD
+
+    # 🔥 ПРОВЕРЯЕМ ФЛАГ BROADCAST 🔥
+    is_broadcast = data.get("is_broadcast_gen", False)
     
-    text = (
-        f"🎨 **Параметры генерации**\n\n"
+    if is_broadcast:
+        # Упрощённый текст для broadcast
+        text = (
+            f"🎨 *Параметры генерации*\n\n"
+            f"Выбери модель и жми \"Сгенерировать\"👇"
+        )
+    else:
+    
+        text = (
+        f"🎨 *Параметры генерации*\n\n"
         f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
         f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
@@ -410,7 +432,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     
     # 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
         text = (
-        f"🎨 **Параметры генерации**\n\n"
+        f"🎨 *Параметры генерации*\n\n"
         f"Выбери модель и жми \"Сгенерировать\"👇"
     )
         await message.answer(
@@ -577,7 +599,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
 
 # 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
         text = (
-    f"🎨 **Параметры генерации**\n\n"
+    f"🎨 *Параметры генерации*\n\n"
     f"Выбери модель и жми \"Сгенерировать\"👇"
 )
         await message.answer(
