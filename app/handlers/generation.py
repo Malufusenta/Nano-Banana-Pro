@@ -362,8 +362,16 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
 # =====================================================================
 @router.message(F.chat.type == "private", F.media_group_id, StateFilter(GenState.free_mode, None, GenState.preflight_check, GenState.selecting_ratio))
 async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot, album: list[types.Message] = None):
-    await state.clear() # <--- ДОБАВИТЬ ЭТУ СТРОКУ, ЧТОБЫ ЗАБЫТЬ СТАРОЕ МЕНЮ
     """Обработка альбомов (2-10 фото)"""
+    
+    # 🔥 СОХРАНЯЕМ BROADCAST ДАННЫЕ ДО ОЧИСТКИ STATE 🔥
+    data = await state.get_data()
+    broadcast_prompt = data.get('broadcast_prompt')
+    broadcast_ratio = data.get('broadcast_ratio', '1:1')
+    is_from_broadcast = data.get('from_broadcast', False)
+    
+    await state.clear()  # Очищаем state
+    
     messages = album if album else [message]
     count = len(messages)
     
@@ -377,7 +385,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     for msg in messages:
         if msg.photo:
             url = await get_photo_url(bot, msg.photo[-1].file_id)
-            if url:  # ✅ Проверка
+            if url:
                 image_urls.append(url)
         if msg.caption and not full_caption: 
             full_caption = msg.caption
@@ -386,6 +394,36 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         await message.answer("❌ Не удалось получить фото.")
         return
     
+    # 🔥 ЕСЛИ ЭТО BROADCAST - ИСПОЛЬЗУЕМ СОХРАНЁННЫЙ ПРОМПТ 🔥
+    if is_from_broadcast and broadcast_prompt:
+        print(f"🔥 DEBUG: Broadcast альбом - используем промпт из рассылки")
+        
+        await state.update_data(
+            pf_prompt=broadcast_prompt,
+            pf_image_urls=image_urls,
+            pf_ratio=broadcast_ratio,
+            pf_model="standard",
+            pf_quality="2k"
+        )
+        await state.set_state(GenState.preflight_check)
+        
+        cost = config.COST_STANDARD
+        text = (
+            f"🎨 **Параметры генерации**\n\n"
+            f"📝 **Запрос:** {broadcast_prompt[:100]}...\n"
+            f"📐 **Формат:** {broadcast_ratio} (из рассылки)\n"
+            f"💰 **Стоимость:** {cost} банан(а)\n\n"
+            f"*Настрой параметры и жми \"Сгенерировать\"*👇"
+        )
+        await message.answer(
+            text,
+            reply_markup=get_preflight_kb("standard", broadcast_ratio, "2k"),
+            parse_mode="Markdown"
+        )
+        return
+    # 🔥 КОНЕЦ BROADCAST ЛОГИКИ 🔥
+    
+    # Обычный флоу (без изменений)
     if count == 1:
         if full_caption:
             await start_preflight_check(message, state, full_caption, image_urls)
@@ -1150,8 +1188,8 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     
     await callback.message.answer(
         f"🔥 <b>Отлично!</b>\n\n"
-        f"Отправьте фото, чтобы увидеть себя в этом образе.\n\n"
-        f"💡 <i>Промпт уже применен - просто пришлите фото!</i>",
+        f"Отправьте фото, к которому применить эффект.\n\n"
+        f"💡 <i>Промпт уже подготовлен - просто пришлите изображение!</i>",
         parse_mode="HTML"
     )
     
