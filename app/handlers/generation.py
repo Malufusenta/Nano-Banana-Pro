@@ -397,29 +397,27 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     # 🔥 ЕСЛИ ЭТО BROADCAST - ИСПОЛЬЗУЕМ СОХРАНЁННЫЙ ПРОМПТ 🔥
     if is_from_broadcast and broadcast_prompt:
         print(f"🔥 DEBUG: Broadcast альбом - используем промпт из рассылки")
-        
+    
         await state.update_data(
-            pf_prompt=broadcast_prompt,
-            pf_image_urls=image_urls,
-            pf_ratio=broadcast_ratio,
-            pf_model="standard",
-            pf_quality="2k"
-        )
+        pf_prompt=broadcast_prompt,
+        pf_image_urls=image_urls,
+        pf_ratio=broadcast_ratio,
+        pf_model="standard",
+        pf_quality="2k",
+        is_broadcast_gen=True  # 👈 ДОБАВЬ ФЛАГ
+    )
         await state.set_state(GenState.preflight_check)
-        
-        cost = config.COST_STANDARD
+    
+    # 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
         text = (
-            f"🎨 **Параметры генерации**\n\n"
-            f"📝 **Запрос:** {broadcast_prompt[:100]}...\n"
-            f"📐 **Формат:** {broadcast_ratio} (из рассылки)\n"
-            f"💰 **Стоимость:** {cost} банан(а)\n\n"
-            f"*Настрой параметры и жми \"Сгенерировать\"*👇"
-        )
+        f"🎨 **Параметры генерации**\n\n"
+        f"Выбери модель и жми \"Сгенерировать\"👇"
+    )
         await message.answer(
-            text,
-            reply_markup=get_preflight_kb("standard", broadcast_ratio, "2k"),
-            parse_mode="Markdown"
-        )
+        text,
+        reply_markup=get_preflight_kb("standard", broadcast_ratio, "2k"),
+        parse_mode="Markdown"
+    )
         return
     # 🔥 КОНЕЦ BROADCAST ЛОГИКИ 🔥
     
@@ -570,28 +568,24 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
         await state.update_data(
             pf_prompt=prompt,
             pf_image_urls=[url],
-            pf_ratio=ratio,  # 👈 ФОРМАТ ИЗ РАССЫЛКИ
+            pf_ratio=ratio,
             pf_model="standard",
-            pf_quality="2k"
-        )
+            pf_quality="2k",
+            is_broadcast_gen=True  # 👈 ДОБАВЬ ФЛАГ
+)
         await state.set_state(GenState.preflight_check)
-        
-        # Показываем preflight с ЗАДАННЫМ форматом
-        cost = config.COST_STANDARD
+
+# 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
         text = (
-            f"🎨 **Параметры генерации**\n\n"
-            f"📝 **Запрос:** {prompt[:100]}...\n"
-            f"📐 **Формат:** {ratio} (из рассылки)\n"
-            f"💰 **Стоимость:** {cost} банан(а)\n\n"
-            f"*Настрой параметры и жми \"Сгенерировать\"*👇"
-        )
+    f"🎨 **Параметры генерации**\n\n"
+    f"Выбери модель и жми \"Сгенерировать\"👇"
+)
         await message.answer(
-            text,
-            reply_markup=get_preflight_kb("standard", ratio, "2k"),
-            parse_mode="Markdown"
-        )
+    text,
+    reply_markup=get_preflight_kb("standard", ratio, "2k"),
+    parse_mode="Markdown"
+)
         return
-    # 🔥 КОНЕЦ НОВОГО КОДА 🔥
     
     # Обычный флоу
     if message.caption:
