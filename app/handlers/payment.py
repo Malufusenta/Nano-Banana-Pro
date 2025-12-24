@@ -203,17 +203,17 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
         payment_id = payment.id
 
         text = (
-            "⚡ <b>Отличный выбор!</b>\n\n"
+            "⚡️ <b>Отличный выбор!</b>\n\n"
             f"🍌 Пополнение: <b>+{package['gens']} {package['suffix']}</b>\n"
             f"💳 К оплате: <b>{package['price']}₽</b>\n\n"
-            "⏳ <i>Бананы зачислим сразу после оплаты.</i>\n\n"
-            "📄 Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>"
+            "📄 Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.\n\n"
+            "❗️ <b>После оплаты нажмите \"Я ОПЛАТИЛ\"</b> 👇"
         )
         
         builder = InlineKeyboardBuilder()
         builder.button(text=f"💳 Оплатить {package['price']}₽", url=pay_url)
         builder.button(text="✅ Я оплатил", callback_data=f"check_{payment_id}_{pkg_key}")
-        builder.button(text="🔙 Отмена", callback_data="goto_shop")
+        builder.button(text="🔙 Назад", callback_data="goto_shop")
         builder.adjust(1)
         
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML", disable_web_page_preview=True)
