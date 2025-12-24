@@ -206,7 +206,7 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
             "⚡️ <b>Отличный выбор!</b>\n\n"
             f"🍌 Пополнение: <b>+{package['gens']} {package['suffix']}</b>\n"
             f"💳 К оплате: <b>{package['price']}₽</b>\n\n"
-            "📄 <i>Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.</i>\n\n"            "❗️ <b>После оплаты нажмите \"Я ОПЛАТИЛ\"</b> 👇"
+            "📄 <i>Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.</i>\n\n"
             "❗️ <b>После оплаты нажмите \"Я ОПЛАТИЛ\"</b> 👇"
         )
         
