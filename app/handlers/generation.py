@@ -248,7 +248,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
         # Упрощённый текст для broadcast
         text = (
             f"🎨 *Параметры генерации*\n\n"
-            f"Выбери модель и жми \"Сгенерировать\"👇"
+            f"Выбери модель и жми *\"Сгенерировать\"*👇"
         )
     else:
     
@@ -1204,8 +1204,8 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     
     await callback.message.answer(
         f"🔥 <b>Отлично!</b>\n\n"
-        f"Отправьте фото, к которому применить эффект.\n\n"
-        f"💡 <i>Промпт уже подготовлен - просто пришлите изображение!</i>",
+        f"Отправьте фото, чтобы увидеть себя в этом образе.\n\n"
+        f"💡 <i>Промпт уже применен - просто пришлите фото!</i>",
         parse_mode="HTML"
     )
     
