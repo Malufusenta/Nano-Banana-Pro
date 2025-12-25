@@ -212,7 +212,7 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
         
         builder = InlineKeyboardBuilder()
         builder.button(text=f"💳 Оплатить {package['price']}₽", url=pay_url)
-        builder.button(text="✅ Я ОПЛАТИЛ", callback_data=f"check_{payment_id}_{pkg_key}")
+        builder.button(text="✅ Я оплатил", callback_data=f"check_{payment_id}_{pkg_key}")
         builder.button(text="🔙 Назад", callback_data="goto_shop")
         builder.adjust(1)
         
