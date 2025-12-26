@@ -5,7 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import ADMIN_IDS
 from app.database import async_session
-from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance, get_user_admin_card_data
+from app.services.user_service import find_user_by_input, admin_change_balance, get_user_admin_card_data
 from app.services.payment_service import confirm_purchase
 from app.handlers.start import get_main_kb
 import asyncio  # 👈 Для фоновых задач
@@ -513,21 +513,24 @@ async def process_find_user(message: types.Message, state: FSMContext):
     user_input = message.text.strip()
     
     async with async_session() as session:
-        user_data = await get_user_admin_card_data(session, user_input)
-    
-    if not user_data:
-        await message.answer(
-            "❌ Пользователь не найден.\n"
-            "Попробуй еще раз или жми /admin",
-            reply_markup=get_cancel_kb()
-        )
-        return
+        # Сначала ищем пользователя по ID или username
+        user = await find_user_by_input(session, user_input)
+        
+        if not user:
+            await message.answer(
+                "❌ Пользователь не найден.\n"
+                "Попробуй еще раз или жми /admin",
+                reply_markup=get_cancel_kb()
+            )
+            return
+        
+        # Теперь получаем полную статистику по найденному user_id
+        user_data = await get_user_admin_card_data(session, user.telegram_id)
 
     await log_admin_action(message.from_user.id, "found_user", user_data['user'].telegram_id)
     
     await state.clear()
     await show_user_card(message, user_data)
-
 
 async def show_user_card(message: types.Message, user_data: dict):
     """Показывает расширенную карточку пользователя"""
