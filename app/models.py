@@ -14,11 +14,17 @@ class User(Base):
     
     # Баланс
     generations_balance: Mapped[int] = mapped_column(Integer, default=3)
+    balance_free: Mapped[int] = mapped_column(Integer, default=3)  # ← ДОБАВЬ
+    balance_paid: Mapped[int] = mapped_column(Integer, default=0)  # ← ДОБАВЬ
     total_generations_used: Mapped[int] = mapped_column(Integer, default=0)
+    last_generation_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # ← ДОБАВЬ
+
     
     # Бонус и Настройки
     is_sub_bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
     preferred_model: Mapped[str] = mapped_column(String, default="standard") # standard / pro
+    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # ← ДОБАВЬ
+
 
 
     is_channel_sub_claimed: Mapped[bool] = mapped_column(Boolean, default=False) # Канал
