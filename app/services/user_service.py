@@ -26,6 +26,7 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int, username: 
 async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1) -> bool:
     """
     Списывает указанное количество генераций (amount).
+    Сначала списывает с balance_paid, потом с balance_free.
     Возвращает True, если баланса хватило.
     """
     query = select(User).where(User.telegram_id == telegram_id)
@@ -35,14 +36,34 @@ async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amou
     if not user:
         return False
     
-    # Проверяем, хватает ли баланса на эту операцию
-    if user.generations_balance >= amount:
-        user.generations_balance -= amount
-        user.total_generations_used += 1
-        await session.commit()
-        return True
-    else:
-        return False
+    # Проверяем общий баланс
+    total_balance = user.balance_paid + user.balance_free
+    if total_balance < amount:
+        return False  # Недостаточно бананов
+    
+    # Списываем сначала с платных, потом с бесплатных
+    remaining = amount
+    
+    if user.balance_paid > 0:
+        deduct_from_paid = min(user.balance_paid, remaining)
+        user.balance_paid -= deduct_from_paid
+        remaining -= deduct_from_paid
+    
+    if remaining > 0:
+        user.balance_free -= remaining
+    
+    # Обновляем старое поле для совместимости
+    user.generations_balance = user.balance_paid + user.balance_free
+    
+    # Статистика
+    user.total_generations_used += 1
+    
+    # Обновляем дату последней генерации
+    from datetime import datetime
+    user.last_generation_at = datetime.now()
+    
+    await session.commit()
+    return True
 
 async def get_user_balance(session: AsyncSession, telegram_id: int) -> int:
     query = select(User).where(User.telegram_id == telegram_id)
@@ -57,6 +78,7 @@ async def claim_bonus(session: AsyncSession, user_id: int, amount: int = 5) -> b
 
     if user and not user.is_sub_bonus_claimed:
         user.generations_balance += amount
+        user.balance_free += amount  # ← ДОБАВИЛИ
         user.is_sub_bonus_claimed = True
         await session.commit()
         return True
@@ -141,16 +163,23 @@ async def find_user_by_input(session: AsyncSession, user_input: str):
 async def admin_change_balance(session: AsyncSession, user_id: int, amount: int):
     """
     Меняет баланс пользователя (может быть отрицательным числом).
+    Админ начисляет/списывает бесплатные бананы (balance_free).
     """
     query = select(User).where(User.telegram_id == user_id)
     result = await session.execute(query)
     user = result.scalar_one_or_none()
     
     if user:
-        user.generations_balance += amount
+        # Админ работает с бесплатными бананами
+        user.balance_free += amount
+        
         # Защита от ухода в минус
-        if user.generations_balance < 0:
-            user.generations_balance = 0
+        if user.balance_free < 0:
+            user.balance_free = 0
+        
+        # Синхронизируем старое поле
+        user.generations_balance = user.balance_paid + user.balance_free
+        
         await session.commit()
         return user.generations_balance
     return None
@@ -296,19 +325,20 @@ async def claim_subscription_bonus(session, user_id: int, bonus_type: str, amoun
     Выдает бонус за подписку, если еще не выдавали.
     bonus_type: 'channel' или 'chat'
     """
-    # Используем твой существующий get_user (убедись, что он есть в файле)
     user = await get_user(session, user_id) 
     if not user: return False
 
     if bonus_type == 'channel':
-        if user.is_channel_sub_claimed: return False # Уже получал
+        if user.is_channel_sub_claimed: return False
         user.is_channel_sub_claimed = True
     
     elif bonus_type == 'chat':
-        if user.is_chat_sub_claimed: return False # Уже получал
+        if user.is_chat_sub_claimed: return False
         user.is_chat_sub_claimed = True
     
+    # Начисляем в оба поля
     user.generations_balance += amount
+    user.balance_free += amount  # ← ДОБАВИЛИ
     await session.commit()
     return True
 

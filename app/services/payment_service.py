@@ -17,19 +17,19 @@ async def create_purchase_record(session: AsyncSession, user_id: int, price: int
 async def confirm_purchase(session: AsyncSession, purchase_id: int) -> bool:
     """
     Подтверждает оплату заказа:
-    1. Меняет статус покупки на 'paid'
-    2. Начисляет генерации пользователю
+    1. Меняет статус покупки на 'succeeded'
+    2. Начисляет генерации пользователю (в balance_paid)
     """
     # 1. Ищем заказ по ID
     query = select(Purchase).where(Purchase.id == purchase_id)
     result = await session.execute(query)
     purchase = result.scalar_one_or_none()
 
-    if not purchase or purchase.status == "paid":
+    if not purchase or purchase.status == "succeeded":
         return False # Заказ не найден или уже оплачен
 
     # 2. Меняем статус
-    purchase.status = "paid"
+    purchase.status = "succeeded"
 
     # 3. Начисляем баланс юзеру
     user_query = select(User).where(User.telegram_id == purchase.user_id)
@@ -38,11 +38,10 @@ async def confirm_purchase(session: AsyncSession, purchase_id: int) -> bool:
     
     if user:
         user.generations_balance += purchase.amount
-        # Обновляем статистику трат юзера? (можно добавить поле total_spent в User, если нужно)
+        user.balance_paid += purchase.amount  # ← ДОБАВИЛИ (это ПЛАТНЫЕ бананы!)
     
     await session.commit()
     return True
-
 async def fulfill_payment(session: AsyncSession, user_id: int, gens_amount: int):
     """
     Начисляет генерации пользователю.

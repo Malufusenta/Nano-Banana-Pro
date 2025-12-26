@@ -13,8 +13,8 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String, nullable=True)
     
     # Баланс
-    generations_balance: Mapped[int] = mapped_column(Integer, default=3)
-    balance_free: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    generations_balance: Mapped[int] = mapped_column(Integer, default=0)
+    balance_free: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     balance_paid: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     total_generations_used: Mapped[int] = mapped_column(Integer, default=0)
     last_generation_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # ← ДОБАВЬ
