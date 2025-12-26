@@ -14,8 +14,8 @@ class User(Base):
     
     # Баланс
     generations_balance: Mapped[int] = mapped_column(Integer, default=3)
-    balance_free: Mapped[int] = mapped_column(Integer, default=3)  # ← ДОБАВЬ
-    balance_paid: Mapped[int] = mapped_column(Integer, default=0)  # ← ДОБАВЬ
+    balance_free: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    balance_paid: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     total_generations_used: Mapped[int] = mapped_column(Integer, default=0)
     last_generation_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # ← ДОБАВЬ
 
