@@ -1,8 +1,8 @@
-"""Add balance split and last generation fixed
+"""Add balance split and last generation final
 
-Revision ID: 069ce1e854b0
+Revision ID: 13aaa832737a
 Revises: 492504c698c4
-Create Date: 2025-12-26 20:09:40.366350
+Create Date: 2025-12-26 20:15:39.774818
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '069ce1e854b0'
+revision: str = '13aaa832737a'
 down_revision: Union[str, Sequence[str], None] = '492504c698c4'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('balance_free', sa.Integer(), server_default='3', nullable=False))
     op.add_column('users', sa.Column('balance_paid', sa.Integer(), server_default='0', nullable=False))
     op.add_column('users', sa.Column('last_generation_at', sa.DateTime(), nullable=True))
-    op.add_column('users', sa.Column('is_blocked', sa.Boolean(), nullable=False))
+    op.add_column('users', sa.Column('is_blocked', sa.Boolean(), server_default='0', nullable=False))
     # ### end Alembic commands ###
 
 

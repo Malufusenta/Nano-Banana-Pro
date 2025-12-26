@@ -23,8 +23,7 @@ class User(Base):
     # Бонус и Настройки
     is_sub_bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
     preferred_model: Mapped[str] = mapped_column(String, default="standard") # standard / pro
-    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # ← ДОБАВЬ
-
+    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
 
     is_channel_sub_claimed: Mapped[bool] = mapped_column(Boolean, default=False) # Канал
