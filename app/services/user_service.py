@@ -346,29 +346,43 @@ async def get_user_admin_card_data(session: AsyncSession, user_id: int):
     if not user:
         return None
     
-    # 2. Статистика платежей (количество и сумма успешных)
+    # 2. Статистика платежей (количество, сумма, последняя дата)
     stmt_payments = select(
         func.count(Purchase.id),
-        func.sum(Purchase.price)
+        func.sum(Purchase.price),
+        func.max(Purchase.created_at)
     ).where(
         Purchase.user_id == user_id,
         Purchase.status == "succeeded"
     )
     result_payments = await session.execute(stmt_payments)
-    payments_count, payments_sum = result_payments.fetchone()
+    payments_count, payments_sum, last_payment_date = result_payments.fetchone()
     
     # 3. Количество рефералов (сколько людей пригласил)
     stmt_referrals = select(func.count(User.id)).where(User.referrer_id == user_id)
     referrals_count = await session.scalar(stmt_referrals) or 0
     
+    # 4. Вычисляем статус пользователя
+    status = "Активен ✅" if not user.is_blocked else "Заблокировал бота ❌"
+    
+    # 5. Подсчитываем дни с момента регистрации
+    from datetime import datetime, timezone
+    days_with_us = (datetime.now(timezone.utc) - user.created_at.replace(tzinfo=timezone.utc)).days
+    
     return {
         "user": user,
         "total_generations": user.total_generations_used,
+        "last_generation_at": user.last_generation_at,
         "payments_count": payments_count or 0,
         "payments_sum": payments_sum or 0,
+        "last_payment_date": last_payment_date,
         "source": user.source or "Прямой переход",
         "referrer_id": user.referrer_id,
         "referrals_count": referrals_count,
         "channel_bonus_claimed": user.is_channel_sub_claimed,
-        "chat_bonus_claimed": user.is_chat_sub_claimed
+        "chat_bonus_claimed": user.is_chat_sub_claimed,
+        "status": status,
+        "days_with_us": days_with_us,
+        "balance_free": user.balance_free,
+        "balance_paid": user.balance_paid
     }

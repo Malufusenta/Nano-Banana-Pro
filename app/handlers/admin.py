@@ -552,18 +552,55 @@ async def show_user_card(message: types.Message, user_data: dict):
         bonuses.append("💬 Чат")
     bonus_text = ", ".join(bonuses) if bonuses else "Не получал"
     
+    # Форматируем дату регистрации
+    reg_date = user.created_at.strftime("%d.%m.%Y")
+    days_text = f"{user_data['days_with_us']} дней" if user_data['days_with_us'] != 1 else "1 день"
+    
+    # Форматируем последнюю оплату
+    last_payment_text = "Нет платежей"
+    if user_data['last_payment_date']:
+        from datetime import datetime, timezone
+        delta = (datetime.now(timezone.utc) - user_data['last_payment_date'].replace(tzinfo=timezone.utc)).days
+        if delta == 0:
+            last_payment_text = "Сегодня"
+        elif delta == 1:
+            last_payment_text = "Вчера"
+        else:
+            last_payment_text = user_data['last_payment_date'].strftime("%d.%m.%Y")
+    
+    # Форматируем последнюю генерацию
+    last_gen_text = "Не генерировал"
+    if user_data['last_generation_at']:
+        from datetime import datetime, timezone
+        delta = (datetime.now(timezone.utc) - user_data['last_generation_at'].replace(tzinfo=timezone.utc)).days
+        if delta == 0:
+            last_gen_text = user_data['last_generation_at'].strftime("Сегодня %H:%M")
+        elif delta == 1:
+            last_gen_text = "Вчера"
+        else:
+            last_gen_text = user_data['last_generation_at'].strftime("%d.%m.%Y")
+    
+    total_balance = user_data['balance_free'] + user_data['balance_paid']
+    
     text = (
         f"👤 <b>Карточка пользователя</b>\n\n"
         f"🆔 <code>{user.telegram_id}</code>\n"
         f"👤 Имя: {safe_name}\n"
-        f"🔗 Ник: @{safe_username}\n\n"
+        f"🔗 Ник: @{safe_username}\n"
+        f"📅 Дата регистрации: {reg_date} ({days_text} с нами)\n"
+        f"📊 Статус: {user_data['status']}\n\n"
         
-        f"💎 <b>Баланс: {user.generations_balance} 🍌</b>\n"
-        f"🎨 Генераций сделано: <b>{user_data['total_generations']}</b>\n\n"
+        f"💎 <b>Баланс: {total_balance} 🍌</b>\n"
+        f"├─ Платные: {user_data['balance_paid']} 🍌\n"
+        f"└─ Бесплатные: {user_data['balance_free']} 🍌\n\n"
+        
+        f"🎨 Генераций сделано: <b>{user_data['total_generations']}</b>\n"
+        f"📆 Дата последней генерации: {last_gen_text}\n\n"
         
         f"💰 <b>Платежи:</b>\n"
         f"  • Количество: {user_data['payments_count']}\n"
-        f"  • Сумма: {user_data['payments_sum']}₽\n\n"
+        f"  • Сумма: {user_data['payments_sum']}₽\n"
+        f"  • Последняя оплата: {last_payment_text}\n\n"
         
         f"🔗 <b>Источник:</b> {source_text}\n"
         f"👥 <b>Рефералов:</b> {user_data['referrals_count']}\n"
