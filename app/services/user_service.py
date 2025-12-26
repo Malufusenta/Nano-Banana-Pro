@@ -336,3 +336,39 @@ async def get_user_financial_stats(session, user_id: int):
         "total_spent": total_spent or 0,
         "source": source
     }
+
+async def get_user_admin_card_data(session: AsyncSession, user_id: int):
+    """
+    Собирает полную информацию о пользователе для админ-карточки
+    """
+    # 1. Основные данные пользователя
+    user = await get_user(session, user_id)
+    if not user:
+        return None
+    
+    # 2. Статистика платежей (количество и сумма успешных)
+    stmt_payments = select(
+        func.count(Purchase.id),
+        func.sum(Purchase.price)
+    ).where(
+        Purchase.user_id == user_id,
+        Purchase.status == "succeeded"
+    )
+    result_payments = await session.execute(stmt_payments)
+    payments_count, payments_sum = result_payments.fetchone()
+    
+    # 3. Количество рефералов (сколько людей пригласил)
+    stmt_referrals = select(func.count(User.id)).where(User.referrer_id == user_id)
+    referrals_count = await session.scalar(stmt_referrals) or 0
+    
+    return {
+        "user": user,
+        "total_generations": user.total_generations_used,
+        "payments_count": payments_count or 0,
+        "payments_sum": payments_sum or 0,
+        "source": user.source or "Прямой переход",
+        "referrer_id": user.referrer_id,
+        "referrals_count": referrals_count,
+        "channel_bonus_claimed": user.is_channel_sub_claimed,
+        "chat_bonus_claimed": user.is_chat_sub_claimed
+    }

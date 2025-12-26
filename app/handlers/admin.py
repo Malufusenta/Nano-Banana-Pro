@@ -5,7 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import ADMIN_IDS
 from app.database import async_session
-from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance
+from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance, get_user_admin_card_data
 from app.services.payment_service import confirm_purchase
 from app.handlers.start import get_main_kb
 import asyncio  # 👈 Для фоновых задач
@@ -513,9 +513,9 @@ async def process_find_user(message: types.Message, state: FSMContext):
     user_input = message.text.strip()
     
     async with async_session() as session:
-        user = await find_user_by_input(session, user_input)
+        user_data = await get_user_admin_card_data(session, user_input)
     
-    if not user:
+    if not user_data:
         await message.answer(
             "❌ Пользователь не найден.\n"
             "Попробуй еще раз или жми /admin",
@@ -523,29 +523,54 @@ async def process_find_user(message: types.Message, state: FSMContext):
         )
         return
 
-    await log_admin_action(message.from_user.id, "found_user", user.telegram_id)
+    await log_admin_action(message.from_user.id, "found_user", user_data['user'].telegram_id)
     
     await state.clear()
-    await show_user_card(message, user.telegram_id, user.full_name, user.username, user.generations_balance)
+    await show_user_card(message, user_data)
 
 
-async def show_user_card(message: types.Message, user_id: int, name: str, username: str, balance: int):
-    """Показывает карточку пользователя с действиями"""
-    safe_name = html.quote(str(name))
-    safe_username = html.quote(str(username)) if username else "Нет"
+async def show_user_card(message: types.Message, user_data: dict):
+    """Показывает расширенную карточку пользователя"""
+    user = user_data['user']
+    
+    safe_name = html.quote(str(user.full_name))
+    safe_username = html.quote(str(user.username)) if user.username else "Нет"
+    
+    # Формируем источник трафика
+    source_text = user_data['source']
+    if user_data['referrer_id']:
+        source_text = f"Реферал от ID: {user_data['referrer_id']}"
+    
+    # Бонусы
+    bonuses = []
+    if user_data['channel_bonus_claimed']:
+        bonuses.append("📢 Канал")
+    if user_data['chat_bonus_claimed']:
+        bonuses.append("💬 Чат")
+    bonus_text = ", ".join(bonuses) if bonuses else "Не получал"
     
     text = (
         f"👤 <b>Карточка пользователя</b>\n\n"
-        f"🆔 <code>{user_id}</code>\n"
+        f"🆔 <code>{user.telegram_id}</code>\n"
         f"👤 Имя: {safe_name}\n"
         f"🔗 Ник: @{safe_username}\n\n"
-        f"💎 <b>Баланс: {balance} 🍌</b>"
+        
+        f"💎 <b>Баланс: {user.generations_balance} 🍌</b>\n"
+        f"🎨 Генераций сделано: <b>{user_data['total_generations']}</b>\n\n"
+        
+        f"💰 <b>Платежи:</b>\n"
+        f"  • Количество: {user_data['payments_count']}\n"
+        f"  • Сумма: {user_data['payments_sum']}₽\n\n"
+        
+        f"🔗 <b>Источник:</b> {source_text}\n"
+        f"👥 <b>Рефералов:</b> {user_data['referrals_count']}\n"
+        f"🎁 <b>Бонусы:</b> {bonus_text}"
     )
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="➕ Добавить", callback_data=f"adm_add_{user_id}")
-    builder.button(text="➖ Отнять", callback_data=f"adm_rem_{user_id}")
-    builder.button(text="✉️ Написать", callback_data=f"adm_msg_{user_id}")
+    builder.button(text="➕ Добавить", callback_data=f"adm_add_{user.telegram_id}")
+    builder.button(text="➖ Отнять", callback_data=f"adm_rem_{user.telegram_id}")
+    builder.button(text="✉️ Написать", callback_data=f"adm_msg_{user.telegram_id}")
     builder.button(text="🔙 Меню", callback_data="admin_menu")
     builder.adjust(2, 1, 1)
     
