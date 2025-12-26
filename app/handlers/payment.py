@@ -3,6 +3,7 @@ from aiogram.types import LabeledPrice, PreCheckoutQuery
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.database import async_session
+from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance, get_user_admin_card_data, add_paid_balance
 from app.services.user_service import get_user_profile_data, claim_subscription_bonus, admin_change_balance, get_user_balance, get_user_financial_stats
 from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded
 from app import config
@@ -266,8 +267,7 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
             async with async_session() as session:
                 await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'])
                 # Начисляем бананы
-                await admin_change_balance(session, callback.from_user.id, package['gens'])
-                
+                await add_paid_balance(session, callback.from_user.id, package['gens'])                
                 # Логируем С АНАЛИТИКОЙ
                 try:
                     new_bal = await get_user_balance(session, callback.from_user.id)

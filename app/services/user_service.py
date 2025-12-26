@@ -416,3 +416,22 @@ async def get_user_admin_card_data(session: AsyncSession, user_id: int):
         "balance_free": user.balance_free,
         "balance_paid": user.balance_paid
     }
+
+async def add_paid_balance(session: AsyncSession, user_id: int, amount: int):
+    """
+    Начисляет ПЛАТНЫЕ бананы (после покупки).
+    """
+    query = select(User).where(User.telegram_id == user_id)
+    result = await session.execute(query)
+    user = result.scalar_one_or_none()
+    
+    if user:
+        # Начисляем в платные
+        user.balance_paid += amount
+        
+        # Синхронизируем старое поле
+        user.generations_balance = user.balance_paid + user.balance_free
+        
+        await session.commit()
+        return user.generations_balance
+    return None
