@@ -1155,9 +1155,15 @@ async def process_generation(
         
         # 3. 🛡️ ПЕРЕВОДЧИК ОШИБОК ДЛЯ ПОЛЬЗОВАТЕЛЯ
         err_msg = str(e).lower()
+
+        if "500" in err_msg or "internal server" in err_msg:
+            user_friendly_text = (
+        "🔧 <b>Nano Banana Pro временно недоступен.</b>\n"
+        "Обычно это решается за 1-2 минуты. Попробуйте ещё раз!"
+    )
         
         # Сценарий А: NSFW / Цензура
-        if "sensitive" in err_msg or "nsfw" in err_msg or "safety" in err_msg:
+        elif "sensitive" in err_msg or "nsfw" in err_msg or "safety" in err_msg:
             user_friendly_text = (
                 "🔞 <b>Сработал фильтр контента!</b>\n"
                 "Нейросеть посчитала запрос недопустимым (18+, насилие или запрещенные темы).\n"
