@@ -853,6 +853,21 @@ async def cb_select_category(callback: types.CallbackQuery, state: FSMContext):
             parse_mode="Markdown"
         )
 
+# ==============================================================================
+# 🎨 BLEND DETECTOR
+# ==============================================================================
+BLEND_TRIGGERS = [
+    "смешай", "смешать", "микс", "mix", "blend",
+    "соедини", "соединить", "объедини", "объединить","обьедини",
+    "скрестить", "скрести", "составь",
+    "вариация", "variation", "комбинируй", "combine",
+    "слей", "merge", "креатив", "creative"
+]
+
+def is_blend_request(prompt: str) -> bool:
+    """Проверяет, хочет ли пользователь смешивание (а не замену лица)"""
+    prompt_lower = prompt.lower()
+    return any(trigger in prompt_lower for trigger in BLEND_TRIGGERS)
 
 # ==============================================================================
 # 🔥 ГЛАВНАЯ ФУНКЦИЯ ГЕНЕРАЦИИ
@@ -898,9 +913,11 @@ async def process_generation(
         'swap', 'replace', 'put', 'place', 'take from'
     ]
     is_swap_task = any(keyword in prompt.lower() for keyword in swap_keywords)
+    # 🔥 ДЕТЕКТОР BLEND (СМЕШИВАНИЕ)
+    is_blend_task = is_blend_request(prompt)
 
     # 🔥 AUTO-COLLAGE ТОЛЬКО ДЛЯ НЕ-SWAP ЗАДАЧ
-    if is_complex_standard and len(final_urls) >= 2 and not is_swap_task:
+    if is_complex_standard and len(final_urls) >= 2 and not is_swap_task and not is_blend_task:
         try:
             print(f"🎨 Создаю коллаж из {len(final_urls)} фото...") 
             
