@@ -373,7 +373,9 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
         aspect_ratio=ratio, 
         cost=cost, 
         use_pro_model=use_pro, 
-        resolution=resolution
+        resolution=resolution,
+        is_blend_mode=data.get("is_blend_mode", False)
+
     )
     
     # ⚠️ ВАЖНО: Мы НЕ делаем await state.clear()
@@ -623,6 +625,9 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
 async def handle_delayed_caption(message: types.Message, state: FSMContext):
     """Обработка отложенного текста после фото"""
     user_prompt = message.text
+        # 🎨 Проверяем blend-задачу
+    if is_blend_request(user_prompt):
+        await state.update_data(is_blend_mode=True)
     data = await state.get_data()
     image_urls = data.get("pending_image_urls")
     
@@ -663,7 +668,9 @@ async def cb_reroll(callback: types.CallbackQuery, bot: Bot):
             params.get("ratio", "1:1"), 
             params.get("cost", 1), 
             params.get("pro", False), 
-            params.get("resolution", "1K")
+            params.get("resolution", "1K"),
+            is_blend_mode=params.get("is_blend_mode", False)
+
         )
     except Exception as e:
         print(f"❌ Ошибка reroll: {e}")
@@ -880,7 +887,9 @@ async def process_generation(
     aspect_ratio: str = "1:1", 
     cost: int = 1, 
     use_pro_model: bool = False, 
-    resolution: str = "1K"
+    resolution: str = "1K",
+    is_blend_mode: bool = False
+
 ):
     """Основная функция генерации изображений"""
     bot = message.bot 
@@ -914,7 +923,7 @@ async def process_generation(
     ]
     is_swap_task = any(keyword in prompt.lower() for keyword in swap_keywords)
     # 🔥 ДЕТЕКТОР BLEND (СМЕШИВАНИЕ)
-    is_blend_task = is_blend_request(prompt)
+    is_blend_task = is_blend_mode or is_blend_request(prompt)
 
     # 🔥 AUTO-COLLAGE ТОЛЬКО ДЛЯ НЕ-SWAP ЗАДАЧ
     if is_complex_standard and len(final_urls) >= 2 and not is_swap_task and not is_blend_task:
@@ -1074,7 +1083,9 @@ async def process_generation(
                 "ratio": aspect_ratio,
                 "cost": cost,
                 "pro": use_pro_model,
-                "resolution": resolution
+                "resolution": resolution,
+                "is_blend_mode": is_blend_mode
+
             })
             
             async with async_session() as session:
