@@ -89,8 +89,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             word = get_banana_word(welcome_bonus)
             text = (
                     f"👋 Привет! Я *Nano Banana Pro 🍌* — твой карманный AI-фотошоп.\n\n"
-                    f"🎁 *Тебе уже начислено {welcome_bonus} подарочных {word}*\n"
-                    f"💡 Идеи и промпты смотри тут: [Наш Канал]({CHANNEL_LINK})\n\n"
+                    f"🎁 *Тебе уже начислено {welcome_bonus} подарочных {word}*\n\n"
+                    f"🤷‍♀️ *Не знаешь, что сгенерировать?* [Хочу фото, как с обложки]({CHANNEL_LINK})\n\n"
                     f"*Я готов творить!*\n"
                     f"Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить 👇"
             )
