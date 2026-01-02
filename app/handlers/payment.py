@@ -87,9 +87,12 @@ async def cb_buy_from_freebies(callback: types.CallbackQuery):
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu_from_freebies(callback: types.CallbackQuery):
     """Возврат в главное меню"""
-    from app.handlers.start import show_main_menu
+    from app.handlers.start import get_main_kb
     await callback.message.delete()
-    await show_main_menu(callback.message)
+    await callback.message.answer(
+        "🏠 Главное меню",
+        reply_markup=get_main_kb()
+    )
     await callback.answer()
 
 
