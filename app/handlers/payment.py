@@ -77,6 +77,20 @@ async def show_freebies(message: types.Message, bot: Bot):
     
     await message.answer(text, parse_mode="HTML", reply_markup=builder.as_markup())
     
+@router.callback_query(F.data == "buy_menu")
+async def cb_buy_from_freebies(callback: types.CallbackQuery):
+    """Открывает магазин из раздела халявы"""
+    await callback.message.delete()
+    await cmd_shop(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "main_menu")
+async def cb_main_menu_from_freebies(callback: types.CallbackQuery):
+    """Возврат в главное меню"""
+    from app.handlers.start import show_main_menu
+    await callback.message.delete()
+    await show_main_menu(callback.message)
+    await callback.answer()
 
 
 # =====================================================================
