@@ -318,31 +318,6 @@ async def create_user(session, telegram_id: int, username: str, full_name: str, 
     await session.commit()
     return new_user
 
-# 👇 ДОБАВИТЬ В КОНЕЦ ФАЙЛА 👇
-
-async def claim_subscription_bonus(session, user_id: int, bonus_type: str, amount: int) -> bool:
-    """
-    Выдает бонус за подписку, если еще не выдавали.
-    bonus_type: 'channel' или 'chat'
-    """
-    user = await get_user(session, user_id) 
-    if not user: return False
-
-    if bonus_type == 'channel':
-        if user.is_channel_sub_claimed: return False
-        user.is_channel_sub_claimed = True
-    
-    elif bonus_type == 'chat':
-        if user.is_chat_sub_claimed: return False
-        user.is_chat_sub_claimed = True
-    
-    # Начисляем в оба поля
-    user.generations_balance += amount
-    user.balance_free += amount  # ← ДОБАВИЛИ
-    await session.commit()
-    return True
-
-# 👇 ВСТАВИТЬ В КОНЕЦ ФАЙЛА user_service.py
 
 async def get_user_financial_stats(session, user_id: int):
     """
