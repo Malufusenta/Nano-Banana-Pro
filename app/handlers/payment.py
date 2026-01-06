@@ -9,6 +9,8 @@ from app.services.payment_service import create_purchase_record, mark_purchase_a
 from app import config
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
 from app.services.admin_logger import log_payment
+# 👇 ДОБАВИТЬ ЭТУ СТРОКУ
+from app.packages import PACKAGES, STARS_PACKAGES
 
 
 router = Router()
@@ -17,22 +19,6 @@ router = Router()
 CHANNEL_ID = "@nanobanan_promt"
 CHAT_ID = "@nanabanan_chat"
 
-PACKAGES = {
-    "mini": {"name": "Start", "gens": 8, "price": 79, "emoji": "", "suffix": "бананов"},
-    "standard": {"name": "Medium", "gens": 44, "price": 299, "emoji": "", "suffix": "банана"},
-    "large": {"name": "Big", "gens": 140, "price": 699, "emoji": "🔥", "suffix": "бананов"},
-    "xl": {"name": "Mega", "gens": 340, "price": 1499, "emoji": "", "suffix": "бананов"},
-    "whale": {"name": "Whale", "gens": 832, "price": 3499, "emoji": "👑", "suffix": "банана"},
-}
-
-# Stars пакеты
-STARS_PACKAGES = {
-    "stars_4": {"bananas": 4, "stars": 35, "emoji": "🍌"},
-    "stars_12": {"bananas": 12, "stars": 90, "emoji": "🍌"},
-    "stars_24": {"bananas": 24, "stars": 160, "emoji": "🍌"},
-    "stars_60": {"bananas": 60, "stars": 350, "emoji": "🍌"},
-    "stars_120": {"bananas": 120, "stars": 650, "emoji": "🍌"},
-}
 
 # 👇 ВСТАВИТЬ В НАЧАЛО ФАЙЛА (после списков PACKAGES)
 
@@ -148,59 +134,84 @@ async def back_to_rub_menu(callback: types.CallbackQuery):
     await callback.answer()
     await cmd_shop(callback.message)
 
-# =====================================================================
-# 2. ОФОРМЛЕНИЕ (ТЕКСТ + ССЫЛКА НА ЮКАССУ)
-# =====================================================================
+# ... (импорты сверху остаются те же)
+
+# ... Импорты оставь те же, что были (убедись, что create_yoo_payment импортирован)
+# from app.services.payment_api import create_yoo_payment
+
 @router.callback_query(F.data.startswith("buy_"))
 async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
     parts = callback.data.split("_")
     
-    # Проверяем, это Stars пакет или рублевый
+    # 1. Если это Stars (оставляем старую логику)
     if len(parts) >= 3 and parts[1] == "stars":
-        # STARS ЛОГИКА
-        pkg_key = f"{parts[1]}_{parts[2]}"  # stars_4, stars_12 и т.д.
+        pkg_key = f"{parts[1]}_{parts[2]}"
         await handle_stars_purchase(callback, bot, pkg_key)
         return
     
-    # РУБЛИ ЛОГИКА (старая)
+    # 2. Получаем тариф
     pkg_key = parts[1]
     package = PACKAGES.get(pkg_key)
     if not package: 
         await callback.answer("Тариф не найден")
         return
-    
+
     user_id = callback.from_user.id
-    
-    async with async_session() as session:
-        await create_purchase_record(session, user_id, package['price'], package['gens'])
+    desc = f"Покупка {package['gens']} бананов"
 
+    # Чтобы пользователь не скучал, пока мы делаем запросы к ЮКассе (это занимает 1-2 сек)
+    # мы можем (опционально) показать часики в кнопке, но пока просто делаем магию.
+
+    # 3. ГЕНЕРИРУЕМ ССЫЛКИ ЗАРАНЕЕ
+    sbp_url = None
+    card_url = None
+
+    # Попытка создать ссылку на СБП
     try:
-        desc = f"Покупка {package['gens']} бананов (ID: {user_id})"
-        payment = create_yoo_payment(package['price'], desc, user_id)
-        pay_url = payment.confirmation.confirmation_url
-        payment_id = payment.id
-
-        text = (
-            "⚡️ <b>Отличный выбор!</b>\n\n"
-            f"🍌 Пополнение: <b>+{package['gens']} {package['suffix']}</b>\n"
-            f"💳 К оплате: <b>{package['price']}₽</b>\n\n"
-            "📄 <i>Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.</i>\n\n"
-            "❗️ <b>После оплаты нажмите \"Я оплатил\"👇</b>"
-
-           
-        )
-        
-        builder = InlineKeyboardBuilder()
-        builder.button(text=f"💳 Оплатить {package['price']}₽", url=pay_url)
-        builder.button(text="✅ Я оплатил", callback_data=f"check_{payment_id}_{pkg_key}")
-        builder.button(text="🔙 Назад", callback_data="goto_shop")
-        builder.adjust(1)
-        
-        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML", disable_web_page_preview=True)
-        
+        # Важно: если в тестовом магазине СБП выключен, тут будет ошибка, мы её подавим
+        payment_sbp = create_yoo_payment(package['price'], desc, user_id, payment_method="sbp")
+        sbp_url = payment_sbp.confirmation.confirmation_url
     except Exception as e:
-        print(f"YooKassa Error: {e}")
-        await callback.answer("Ошибка создания ссылки. Попробуйте позже.", show_alert=True)
+        print(f"⚠️ СБП не создан (возможно отключен в настройках): {e}")
+
+    # Попытка создать ссылку на Карту
+    try:
+        payment_card = create_yoo_payment(package['price'], desc, user_id, payment_method="bank_card")
+        card_url = payment_card.confirmation.confirmation_url
+    except Exception as e:
+        print(f"⚠️ Оплата картой не создана: {e}")
+        await callback.answer("Ошибка платежной системы", show_alert=True)
+        return
+
+    # 4. СОБИРАЕМ КРАСИВЫЙ ТЕКСТ
+    text = (
+        "⚡️ <b>Отличный выбор!</b>\n\n"
+        f"🍌 Пополнение: <b>+{package['gens']} {package['suffix']}</b>\n"
+        f"💳 К оплате: <b>{package['price']}₽</b>\n\n"
+        "📄 <i>Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.</i>"
+    )
+
+    # 5. СОБИРАЕМ КНОПКИ
+    builder = InlineKeyboardBuilder()
+
+    # Кнопка СБП (показываем, только если ссылка успешно создалась)
+    if sbp_url:
+        builder.button(text="🚀 СБП", url=sbp_url)
+    
+    # Кнопка Карты (основная)
+    if card_url:
+        builder.button(text="💳 Карта/другое", url=card_url)
+        
+    builder.button(text="🔙 Назад", callback_data="goto_shop")
+    builder.adjust(1) # Все кнопки в столбик
+
+    # Отправляем
+    await callback.message.edit_text(
+        text, 
+        reply_markup=builder.as_markup(), 
+        parse_mode="HTML", 
+        disable_web_page_preview=True
+    )
 
 # Создание Stars инвойса
 async def handle_stars_purchase(callback: types.CallbackQuery, bot: Bot, pkg_key: str):
@@ -344,7 +355,6 @@ async def cmd_about(message: types.Message):
         "🆔 <b>ИНН:</b> 025502709811\n\n"
         
         "📞 <b>Контакты:</b>\n"
-        "Тел.: +79953435561\n"
         "Telegram: @nan0banana_help\n"
         "Email: help.nanobanan@gmail.com\n\n"
         
