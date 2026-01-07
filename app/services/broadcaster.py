@@ -28,25 +28,28 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
     - broadcast_id: ID рассылки из БД
     - admin_id: ID админа (для отчёта)
     """
-    
-    # Получаем данные рассылки
+
+    from datetime import datetime, timedelta
+
+    # Получаем данные рассылки и список пользователей
     async with async_session() as session:
+        # 1. Получаем рассылку
         result = await session.execute(
             select(Broadcast).where(Broadcast.id == broadcast_id)
         )
         broadcast = result.scalar_one()
         
-    # Получаем активных пользователей (исключаем новичков)
-    from datetime import datetime, timedelta
-
-    # Только те, кто зарегистрирован более 24 часов назад
-    cutoff_time = datetime.now() - timedelta(hours=24)
-
-    users_result = await session.execute(
-        select(User.telegram_id)
-        .where(User.created_at < cutoff_time)  # 👈 ФИЛЬТР
-    )
-    user_ids = [row[0] for row in users_result.fetchall()]
+        # 2. Получаем активных пользователей (исключаем новичков и заблокировавших)
+        cutoff_time = datetime.now() - timedelta(hours=24)
+        
+        users_result = await session.execute(
+            select(User.telegram_id)
+            .where(
+                User.created_at < cutoff_time,
+                User.is_blocked == False  # ✅ Только активные
+            )
+        )
+        user_ids = [row[0] for row in users_result.fetchall()]
 
     print(f"📊 Broadcast #{broadcast_id}: Отправка {len(user_ids)} пользователям (исключены новички)")
     
@@ -118,12 +121,15 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
             blocked += 1
             sent += 1
             
-            # Помечаем в БД (опционально)
-            # async with async_session() as session:
-            #     await session.execute(
-            #         update(User).where(User.telegram_id == user_id).values(is_blocked=True)
-            #     )
-            #     await session.commit()
+            # ✅ Помечаем в БД
+            try:
+                async with async_session() as session:
+                    await session.execute(
+                        update(User).where(User.telegram_id == user_id).values(is_blocked=True)
+                    )
+                    await session.commit()
+            except Exception as db_error:
+                print(f"⚠️ Failed to mark user {user_id} as blocked: {db_error}")
             
         except Exception as e:
             # Другие ошибки (чат не найден, etc)
