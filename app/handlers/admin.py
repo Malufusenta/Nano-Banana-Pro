@@ -359,10 +359,10 @@ async def process_broadcast_buttons(message: types.Message, state: FSMContext):
         await state.set_state(BroadcastState.waiting_for_aspect_ratio)
         
         builder = InlineKeyboardBuilder()
-        ratios = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"]
+        ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
         for r in ratios:
             builder.button(text=r, callback_data=f"bc_ratio_{r}")
-        builder.adjust(3, 2, 2)
+        builder.adjust(3, 3, 2, 2)
         
         await message.answer(
             "📐 <b>Выберите формат результата:</b>\n\n"
