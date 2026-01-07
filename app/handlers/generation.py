@@ -163,11 +163,11 @@ def get_preflight_kb(model_type: str, ratio: str, quality: str):
 
 def get_ratio_kb():
     builder = InlineKeyboardBuilder()
-    ratios = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"]
+    ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
     for r in ratios: 
         builder.button(text=r, callback_data=f"set_ratio_{r}")
     builder.button(text="🔙 Назад", callback_data="pf_back")
-    builder.adjust(3, 2, 2, 1)
+    builder.adjust(3, 3, 2, 2, 1)
     return builder.as_markup()
 
 def get_cancel_kb():
