@@ -2,6 +2,7 @@ from aiogram import Router, types, F, Bot
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+# Теперь этот импорт точно сработает, файлы на месте
 from app.services.admin_logger import log_new_user, log_referral
 from app.database import async_session
 from app.services.user_service import get_user, create_user, admin_change_balance
@@ -9,7 +10,6 @@ from app import config
 
 router = Router()
 
-# 👇 Твои настройки
 WELCOME_PHOTO = "AgACAgIAAxkBAAIGbWky1V4aiUImfckmTzqXjKcykdunAAJqC2sb4L2ZSWGkUXDH06FzAQADAgADeQADNgQ"
 CHANNEL_LINK = "https://t.me/nanobanan_promt"
 
@@ -19,17 +19,10 @@ def get_banana_word(n: int) -> str:
     if 2 <= n % 10 <= 4 and (n % 100 < 10 or n % 100 >= 20): return "банана"
     return "бананов"
 
-# 👇 МЕНЮ
 def get_main_kb():
-    # 👇 ВСТАВЬ ЭТО ВНУТРЬ get_main_kb
     kb = [
-        # Ряд 1: Самая главная
         [KeyboardButton(text="✨ Начать творить")],
-        
-        # Ряд 2: Коммерция и Личное
         [KeyboardButton(text="🍌 Купить бананы"), KeyboardButton(text="👤 Профиль")],
-        
-        # Ряд 3: Помощь и Обучение
         [KeyboardButton(text="📚 Гайд"), KeyboardButton(text="💬 Поддержка")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, input_field_placeholder="Пиши сюда ")
@@ -39,60 +32,54 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     await state.clear()
     user_id = message.from_user.id
     
-    # 🕵️‍♂️ ОПРЕДЕЛЯЕМ ИСТОЧНИК (DeepLink)
+    # 1. ЛОВИМ ИСТОЧНИК
     referrer_id = None
     source = None
-    args = command.args # То, что написано после ?start=
+    args = command.args # Хвостик ссылки
     
     if args:
-        # Вариант А: Это ЦИФРЫ -> значит ID друга (Рефералка)
         if args.isdigit():
             possible_ref = int(args)
-            if possible_ref != user_id: # Нельзя пригласить самого себя
+            if possible_ref != user_id:
                 referrer_id = possible_ref
-                source = "ref_friend" 
-        # Вариант Б: Это ТЕКСТ -> значит Рекламная метка (например: mts_ads)
+                source = "ref_friend"
         else:
-            source = args # Сохраняем название кампании как источник
+            source = args # Например "google" или "yandex"
 
     async with async_session() as session:
         user = await get_user(session, user_id)
         
-        # 🆕 СЦЕНАРИЙ: НОВЫЙ ПОЛЬЗОВАТЕЛЬ
+        # ЕСЛИ НОВЫЙ ЮЗЕР
         if not user:
-            # 1. Создаем пользователя, записывая и РЕФЕРЕРА, и ИСТОЧНИК
+            # Передаем source в функцию создания
             await create_user(
                 session, 
                 telegram_id=user_id, 
                 username=message.from_user.username, 
                 full_name=message.from_user.full_name, 
                 referrer_id=referrer_id,
-                source=source # ✅ Вот сюда пишется метка
+                source=source # <--- ВАЖНО
             )
 
-            # 2. Логируем админу (передаем исходный args, чтобы ты видел конкретный ID или название метки)
+            # Шлем лог админу
             await log_new_user(bot, message.from_user, deep_link=args)
 
-            # 3. Начисляем бонус новичку (+2)
+            # Начисляем бонусы
             welcome_bonus = 2
             await admin_change_balance(session, user_id, welcome_bonus)
             
-            # 4. Начисляем бонус другу (+2), если он есть
             if referrer_id:
                 try:
                     await admin_change_balance(session, referrer_id, 2)
-                    await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 Тебе начислено: +2 банана", parse_mode="Markdown")
+                    await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 +2 банана", parse_mode="Markdown")
                     await log_referral(bot, referrer_id, message.from_user)
                 except: pass
 
-            # Текст приветствия (оставляем твой)
             word = get_banana_word(welcome_bonus)
             text = (
                     f"👋 Привет! Я *Nano Banana Pro 🍌* — твой карманный AI-фотошоп.\n\n"
                     f"🎁 *Тебе уже начислено {welcome_bonus} подарочных {word}*\n\n"
-                    f"🤷‍♀️ *Не знаешь, что сгенерировать?* [Хочу фото, как с обложки]({CHANNEL_LINK})\n\n"
-                    f"*Я готов творить!*\n"
-                    f"Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить 👇"
+                    f"🤷‍♀️ *Не знаешь, что сгенерировать?* [Хочу фото, как с обложки]({CHANNEL_LINK})\n"
             )
             
             try:
@@ -100,26 +87,18 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     await message.answer_photo(WELCOME_PHOTO, caption=text, parse_mode="Markdown", reply_markup=get_main_kb())
                 else: 
                     await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
-            except Exception as e: 
+            except: 
                 await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
 
-        # 👴 СЦЕНАРИЙ: СТАРЫЙ ПОЛЬЗОВАТЕЛЬ
+        # ЕСЛИ СТАРЫЙ ЮЗЕР
         else:
+            # Если перешел по рекламе - обновляем источник!
+            if source and source != "ref_friend":
+                if user.source != source:
+                    user.source = source
+                    await session.commit()
+
             bal = user.generations_balance
-            if bal == 0:
-                # 🛠 ИСПРАВЛЕНО: Убраны лишние звездочки (** -> *)
-                text = (
-                    f"👋 С возвращением!\n"
-                    f"🍌 Твой баланс: *0 бананов*\n\n"
-                )
-            else:
-                word = get_banana_word(bal)
-                # 🛠 ИСПРАВЛЕНО: Убраны лишние звездочки (** -> *)
-                text = (
-                    f"👋 *С возвращением!*\n"
-                    f"🍌 Твой баланс: *{bal} {word}*\n\n"
-                    f"*Я готов творить!*\n"
-                    f"Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить 👇"
-                )
-            
+            word = get_banana_word(bal)
+            text = f"👋 *С возвращением!*\n🍌 Твой баланс: *{bal} {word}*"
             await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())

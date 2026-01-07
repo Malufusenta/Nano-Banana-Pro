@@ -1,6 +1,7 @@
 from sqlalchemy import select, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Purchase, User
+from datetime import datetime # ✅ Добавил, чтобы работало время
 
 async def create_purchase_record(session: AsyncSession, user_id: int, price: int, gens_amount: int):
     """Создает запись о том, что человек хочет купить (статус pending)"""
@@ -8,7 +9,8 @@ async def create_purchase_record(session: AsyncSession, user_id: int, price: int
         user_id=user_id,
         price=price,
         amount=gens_amount,
-        status="pending"
+        status="pending",
+        created_at=datetime.now() # ✅ Фиксируем дату создания
     )
     session.add(purchase)
     await session.commit()
@@ -16,9 +18,9 @@ async def create_purchase_record(session: AsyncSession, user_id: int, price: int
 
 async def confirm_purchase(session: AsyncSession, purchase_id: int) -> bool:
     """
-    Подтверждает оплату заказа:
+    Подтверждает оплату заказа (для кнопок или админки):
     1. Меняет статус покупки на 'succeeded'
-    2. Начисляет генерации пользователю (в balance_paid)
+    2. Начисляет генерации пользователю
     """
     # 1. Ищем заказ по ID
     query = select(Purchase).where(Purchase.id == purchase_id)
@@ -38,14 +40,14 @@ async def confirm_purchase(session: AsyncSession, purchase_id: int) -> bool:
     
     if user:
         user.generations_balance += purchase.amount
-        user.balance_paid += purchase.amount  # ← ДОБАВИЛИ (это ПЛАТНЫЕ бананы!)
+        user.balance_paid += purchase.amount 
     
     await session.commit()
     return True
+
 async def fulfill_payment(session: AsyncSession, user_id: int, gens_amount: int):
     """
-    Начисляет генерации пользователю.
-    Используется после успешной оплаты или админом.
+    Начисляет генерации пользователю (ручное пополнение).
     """
     # 1. Находим юзера
     query = select(User).where(User.telegram_id == user_id)
@@ -59,13 +61,17 @@ async def fulfill_payment(session: AsyncSession, user_id: int, gens_amount: int)
         return user.generations_balance
     return None
 
-# 👇 ВСТАВИТЬ В КОНЕЦ ФАЙЛА app/services/payment_service.py
+# 👇 ВОТ ЭТА ФУНКЦИЯ ТЕПЕРЬ УМНАЯ 👇
 
-async def mark_purchase_as_succeeded(session, user_id: int, price: int):
+async def mark_purchase_as_succeeded(session: AsyncSession, user_id: int, price: float):
     """
-    Находит последнюю запись 'pending' с такой ценой и меняет статус на 'succeeded'
+    Фиксирует успешную оплату для вебхука.
+    Логика:
+    1. Ищет 'pending' запись.
+    2. Если находит -> меняет статус на 'succeeded'.
+    3. Если НЕ находит -> создает НОВУЮ запись 'succeeded'.
     """
-    # 1. Ищем последнюю неоплаченную покупку этого юзера на эту сумму
+    # 1. Ищем последнюю неоплаченную покупку
     stmt = select(Purchase).where(
         Purchase.user_id == user_id,
         Purchase.price == price,
@@ -78,6 +84,17 @@ async def mark_purchase_as_succeeded(session, user_id: int, price: int):
     # 2. Если нашли — обновляем статус
     if purchase:
         purchase.status = "succeeded"
-        await session.commit()
-        return True
-    return False
+    else:
+        # 3. Если не нашли (быстрая оплата) — СОЗДАЕМ новую
+        # (amount ставим 0, так как бананы начисляются отдельно в webhook_server)
+        purchase = Purchase(
+            user_id=user_id,
+            price=price,
+            amount=0, 
+            status="succeeded",
+            created_at=datetime.now()
+        )
+        session.add(purchase)
+
+    await session.commit()
+    return True

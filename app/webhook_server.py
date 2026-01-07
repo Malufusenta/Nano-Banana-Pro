@@ -1,89 +1,107 @@
 from aiohttp import web
+from aiogram import Bot
 from app.database import async_session
-from app.services.user_service import add_paid_balance
-from app.packages import PACKAGES 
-
-# 👇 ИМПОРТИРУЕМ ТВОЙ ЛОГГЕР
-# (Если файл лежит не в app/utils/logger.py, поправь путь)
+from app.services.payment_service import mark_purchase_as_succeeded
+from app.services.user_service import add_paid_balance, get_user_balance, get_user_financial_stats
 from app.services.admin_logger import log_payment
+from app.models import User
+from sqlalchemy import select
 
-def get_banana_word(n: int) -> str:
-    n = abs(n)
-    if n % 10 == 1 and n % 100 != 11: return "банан"
-    if 2 <= n % 10 <= 4 and (n % 100 < 10 or n % 100 >= 20): return "банана"
-    return "бананов"
+# Настройки
+WEBHOOK_PORT = 5001
+WEBHOOK_PATH = "/yookassa_webhook"
 
-def get_bananas_by_price(price):
-    target_price = float(price)
-    for key, pkg in PACKAGES.items():
-        if float(pkg['price']) == target_price:
-            return pkg['gens']
-    return 0
-
-async def handle_yookassa_webhook(request):
-    bot = request.app['bot']
+async def handle_yookassa(request):
     try:
-        event_json = await request.json()
-    except Exception:
-        return web.Response(status=200)
-
-    if event_json.get('event') == 'payment.succeeded':
-        payment_object = event_json['object']
-        metadata = payment_object.get('metadata', {})
-        user_id = int(metadata.get('user_id', 0))
-        amount = float(payment_object['amount']['value'])
+        data = await request.json()
+        event = data.get("event")
+        object_ = data.get("object", {})
         
-        if user_id == 0:
-            return web.Response(status=200)
-
-        bananas = get_bananas_by_price(amount)
-        
-        if bananas > 0:
-            async with async_session() as session:
-                await add_paid_balance(session, user_id, bananas)
+        if event == "payment.succeeded":
+            payment_id = object_.get("id")
+            metadata = object_.get("metadata", {})
             
-            # 1. Отправляем сообщение юзеру
-            try:
-                suffix = get_banana_word(bananas)
-                text = (
-                    f"✅ <b>Оплата прошла успешно!</b>\n\n"
-                    f"🍌 Начислено: <b>+{bananas} {suffix}</b>\n"
-                    f"Спасибо за покупку! Можно снова творить 🎨"
-                )
-                await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
-            except Exception as e:
-                print(f"⚠️ Не удалось отправить сообщение юзеру: {e}")
+            # Ищем ID юзера
+            user_id = int(metadata.get("user_id", 0)) if metadata.get("user_id") else 0
+            amount = float(object_.get("amount", {}).get("value", 0.0))
 
-            # 2. 👇 ОТПРАВЛЯЕМ ЛОГ АДМИНУ
-            try:
-                # Получаем инфо о юзере из Телеграма (чтобы узнать username)
-                user_info = await bot.get_chat(user_id)
-                
-                # Формируем название товара
-                item_name = f"{bananas} {get_banana_word(bananas)}"
+            print(f"🔔 WEBHOOK: Пришла оплата {amount}р от {user_id}")
 
-                # Вызываем твой логгер
-                # stats=None, так как из вебхука мы не знаем историю покупок, 
-                # логгер пометит его как "Новичок" или просто покажет сумму.
-                await log_payment(
-                    bot=bot,
-                    user=user_info,
-                    amount=int(amount),
-                    item_name=item_name,
-                    new_balance=0, # Тут можно поставить 0, т.к. это поле не критично
-                    stats=None 
-                )
-            except Exception as e:
-                print(f"⚠️ Ошибка отправки лога админу: {e}")
+            if user_id:
+                async with async_session() as session:
+                    # 1. Записываем покупку
+                    await mark_purchase_as_succeeded(session, user_id, amount)
+                    
+                    # 2. Начисляем бананы (по цене)
+                    gens_to_add = 0
+                    item_name = object_.get("description", "Покупка бананов")
 
-    return web.Response(status=200)
+                    if amount == 79.0: 
+                        gens_to_add = 8
+                        item_name = "Start: 8 бананов"
+                    elif amount == 299.0: 
+                        gens_to_add = 44
+                        item_name = "Medium: 44 банана"
+                    elif amount == 699.0: 
+                        gens_to_add = 140
+                        item_name = "Big: 140 бананов 🔥"
+                    elif amount == 1499.0: 
+                        gens_to_add = 340
+                        item_name = "Mega: 340 бананов"
+                    elif amount == 3499.0: 
+                        gens_to_add = 832
+                        item_name = "Whale: 832 банана 👑"
+                    
+                    if gens_to_add > 0:
+                        await add_paid_balance(session, user_id, gens_to_add)
+                        await session.commit()
 
-async def start_webhook_server(bot):
+                    # ======================================================
+                    # 📊 ВОТ ЭТОГО НЕ ХВАТАЛО В СТАРОЙ ВЕРСИИ
+                    # ======================================================
+                    
+                    # Получаем статистику через user_service (он у нас теперь исправлен)
+                    stats = await get_user_financial_stats(session, user_id)
+                    
+                    # Шлем лог
+                    bot_instance = request.app['bot']
+                    new_bal = await get_user_balance(session, user_id)
+                    
+                    # Ищем объект юзера для лога
+                    u_res = await session.execute(select(User).where(User.telegram_id == user_id))
+                    db_user = u_res.scalar_one_or_none()
+
+                    await log_payment(
+                        bot_instance, 
+                        db_user, 
+                        amount, 
+                        item_name, 
+                        new_bal, 
+                        stats=stats # <--- ПЕРЕДАЕМ СТАТИСТИКУ
+                    )
+                    
+# Уведомление юзеру
+                    try:
+                        await bot_instance.send_message(
+                            user_id,
+                            f"✅ <b>Оплата прошла успешно!</b>\n\n🍌 Начислено: <b>+{gens_to_add} бананов</b>\nСпасибо за покупку! Можно снова творить 🎨",
+                            parse_mode="HTML"
+                        )
+                    except:
+                        pass
+
+        return web.Response(status=200)
+    except Exception as e:
+        print(f"🔴 Webhook Error: {e}")
+        return web.Response(status=500)
+
+async def start_webhook_server(bot: Bot):
     app = web.Application()
-    app['bot'] = bot 
-    app.router.add_post('/yookassa_webhook', handle_yookassa_webhook)
+    app['bot'] = bot
+    app.router.add_post(WEBHOOK_PATH, handle_yookassa)
+    
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 5001)
+    site = web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT)
     await site.start()
-    print("🚀 Webhook Server (Dynamic Prices) запущен на порту 5001")
+    print(f"🚀 Сервер оплат запущен на порту {WEBHOOK_PORT}")
