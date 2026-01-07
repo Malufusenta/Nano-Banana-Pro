@@ -41,7 +41,10 @@ def get_banana_suffix(count):
 @router.message(F.text == "Заработать🍌")
 @router.message(Command("free"))
 async def show_freebies(message: types.Message, bot: Bot):
-    user_id = message.from_user.id
+    await _show_freebies_logic(message, message.from_user.id, bot)
+
+async def _show_freebies_logic(message, user_id: int, bot: Bot):
+   
     bot_info = await bot.me()
     
     ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
@@ -375,7 +378,7 @@ async def cb_goto_shop(callback: types.CallbackQuery):
 async def cb_goto_free(callback: types.CallbackQuery, bot: Bot):
     await callback.answer()
     # Вызываем функцию с заданиями (она тоже в этом файле)
-    await show_freebies(callback.message, bot)
+    await _show_freebies_logic(callback.message, callback.from_user.id, bot)  # ✅
 
 # =====================================================================
 # ОБРАБОТЧИКИ STARS ПЛАТЕЖЕЙ
