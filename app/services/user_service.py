@@ -145,22 +145,42 @@ async def find_user_by_input(session: AsyncSession, user_input: str):
 
 async def admin_change_balance(session: AsyncSession, user_id: int, amount: int):
     """
-    Меняет баланс пользователя (может быть отрицательным числом).
+    Меняет баланс пользователя.
+    При начислении (+) - добавляет в balance_free
+    При снятии (-) - сначала из balance_free, потом из balance_paid
     """
     query = select(User).where(User.telegram_id == user_id)
     result = await session.execute(query)
     user = result.scalar_one_or_none()
     
-    if user:
+    if not user:
+        return None
+    
+    # НАЧИСЛЕНИЕ (положительное число)
+    if amount > 0:
         user.balance_free += amount
-        if user.balance_free < 0:
-            user.balance_free = 0
+    
+    # СНЯТИЕ (отрицательное число)
+    else:
+        to_remove = abs(amount)
         
-        user.generations_balance = user.balance_paid + user.balance_free
+        # Сначала вычитаем из бесплатных
+        if user.balance_free > 0:
+            deduct_from_free = min(user.balance_free, to_remove)
+            user.balance_free -= deduct_from_free
+            to_remove -= deduct_from_free
         
-        await session.commit()
-        return user.generations_balance
-    return None
+        # Если осталось что снимать - вычитаем из платных
+        if to_remove > 0 and user.balance_paid > 0:
+            deduct_from_paid = min(user.balance_paid, to_remove)
+            user.balance_paid -= deduct_from_paid
+            to_remove -= deduct_from_paid
+    
+    # Обновляем общий баланс
+    user.generations_balance = user.balance_paid + user.balance_free
+    
+    await session.commit()
+    return user.generations_balance
 
 # --- ИСТОРИЯ ---
 
@@ -357,3 +377,12 @@ async def add_paid_balance(session: AsyncSession, user_id: int, amount: int):
         await session.commit()
         return user.generations_balance
     return None
+
+async def has_user_purchased(session: AsyncSession, user_id: int) -> bool:
+    """Проверяет, были ли у пользователя успешные покупки"""
+    query = select(Purchase).where(
+        Purchase.user_id == user_id, 
+        Purchase.status.in_(['succeeded', 'paid'])
+    ).limit(1)
+    result = await session.execute(query)
+    return result.first() is not None

@@ -16,7 +16,7 @@ from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
     add_history, clear_history, get_history_message_by_id, get_dialog_context,
     start_generation_task, finish_generation_task, admin_change_balance,
-    get_user_model_preference, set_user_model_preference
+    get_user_model_preference, set_user_model_preference, has_user_purchased
 )
 from app.services.ai_engine import generate_image
 from app.utils import prompts
@@ -34,6 +34,51 @@ IGNORED_TEXTS = [
     "/start", "/help", "/admin", "/stats", "/clear",
     "/profile", "/free", "/about", "/support", "/guide"
 ]
+
+async def get_smart_alert_message(user_id: int, balance: int, cost: int) -> tuple[str, InlineKeyboardBuilder]:
+    """
+    Возвращает умное сообщение и клавиатуру в зависимости от сценария
+    
+    Returns:
+        (text, keyboard_builder)
+    """
+    async with async_session() as session:
+        has_purchases = await has_user_purchased(session, user_id)
+    
+    builder = InlineKeyboardBuilder()
+    
+    # 🔹 СЦЕНАРИЙ В: Не хватает чуть-чуть (Баланс > 0, но < Цены)
+    if balance > 0 and balance < cost:
+        text = (
+            "🎨 <b>Маловато для шедевра!</b>\n\n"
+            f"Для этого действия нужно <b>{cost} 🍌</b>, а у тебя осталось всего <b>{balance} 🍌</b>.\n\n"
+            "👇 Докупи бананов, чтобы продолжить:"
+        )
+        builder.button(text="💰 Купить бананы", callback_data="goto_shop")
+        builder.adjust(1)
+        return text, builder
+    
+    # 🔹 СЦЕНАРИЙ Б: Опытный (Баланс 0, покупки были)
+    if balance == 0 and has_purchases:
+        text = (
+            "🙈 <b>Ой, бананы закончились!</b>\n\n"
+            "На балансе 0 бананов. Не останавливайся на достигнутом — пополни баланс и твори дальше!\n\n"
+            "👇 Пополни баланс:"
+        )
+        builder.button(text="💰 Купить бананы", callback_data="goto_shop")
+        builder.adjust(1)
+        return text, builder
+    
+    # 🔹 СЦЕНАРИЙ А: Новичок (Баланс 0, покупок не было)
+    text = (
+        "🙈 <b>Ой, бананы закончились!</b>\n\n"
+        "Ты так увлекся творчеством, что запасы иссякли. Но не беда!\n\n"
+        "👇 Пополни запас прямо сейчас (от 4.9₽/шт):"
+    )
+    builder.button(text="💰 Купить бананы", callback_data="goto_shop")
+    builder.button(text="Заработать🍌", callback_data="goto_free")
+    builder.adjust(1)
+    return text, builder
 
 class GenState(StatesGroup):
     waiting_for_category_input = State() 
@@ -130,12 +175,7 @@ async def get_photo_url(bot: Bot, file_id: str) -> str:
 # =====================================================================
 # 🎛 КЛАВИАТУРЫ
 # =====================================================================
-def get_no_balance_kb():
-    builder = InlineKeyboardBuilder()
-    builder.button(text="💰 Купить бананы", callback_data="goto_shop")
-    builder.button(text="Заработать🍌", callback_data="goto_free")
-    builder.adjust(1)
-    return builder.as_markup()
+
 
 def get_preflight_kb(model_type: str, ratio: str, quality: str):
     builder = InlineKeyboardBuilder()
@@ -897,11 +937,12 @@ async def process_generation(
         balance_left = await get_user_balance(session, user_id)
 
     if not has_balance:
+        # 🔥 SMART ALERT: Определяем сценарий и показываем умное уведомление
+        alert_text, alert_kb = await get_smart_alert_message(user_id, balance_left, cost)
+        
         await message.answer(
-            "🙈 <b>Ой, бананы закончились!</b>\n\n"
-            "Ты так увлекся творчеством, что запасы иссякли.\n"
-            "👇 Пополни запас прямо сейчас:",
-            reply_markup=get_no_balance_kb(),
+            alert_text,
+            reply_markup=alert_kb.as_markup(),
             parse_mode="HTML"
         )
         return
