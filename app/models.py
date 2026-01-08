@@ -102,3 +102,22 @@ class Broadcast(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # 6. Таблица конфигов для постов (Deep Linking)
+class PostConfig(Base):
+    __tablename__ = "post_configs"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    config_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)  # "post_55"
+    
+    # Настройки генерации
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    model_type: Mapped[str] = mapped_column(String(20), default="standard")  # standard / pro
+    aspect_ratio: Mapped[str] = mapped_column(String(10), default="1:1")
+    
+    # Метаданные
+    created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)  # ID админа
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    # Статистика использования (опционально)
+    clicks_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

@@ -420,13 +420,12 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     
     # 🔥 ЕСЛИ ЭТО BROADCAST - ИСПОЛЬЗУЕМ СОХРАНЁННЫЙ ПРОМПТ 🔥
     if is_from_broadcast and broadcast_prompt:
-        print(f"🔥 DEBUG: Broadcast альбом - используем промпт из рассылки")
-    
+        model = data.get('broadcast_model', 'standard')
         await state.update_data(
         pf_prompt=broadcast_prompt,
         pf_image_urls=image_urls,
         pf_ratio=broadcast_ratio,
-        pf_model="standard",
+        pf_model=model,  # 👈 ИСПОЛЬЗУЕМ МОДЕЛЬ ИЗ ПОСТА
         pf_quality="2k",
         is_broadcast_gen=True  # 👈 ДОБАВЬ ФЛАГ
     )
@@ -579,11 +578,10 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
     data = await state.get_data()
     
     if data.get('from_broadcast') and data.get('broadcast_prompt'):
-        print(f"🔥 DEBUG: Нашёл broadcast промпт!")
         prompt = data.get('broadcast_prompt')
         ratio = data.get('broadcast_ratio', '1:1')
+        model = data.get('broadcast_model', 'standard')  # 👈 ДОБАВЬ ЭТУ СТРОКУ
         
-        print(f"🔥 DEBUG: Используем формат: {ratio}")
         
         # Очищаем флаги
         await state.update_data(from_broadcast=False, broadcast_prompt=None, broadcast_ratio=None)
@@ -593,8 +591,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
             pf_prompt=prompt,
             pf_image_urls=[url],
             pf_ratio=ratio,
-            pf_model="standard",
-            pf_quality="2k",
+            pf_model=model,  # 👈 ИСПОЛЬЗУЕМ МОДЕЛЬ ИЗ ПОСТА
             is_broadcast_gen=True  # 👈 ДОБАВЬ ФЛАГ
 )
         await state.set_state(GenState.preflight_check)
@@ -1231,8 +1228,6 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
         from_broadcast=True
     )
     
-    print(f"🔥 DEBUG: Промпт: {broadcast.hidden_prompt[:50]}...")
-    print(f"🔥 DEBUG: Формат: {broadcast.aspect_ratio}")
     
     await state.set_state(GenState.free_mode)
     

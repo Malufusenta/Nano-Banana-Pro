@@ -12,6 +12,7 @@ import asyncio  # 👈 Для фоновых задач
 import json     # 👈 Для парсинга JSON (если ещё нет)
 from sqlalchemy import select, func
 from app.models import User, Purchase, Broadcast
+from app import config
 
 router = Router()
 
@@ -30,6 +31,12 @@ class BroadcastState(StatesGroup):
      # Ждём список кнопок
     waiting_for_confirmation = State()  # Показываем превью, ждём подтверждения
 
+    # --- СОСТОЯНИЯ ДЛЯ СОЗДАНИЯ POST LINK ---
+class PostLinkState(StatesGroup):
+    waiting_for_prompt = State()
+    waiting_for_model = State()
+    waiting_for_aspect_ratio = State()
+
 
 # =====================================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -40,6 +47,7 @@ def get_admin_menu_kb():
     builder.button(text="📊 Статистика", callback_data="admin_stats")
     builder.button(text="🔍 Найти пользователя", callback_data="admin_find_user")
     builder.button(text="📢 Рассылка", callback_data="admin_broadcast") 
+    builder.button(text="🔗 Создать ссылку", callback_data="admin_create_postlink")  # 👈 НОВАЯ КНОПКА
     builder.button(text="❌ Выйти", callback_data="close_admin")
     builder.adjust(1)
     return builder.as_markup()
@@ -818,3 +826,140 @@ async def cb_broadcast_select_ratio(callback: types.CallbackQuery, state: FSMCon
     
     # Показываем превью
     await show_broadcast_preview(callback.message, state)
+
+    # =====================================================================
+# СОЗДАНИЕ POST LINK
+# =====================================================================
+@router.callback_query(F.data == "admin_create_postlink")
+async def cb_create_postlink_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало создания Post Link"""
+    await state.set_state(PostLinkState.waiting_for_prompt)
+    
+    await callback.message.answer(
+        "🔗 <b>Создание ссылки для поста</b>\n\n"
+        "📝 <b>Шаг 1/3: Промт</b>\n\n"
+        "Отправьте промт для генерации (текст).\n"
+        "Это то, что будет применяться к фото пользователя.\n\n"
+        "<i>Пример: luxury bedroom, 4k, photorealistic</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.message(PostLinkState.waiting_for_prompt)
+async def process_postlink_prompt(message: types.Message, state: FSMContext):
+    """Обработка промта"""
+    prompt = message.text.strip()
+    
+    if len(prompt) < 5:
+        await message.answer(
+            "❌ Промт слишком короткий (минимум 5 символов).\n"
+            "Попробуйте ещё раз:",
+            reply_markup=get_cancel_kb()
+        )
+        return
+    
+    await state.update_data(postlink_prompt=prompt)
+    await state.set_state(PostLinkState.waiting_for_model)
+    
+    # Кнопки выбора модели
+    builder = InlineKeyboardBuilder()
+# Кнопки выбора модели
+    builder = InlineKeyboardBuilder()
+    builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="postlink_model_standard")
+    builder.button(text=f"💎 PRO ({config.COST_PRO} банана)", callback_data="postlink_model_pro")
+    builder.button(text="❌ Отмена", callback_data="admin_menu")
+    builder.adjust(1)
+    
+    await message.answer(
+        "✅ Промт сохранён!\n\n"
+        "📝 <b>Шаг 2/3: Модель</b>\n\n"
+        "Выберите модель для генерации:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+
+@router.callback_query(PostLinkState.waiting_for_model, F.data.startswith("postlink_model_"))
+async def process_postlink_model(callback: types.CallbackQuery, state: FSMContext):
+    """Выбор модели"""
+    model = callback.data.split("_")[2]  # standard или pro
+    
+    await state.update_data(postlink_model=model)
+    await state.set_state(PostLinkState.waiting_for_aspect_ratio)
+    
+    # Кнопки выбора формата
+    builder = InlineKeyboardBuilder()
+    ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    for r in ratios:
+        builder.button(text=r, callback_data=f"postlink_ratio_{r}")
+    builder.button(text="❌ Отмена", callback_data="admin_menu")
+    builder.adjust(3, 3, 2, 2, 1)
+    
+    await callback.message.edit_text(
+        "✅ Модель сохранена!\n\n"
+        "📝 <b>Шаг 3/3: Формат</b>\n\n"
+        "Выберите соотношение сторон:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(PostLinkState.waiting_for_aspect_ratio, F.data.startswith("postlink_ratio_"))
+async def process_postlink_finish(callback: types.CallbackQuery, state: FSMContext):
+    """Завершение создания - генерация ссылки"""
+    ratio = callback.data.split("_")[2]
+    
+    data = await state.get_data()
+    prompt = data['postlink_prompt']
+    model = data['postlink_model']
+    
+    # Импортируем модель
+    from app.models import PostConfig
+    from sqlalchemy import select, func
+    
+    # Генерируем ID (берем последний + 1)
+    async with async_session() as session:
+        result = await session.execute(
+            select(func.max(PostConfig.id))
+        )
+        last_id = result.scalar() or 0
+        new_id = last_id + 1
+        
+        config_id = f"post_{new_id}"
+        
+        # Сохраняем в БД
+        new_config = PostConfig(
+            config_id=config_id,
+            prompt=prompt,
+            model_type=model,
+            aspect_ratio=ratio,
+            created_by=callback.from_user.id
+        )
+        
+        session.add(new_config)
+        await session.commit()
+    
+    # Генерируем ссылку
+    bot_username = (await callback.bot.get_me()).username
+    link = f"https://t.me/{bot_username}?start={config_id}"
+    
+    # Формируем красивое сообщение
+    text = (
+        f"✅ <b>Ссылка создана!</b>\n\n"
+        f"🔗 <code>{link}</code>\n\n"
+        f"📋 <b>Настройки:</b>\n"
+        f"• ID: <code>{config_id}</code>\n"
+        f"• Промт: <code>{prompt[:80]}{'...' if len(prompt) > 80 else ''}</code>\n"
+        f"• Модель: {model.upper()}\n"
+        f"• Формат: {ratio}\n\n"
+        f"💡 <b>Как использовать:</b>\n"
+        f"1. Скопируйте ссылку выше\n"
+        f"2. Создайте пост в канале с примером\n"
+        f"3. Добавьте кнопку с этой ссылкой\n"
+        f"4. Пользователи получат настроенный промт автоматически!"
+    )
+    
+    await callback.message.edit_text(text, parse_mode="HTML")
+    await callback.answer("🎉 Ссылка готова!")
+    
+    await state.clear()

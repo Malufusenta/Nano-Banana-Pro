@@ -7,6 +7,8 @@ from app.services.admin_logger import log_new_user, log_referral
 from app.database import async_session
 from app.services.user_service import get_user, create_user, admin_change_balance
 from app import config
+from sqlalchemy import select
+from app.models import PostConfig
 
 router = Router()
 
@@ -36,8 +38,40 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     referrer_id = None
     source = None
     args = command.args # Хвостик ссылки
+
+    # 🔥 НОВАЯ ЛОГИКА: Проверяем на post_XX
+    is_post_link = False
+    post_config = None
     
-    if args:
+    if args and args.startswith("post_"):
+        is_post_link = True
+        # Ищем конфиг в БД
+        async with async_session() as session:
+            result = await session.execute(
+                select(PostConfig).where(PostConfig.config_id == args)
+            )
+            post_config = result.scalar_one_or_none()
+        
+        # Если конфиг не найден - показываем ошибку
+        if not post_config:
+            await message.answer(
+                "⚠️ <b>Ссылка устарела или неверна.</b>\n\n"
+                "Попробуйте найти свежую ссылку в нашем канале!",
+                parse_mode="HTML"
+            )
+            return
+        
+        # Увеличиваем счетчик кликов
+        async with async_session() as session:
+            result = await session.execute(
+                select(PostConfig).where(PostConfig.config_id == args)
+            )
+            config = result.scalar_one_or_none()
+            if config:
+                config.clicks_count += 1
+                await session.commit()
+    
+    elif args:
         if args.isdigit():
             possible_ref = int(args)
             if possible_ref != user_id:
@@ -58,7 +92,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 username=message.from_user.username, 
                 full_name=message.from_user.full_name, 
                 referrer_id=referrer_id,
-                source=source # <--- ВАЖНО
+                source=source if not is_post_link else f"post_{post_config.config_id if post_config else 'unknown'}"
             )
 
             # Шлем лог админу
@@ -75,6 +109,33 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     await log_referral(bot, referrer_id, message.from_user)
                 except: pass
 
+# 🔥 ЕСЛИ ЭТО POST LINK - СПЕЦИАЛЬНОЕ ПРИВЕТСТВИЕ
+            if is_post_link and post_config:
+                # Сохраняем настройки в state
+                await state.update_data(
+                    broadcast_prompt=post_config.prompt,
+                    broadcast_ratio=post_config.aspect_ratio,
+                    broadcast_model=post_config.model_type,  # 👈 ДОБАВЬ ЭТУ СТРОКУ
+                    from_broadcast=True
+                )
+                
+                # Включаем режим генерации
+                from app.handlers.generation import GenState
+                await state.set_state(GenState.free_mode)
+                
+                word = get_banana_word(welcome_bonus)
+                text = (
+                    f"👋 Привет! Я вижу, ты пришел за этим образом! 🔥\n\n"
+                    f"Я <b>Nano Banana Pro 🍌</b> — твой AI-фотошоп.\n\n"
+                    f"🎁 Твои {welcome_bonus} приветственных {word} уже начислены.\n"
+                    f"✨ Я уже настроил нужный промт.\n\n"
+                    f"Ничего нажимать не надо — просто пришли мне свое фото, "
+                    f"и я сделаю кадр как в посте! 👇"
+                )
+                
+                await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb())
+                return
+                # Обычное приветствие для новых юзеров
             word = get_banana_word(welcome_bonus)
             text = (
                     f"👋 Привет! Я *Nano Banana Pro 🍌* — твой карманный AI-фотошоп.\n\n"
@@ -92,6 +153,27 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
         # ЕСЛИ СТАРЫЙ ЮЗЕР
         else:
+
+# 🔥 ЕСЛИ POST LINK - ПРИМЕНЯЕМ НАСТРОЙКИ И УВЕДОМЛЯЕМ
+            if is_post_link and post_config:
+                await state.update_data(
+                    broadcast_prompt=post_config.prompt,
+                    broadcast_ratio=post_config.aspect_ratio,
+                    broadcast_model=post_config.model_type,  # 👈 ДОБАВЬ ЭТУ СТРОКУ
+                    from_broadcast=True
+                )
+                
+                from app.handlers.generation import GenState
+                await state.set_state(GenState.free_mode)
+                
+                await message.answer(
+                    "✨ <b>Настройки из поста применены!</b>\n\n"
+                    "📸 Присылай фото, чтобы сгенерировать 👇",
+                    parse_mode="HTML",
+                    reply_markup=get_main_kb()
+                )
+                return
+
             # Если перешел по рекламе - обновляем источник!
             if source and source != "ref_friend":
                 if user.source != source:
