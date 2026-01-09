@@ -1009,7 +1009,7 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
         
         # 2. Конец периода - текущее время UTC
         # replace(tzinfo=None) нужен, чтобы убрать часовой пояс, так как в SQLite даты "голые"
-        date_to = datetime.now(timezone.utc).replace(tzinfo=None)
+        date_to = datetime.now()
         
         date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
     
