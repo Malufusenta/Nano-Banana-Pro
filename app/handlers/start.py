@@ -138,19 +138,24 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 # Обычное приветствие для новых юзеров
             word = get_banana_word(welcome_bonus)
             text = (
-                    f"👋 Привет! Я *Nano Banana Pro 🍌* — твой карманный AI-фотошоп.\n\n"
-                    f"🎁 *Тебе уже начислено {welcome_bonus} подарочных {word}*\n\n"
-                    f"🤷‍♀️ *Не знаешь, что сгенерировать?* [Хочу фото, как с обложки]({CHANNEL_LINK})\n"
+                f"👋 Привет! Я <b>Nano Banana Pro 🍌</b> — твой карманный AI-фотошоп.\n\n"
+                f"🎁 <b>Тебе уже начислено {welcome_bonus} подарочных {word}</b>\n\n"
+                f"🤷‍♀️ <b>Не знаешь, что сгенерировать?</b>\n"
+                f"👉 <a href='{CHANNEL_LINK}'><b>Выбрать образ для фото, как с обложки</b></a>\n\n"
+                f"<b>Я готов творить!</b>\n"
+                f"Напиши, что создать, или пришли от 1 до 4 фото, которые нужно изменить или объединить 👇"
             )
             
             try:
                 if "AgAC" in WELCOME_PHOTO: 
-                    await message.answer_photo(WELCOME_PHOTO, caption=text, parse_mode="Markdown", reply_markup=get_main_kb())
+                    await message.answer_photo(WELCOME_PHOTO, caption=text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
+)
                 else: 
-                    await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
+                    await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
+)
             except: 
-                await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
-
+                await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
+)
         # ЕСЛИ СТАРЫЙ ЮЗЕР
         else:
 
