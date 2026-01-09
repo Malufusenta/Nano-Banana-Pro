@@ -14,7 +14,7 @@ from sqlalchemy import select, func
 from app.models import User, Purchase, Broadcast
 from app import config
 from app.services.analytics_service import get_analytics_report, format_report_message
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from aiogram.fsm.state import State, StatesGroup
 
 class StatsState(StatesGroup):
@@ -1002,13 +1002,20 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
         return
     now = datetime.now()
     
-    # Определяем период
+# Определяем период
     if period == "today":
-        date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_to = now
-        date_str = now.strftime("%d.%m.%Y") + " (сегодня)"
+        # 1. Вызываем твою новую функцию (она посчитает начало дня по МСК и вернет UTC)
+        date_from = get_today_start_msk()
+        
+        # 2. Конец периода - текущее время UTC
+        # replace(tzinfo=None) нужен, чтобы убрать часовой пояс, так как в SQLite даты "голые"
+        date_to = datetime.now(timezone.utc).replace(tzinfo=None)
+        
+        date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
     
     elif period == "yesterday":
+        # ... дальше код не трогаем
+    # ...
         yesterday = now - timedelta(days=1)
         date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
         date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -1134,3 +1141,26 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
             "• <code>05.01.2026</code> (один день)",
             parse_mode="HTML"
         )
+
+        from datetime import datetime, timedelta, timezone
+
+def get_today_start_msk():
+    """
+    Возвращает UTC-время, которое соответствует 00:00:00 по Москве.
+    Нужно для фильтрации в базе данных.
+    """
+    # 1. Текущее время в UTC
+    now_utc = datetime.now(timezone.utc)
+    
+    # 2. Переводим в МСК (UTC+3)
+    msk_tz = timezone(timedelta(hours=3))
+    now_msk = now_utc.astimezone(msk_tz)
+    
+    # 3. Обрезаем до начала дня (00:00:00)
+    start_of_day_msk = now_msk.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # 4. Переводим обратно в UTC, чтобы база поняла
+    start_of_day_utc = start_of_day_msk.astimezone(timezone.utc)
+    
+    # 5. Убираем информацию о зоне (делаем naive), так как в базе даты "голые"
+    return start_of_day_utc.replace(tzinfo=None)
