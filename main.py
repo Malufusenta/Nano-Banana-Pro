@@ -6,11 +6,43 @@ from app.handlers import start, generation, payment, menu_actions, admin
 from app.middlewares.album import AlbumMiddleware 
 from app.middlewares.admin_spy import AdminSpyMiddleware
 from app.middlewares.antifraud import AntiFraudMiddleware
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from datetime import datetime, timedelta
+from app.services.analytics_service import get_analytics_report, format_report_message
+from app.database import async_session
 
 # 👇 ИМПОРТИРУЕМ НАШ НОВЫЙ СЕРВЕР
 from app.webhook_server import start_webhook_server 
 
 from app import config
+
+async def send_daily_report(bot):
+    """
+    Отправляет ежедневный отчёт администратору в 08:30
+    За период: вчерашние сутки (00:00 - 23:59)
+    """
+    from app.config import ADMIN_IDS
+    
+    # Вчерашний день
+    yesterday = datetime.now() - timedelta(days=1)
+    date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+    date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Собираем статистику
+    async with async_session() as session:
+        data = await get_analytics_report(session, date_from, date_to)
+    
+    # Форматируем сообщение
+    date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
+    message = format_report_message(data, date_str)
+    
+    # Отправляем всем админам
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, message)
+        except Exception as e:
+            print(f"❌ Ошибка отправки отчёта админу {admin_id}: {e}")
 
 async def main():
     logging.basicConfig(level=logging.INFO)
@@ -35,7 +67,23 @@ async def main():
 
     print("✅ Бот запущен!")
 
-    # 👇 ЗАПУСКАЕМ СЕРВЕР ПАРАЛЛЕЛЬНО С БОТОМ
+    # Создаём планировщик для автоматических отчётов
+    scheduler = AsyncIOScheduler()
+    
+    # Добавляем задачу: каждый день в 08:30
+    scheduler.add_job(
+        send_daily_report,
+        CronTrigger(hour=8, minute=30),
+        args=[bot],
+        id='daily_report',
+        replace_existing=True
+    )
+    
+    # Запускаем планировщик
+    scheduler.start()
+    print("📅 Планировщик запущен: отчёты будут отправляться в 08:30")
+
+    # Запускаем сервер оплат параллельно с ботом
     await start_webhook_server(bot)
 
     await dp.start_polling(bot)

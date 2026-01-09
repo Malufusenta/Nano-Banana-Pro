@@ -9,6 +9,8 @@ from app.services.user_service import get_user, create_user, admin_change_balanc
 from app import config
 from sqlalchemy import select
 from app.models import PostConfig
+from app.services.user_service import get_user, create_user, admin_change_balance, track_banana_transaction
+from app.database import async_session
 
 router = Router()
 
@@ -101,13 +103,19 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             # Начисляем бонусы
             welcome_bonus = 2
             await admin_change_balance(session, user_id, welcome_bonus)
-            
-            if referrer_id:
-                try:
-                    await admin_change_balance(session, referrer_id, 2)
-                    await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 +2 банана", parse_mode="Markdown")
-                    await log_referral(bot, referrer_id, message.from_user)
-                except: pass
+            await track_banana_transaction(session, user_id, welcome_bonus, "welcome", "Welcome bonus")
+            await session.commit()
+
+        if referrer_id:
+            try:
+                await admin_change_balance(session, referrer_id, 2)
+                # Трекинг реферального бонуса
+                await track_banana_transaction(session, referrer_id, 2, "earned_ref", f"Referral from {user_id}")
+                await session.commit()
+                
+                await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 +2 банана", parse_mode="Markdown")
+                await log_referral(bot, referrer_id, message.from_user)
+            except: pass
 
 # 🔥 ЕСЛИ ЭТО POST LINK - СПЕЦИАЛЬНОЕ ПРИВЕТСТВИЕ
             if is_post_link and post_config:

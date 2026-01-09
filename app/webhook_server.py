@@ -6,6 +6,7 @@ from app.services.user_service import add_paid_balance, get_user_balance, get_us
 from app.services.admin_logger import log_payment
 from app.models import User
 from sqlalchemy import select
+from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
 
 # Настройки
 WEBHOOK_PORT = 5001
@@ -29,33 +30,32 @@ async def handle_yookassa(request):
 
             if user_id:
                 async with async_session() as session:
+                    # Определяем тариф
+                    tariff_map = {
+                        79.0: (8, "8 бананов"),
+                        299.0: (44, "44 банана"),
+                        699.0: (140, "140 бананов"),
+                        1499.0: (340, "340 бананов"),
+                        3499.0: (832, "832 банана")
+                    }
+                    
+                    tariff_data = tariff_map.get(amount)
+                    
+                    if not tariff_data:
+                        print(f"⚠️ WEBHOOK: Неизвестная сумма оплаты: {amount}₽ от юзера {user_id}")
+                        return web.Response(status=200)
+                    
+                    gens_to_add, tariff_name = tariff_data
+                    
                     # 1. Записываем покупку
                     await mark_purchase_as_succeeded(session, user_id, amount)
                     
-                    # 2. Начисляем бананы (по цене)
-                    gens_to_add = 0
-                    item_name = object_.get("description", "Покупка бананов")
-
-                    if amount == 79.0: 
-                        gens_to_add = 8
-                        item_name = "Start: 8 бананов"
-                    elif amount == 299.0: 
-                        gens_to_add = 44
-                        item_name = "Medium: 44 банана"
-                    elif amount == 699.0: 
-                        gens_to_add = 140
-                        item_name = "Big: 140 бананов 🔥"
-                    elif amount == 1499.0: 
-                        gens_to_add = 340
-                        item_name = "Mega: 340 бананов"
-                    elif amount == 3499.0: 
-                        gens_to_add = 832
-                        item_name = "Whale: 832 банана 👑"
+                    # 2. Обновляем аналитику
+                    await update_purchase_analytics(session, user_id, amount, tariff_name, payment_id)
                     
-                    if gens_to_add > 0:
-                        await add_paid_balance(session, user_id, gens_to_add)
-                        await session.commit()
-
+                    # 3. Начисляем бананы
+                    await add_paid_balance(session, user_id, gens_to_add)
+                    await session.commit()
                     # ======================================================
                     # 📊 ВОТ ЭТОГО НЕ ХВАТАЛО В СТАРОЙ ВЕРСИИ
                     # ======================================================
@@ -75,7 +75,7 @@ async def handle_yookassa(request):
                         bot_instance, 
                         db_user, 
                         amount, 
-                        item_name, 
+                        tariff_name, 
                         new_bal, 
                         stats=stats # <--- ПЕРЕДАЕМ СТАТИСТИКУ
                     )

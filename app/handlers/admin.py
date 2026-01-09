@@ -13,6 +13,12 @@ import json     # 👈 Для парсинга JSON (если ещё нет)
 from sqlalchemy import select, func
 from app.models import User, Purchase, Broadcast
 from app import config
+from app.services.analytics_service import get_analytics_report, format_report_message
+from datetime import datetime, timedelta
+from aiogram.fsm.state import State, StatesGroup
+
+class StatsState(StatesGroup):
+    waiting_for_custom_dates = State()
 
 router = Router()
 
@@ -48,6 +54,7 @@ def get_admin_menu_kb():
     builder.button(text="🔍 Найти пользователя", callback_data="admin_find_user")
     builder.button(text="📢 Рассылка", callback_data="admin_broadcast") 
     builder.button(text="🔗 Создать ссылку", callback_data="admin_create_postlink")  # 👈 НОВАЯ КНОПКА
+    builder.button(text="📈 Отчёты", callback_data="admin_stats_new")  # Новая
     builder.button(text="❌ Выйти", callback_data="close_admin")
     builder.adjust(1)
     return builder.as_markup()
@@ -963,3 +970,167 @@ async def process_postlink_finish(callback: types.CallbackQuery, state: FSMConte
     await callback.answer("🎉 Ссылка готова!")
     
     await state.clear()
+
+@router.callback_query(F.data == "admin_stats_new")
+async def cb_admin_stats(callback: types.CallbackQuery):
+    """Главное меню статистики"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📅 За сегодня", callback_data="stats_today")
+    builder.button(text="📅 За вчера", callback_data="stats_yesterday")
+    builder.button(text="📅 За неделю (7 дней)", callback_data="stats_week")
+    builder.button(text="📅 За месяц (30 дней)", callback_data="stats_month")
+    builder.button(text="📅 За всё время", callback_data="stats_alltime")
+    builder.button(text="🔧 Свой период", callback_data="stats_custom")  # 👈 ДОБАВЬ ЭТУ СТРОКУ
+    builder.button(text="🔙 Назад", callback_data="admin_menu" \
+    "")
+    builder.adjust(1)
+    
+    await callback.message.edit_text(
+        "📊 <b>Статистика</b>\n\nВыберите период:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("stats_"))
+async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
+    """Показывает статистику за выбранный период"""
+    period = callback.data.split("_")[1]
+    # Если это кастомный период - перенаправляем в отдельный handler
+    if period == "custom":
+        await cb_stats_custom_start(callback, state)
+        return
+    now = datetime.now()
+    
+    # Определяем период
+    if period == "today":
+        date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = now
+        date_str = now.strftime("%d.%m.%Y") + " (сегодня)"
+    
+    elif period == "yesterday":
+        yesterday = now - timedelta(days=1)
+        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
+    
+    elif period == "week":
+        date_from = now - timedelta(days=7)
+        date_to = now
+        date_str = "7 дней"
+    
+    elif period == "month":
+        date_from = now - timedelta(days=30)
+        date_to = now
+        date_str = "30 дней"
+    
+    elif period == "alltime":
+        # Берём дату создания первого юзера как начало
+        async with async_session() as session:
+            first_user = await session.execute(
+                select(User).order_by(User.created_at).limit(1)
+            )
+            first = first_user.scalar_one_or_none()
+            date_from = first.created_at if first else now - timedelta(days=365)
+        date_to = now
+        date_str = "всё время"
+    
+    else:
+        await callback.answer("❌ Неизвестный период")
+        return
+    
+    # Показываем индикатор загрузки
+    await callback.answer("⏳ Собираю данные...")
+    
+    # Собираем статистику
+    async with async_session() as session:
+        data = await get_analytics_report(session, date_from, date_to)
+    
+    # Форматируем сообщение
+    message = format_report_message(data, date_str)
+    
+    # Отправляем новым сообщением (т.к. может быть длинным)
+    await callback.message.answer(message)
+
+    # Показываем кнопки
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 Ещё отчёт", callback_data="admin_stats_new")
+    builder.button(text="🔙 В админку", callback_data="admin_menu")
+    builder.adjust(1)
+
+    await callback.message.answer("✅ Отчёт готов!", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data == "stats_custom")
+async def cb_stats_custom_start(callback: types.CallbackQuery, state: FSMContext):
+    """Запрос кастомного периода"""
+    await state.set_state(StatsState.waiting_for_custom_dates)
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Отмена", callback_data="admin_stats_new")
+    
+    await callback.message.edit_text(
+        "🔧 <b>Свой период</b>\n\n"
+        "Введите даты в формате:\n"
+        "<code>ДД.ММ.ГГГГ - ДД.ММ.ГГГГ</code>\n\n"
+        "Примеры:\n"
+        "• <code>01.01.2026 - 09.01.2026</code>\n"
+        "• <code>15.12.2025 - 31.12.2025</code>\n\n"
+        "Или введите одну дату для отчёта за один день:\n"
+        "• <code>05.01.2026</code>",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.message(StatsState.waiting_for_custom_dates, F.text)
+async def cb_stats_custom_process(message: types.Message, state: FSMContext):
+    """Обработка кастомных дат"""
+    text = message.text.strip()
+    
+    try:
+        # Проверяем формат: одна дата или диапазон
+        if " - " in text:
+            # Диапазон дат
+            date_from_str, date_to_str = text.split(" - ")
+            date_from = datetime.strptime(date_from_str.strip(), "%d.%m.%Y")
+            date_to = datetime.strptime(date_to_str.strip(), "%d.%m.%Y").replace(hour=23, minute=59, second=59)
+            date_str = f"{date_from_str.strip()} — {date_to_str.strip()}"
+        else:
+            # Одна дата - отчёт за день
+            date_from = datetime.strptime(text, "%d.%m.%Y")
+            date_to = date_from.replace(hour=23, minute=59, second=59)
+            date_str = text
+        
+        # Показываем индикатор
+        wait_msg = await message.answer("⏳ Собираю данные...")
+        
+        # Собираем статистику
+        async with async_session() as session:
+            data = await get_analytics_report(session, date_from, date_to)
+        
+        # Форматируем сообщение
+        report = format_report_message(data, date_str)
+        
+        # Удаляем индикатор и отправляем отчёт
+        await wait_msg.delete()
+        await message.answer(report)
+        
+        # Очищаем состояние
+        await state.clear()
+        
+        # Показываем кнопки
+        builder = InlineKeyboardBuilder()
+        builder.button(text="📊 Ещё отчёт", callback_data="admin_stats_new")
+        builder.button(text="🔙 В админку", callback_data="admin_menu")
+        builder.adjust(1)
+        
+        await message.answer("✅ Отчёт готов!", reply_markup=builder.as_markup())
+        
+    except ValueError:
+        await message.answer(
+            "❌ <b>Неверный формат!</b>\n\n"
+            "Используйте:\n"
+            "• <code>01.01.2026 - 09.01.2026</code> (диапазон)\n"
+            "• <code>05.01.2026</code> (один день)",
+            parse_mode="HTML"
+        )

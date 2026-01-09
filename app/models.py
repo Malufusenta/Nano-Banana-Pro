@@ -31,6 +31,12 @@ class User(Base):
     referrer_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # Кто пригласил
     source: Mapped[str | None] = mapped_column(String, nullable=True) # Источник трафика
 
+    # Аналитика покупок (LTV)
+    total_revenue: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    orders_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    first_purchase_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    had_free_actions_before_purchase: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
     
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -43,6 +49,13 @@ class Purchase(Base):
     amount: Mapped[int] = mapped_column(Integer)
     price: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String, default="pending")
+
+    # Аналитика
+    tariff_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 # 3. Таблица Истории (Контекст + Галерея)
@@ -121,3 +134,14 @@ class PostConfig(Base):
     
     # Статистика использования (опционально)
     clicks_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # 7. Таблица транзакций бананов (детальный трекинг)
+class BananaTransaction(Base):
+    __tablename__ = "banana_transactions"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    amount: Mapped[int] = mapped_column(Integer)  # +10 или -1
+    transaction_type: Mapped[str] = mapped_column(String)  # "spent", "earned_ref", "earned_sub", "purchased", "welcome"
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

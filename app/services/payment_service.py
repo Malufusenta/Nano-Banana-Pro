@@ -2,6 +2,10 @@ from sqlalchemy import select, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Purchase, User
 from datetime import datetime # ✅ Добавил, чтобы работало время
+from sqlalchemy import select, update, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import Purchase, User, BananaTransaction
+from datetime import datetime
 
 async def create_purchase_record(session: AsyncSession, user_id: int, price: int, gens_amount: int):
     """Создает запись о том, что человек хочет купить (статус pending)"""
@@ -84,17 +88,78 @@ async def mark_purchase_as_succeeded(session: AsyncSession, user_id: int, price:
     # 2. Если нашли — обновляем статус
     if purchase:
         purchase.status = "succeeded"
+        purchase.completed_at = datetime.now()
     else:
         # 3. Если не нашли (быстрая оплата) — СОЗДАЕМ новую
-        # (amount ставим 0, так как бананы начисляются отдельно в webhook_server)
         purchase = Purchase(
             user_id=user_id,
             price=price,
             amount=0, 
             status="succeeded",
-            created_at=datetime.now()
+            created_at=datetime.now(),
+            completed_at=datetime.now()
         )
         session.add(purchase)
 
-    await session.commit()
+    # Commit будет в вызывающей функции
     return True
+
+async def update_purchase_analytics(
+    session: AsyncSession, 
+    user_id: int, 
+    price: float,
+    tariff_name: str,
+    payment_id: str = None
+):
+    """
+    Обновляет аналитику после успешной покупки:
+    1. Заполняет детали Purchase
+    2. Обновляет LTV метрики User
+    3. Проверяет флаг "копил или сразу купил" при первой покупке
+    """
+    # 1. Получаем юзера
+    user_result = await session.execute(
+        select(User).where(User.telegram_id == user_id)
+    )
+    user = user_result.scalar_one_or_none()
+    
+    if not user:
+        return
+    
+    # 2. Находим Purchase и заполняем детали
+    purchase_result = await session.execute(
+        select(Purchase)
+        .where(Purchase.user_id == user_id, Purchase.price == price, Purchase.status == "succeeded")
+        .order_by(desc(Purchase.created_at))
+        .limit(1)
+    )
+    purchase = purchase_result.scalar_one_or_none()
+    
+    if purchase:
+        purchase.tariff_name = tariff_name
+        purchase.user_source = user.source or "organic"
+        purchase.completed_at = datetime.now()
+        if payment_id:
+            purchase.payment_id = payment_id
+    
+    # 3. Обновляем LTV метрики юзера
+    user.total_revenue += int(price)
+    user.orders_count += 1
+    
+    # 4. Проверяем первую покупку
+    if user.orders_count == 1:  # Это первая покупка
+        user.first_purchase_at = datetime.now()
+        
+        # Проверяем: были ли бесплатные начисления ДО покупки?
+        free_transactions_result = await session.execute(
+            select(BananaTransaction)
+            .where(
+                BananaTransaction.user_id == user_id,
+                BananaTransaction.transaction_type.in_(["earned_ref", "earned_sub"])
+            )
+            .limit(1)
+        )
+        had_free_actions = free_transactions_result.scalar_one_or_none() is not None
+        user.had_free_actions_before_purchase = had_free_actions
+    
+    # Commit будет в вызывающей функции

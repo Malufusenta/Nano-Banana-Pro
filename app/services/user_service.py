@@ -4,6 +4,7 @@ from app.models import User, Purchase
 from datetime import datetime, timedelta, timezone
 from app.config import START_BALANCE
 from app.models import MessageHistory, GenerationTask
+from app.models import User, Purchase, MessageHistory, GenerationTask, BananaTransaction
 
 # --- ТВОЯ СТАРАЯ ЛОГИКА ---
 
@@ -41,19 +42,23 @@ async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amou
         return False  # Недостаточно бананов
     
     remaining = amount
-    
-    if user.balance_paid > 0:
-        deduct_from_paid = min(user.balance_paid, remaining)
-        user.balance_paid -= deduct_from_paid
-        remaining -= deduct_from_paid
-    
+
+    # СПИСЫВАЕМ ПО ТЗ: Сначала бесплатные, потом платные
+    if user.balance_free > 0:
+        deduct_from_free = min(user.balance_free, remaining)
+        user.balance_free -= deduct_from_free
+        remaining -= deduct_from_free
+
     if remaining > 0:
-        user.balance_free -= remaining
+        user.balance_paid -= remaining
     
     user.generations_balance = user.balance_paid + user.balance_free
     user.total_generations_used += 1
     user.last_generation_at = datetime.now()
-    
+
+    # Трекинг расхода
+    await track_banana_transaction(session, telegram_id, -amount, "spent", "Generation")
+
     await session.commit()
     return True
 
@@ -159,7 +164,8 @@ async def admin_change_balance(session: AsyncSession, user_id: int, amount: int)
     # НАЧИСЛЕНИЕ (положительное число)
     if amount > 0:
         user.balance_free += amount
-    
+        await track_banana_transaction(session, user_id, amount, "earned_manual", "Manual adjustment")
+
     # СНЯТИЕ (отрицательное число)
     else:
         to_remove = abs(amount)
@@ -374,6 +380,8 @@ async def add_paid_balance(session: AsyncSession, user_id: int, amount: int):
     if user:
         user.balance_paid += amount
         user.generations_balance = user.balance_paid + user.balance_free
+        await track_banana_transaction(session, user_id, amount, "purchased", f"Purchased {amount} bananas")
+
         await session.commit()
         return user.generations_balance
     return None
@@ -386,3 +394,20 @@ async def has_user_purchased(session: AsyncSession, user_id: int) -> bool:
     ).limit(1)
     result = await session.execute(query)
     return result.first() is not None
+
+async def track_banana_transaction(
+    session: AsyncSession, 
+    user_id: int, 
+    amount: int, 
+    transaction_type: str, 
+    description: str = None
+):
+    """Записывает транзакцию бананов для аналитики"""
+    transaction = BananaTransaction(
+        user_id=user_id,
+        amount=amount,
+        transaction_type=transaction_type,
+        description=description
+    )
+    session.add(transaction)
+    # НЕ делаем commit - он будет в родительской функции
