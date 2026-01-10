@@ -513,9 +513,9 @@ async def cmd_start_creating(message: types.Message, state: FSMContext):
     await state.set_state(GenState.free_mode)
     
     text = (
-        "*Я готов творить!*\n"
-        "Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить\n\n"
-        "*Не знаешь, что создать?👇*"
+        "*Я готов творить! 🎨*\n\n"
+        "Пришли *от 1 до 4 фото* с описанием или напиши, что сделать.\n\n"
+        "*Не знаешь, что создать? 👇*"
     )
     # Создаем inline-кнопку
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton

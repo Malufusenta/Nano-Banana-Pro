@@ -225,9 +225,9 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             text = (
             f"👋 *С возвращением!*\n"
             f"🍌 Твой баланс: *{bal} {word}*\n\n"
-            f"*Я готов творить!*\n"
-            f"Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить\n\n"
-            f"*Не знаешь, что создать?👇*"
+            f"*Я готов творить! 🎨*\n"
+            f"Пришли *от 1 до 4 фото* с описанием или напиши, что сделать.\n\n"
+            f"*Не знаешь, что создать? 👇*"
 )
             # Создаем inline-кнопку для старого юзера
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
