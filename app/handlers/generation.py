@@ -514,9 +514,16 @@ async def cmd_start_creating(message: types.Message, state: FSMContext):
     
     text = (
         "*Я готов творить!*\n"
-        "Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить 👇"
+        "Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить\n\n"
+        "*Не знаешь, что создать?👇*"
     )
-    await message.answer(text, parse_mode="Markdown")
+    # Создаем inline-кнопку
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💃 Примерить образ", url="https://t.me/+3ovTRpUPci85ODYy")]
+    ])
+    
+    await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
 
     # 👇 ВСТАВИТЬ ЭТО ПОСЛЕ cmd_start_creating 👇
 

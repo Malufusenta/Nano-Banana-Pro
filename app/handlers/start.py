@@ -162,25 +162,31 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb())
                 return
             # Обычное приветствие для новых юзеров
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             word = get_banana_word(welcome_bonus)
             text = (
-                f"👋 Привет! Я <b>Nano Banana Pro 🍌</b> — твой карманный AI-фотошоп.\n\n"
+                f"👋 Привет! Я <b>Nano Banana Pro 🍌</b> — твой AI-фотошоп.\n\n"
                 f"🎁 <b>Тебе уже начислено {welcome_bonus} подарочных {word}</b>\n\n"
-                f"🤷‍♀️ <b>Не знаешь, что сгенерировать?</b>\n"
-                f"👉 <a href='{CHANNEL_LINK}'><b>Выбрать образ для фото, как с обложки</b></a>\n\n"
                 f"<b>Я готов творить!</b>\n"
-                f"Напиши, что создать, или пришли от 1 до 4 фото, которые нужно изменить или объединить 👇"
+                f"Напиши, что создать, или пришли <b>от 1 до 4 фото</b>, которые нужно изменить или объединить\n\n"
+                f"🤷‍♀️ <b>Не знаешь, что сгенерировать?👇</b>"
             )
+
+                        # Создаем клавиатуру с кнопкой
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💃 Примерить образ", url="https://t.me/+qcYoFpW4yXRlZjVi")]
+            ])
+
             
             try:
                 if "AgAC" in WELCOME_PHOTO: 
-                    await message.answer_photo(WELCOME_PHOTO, caption=text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
+                    await message.answer_photo(WELCOME_PHOTO, caption=text, parse_mode="HTML", reply_markup=keyboard,link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
 )
                 else: 
-                    await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
+                    await message.answer(text, parse_mode="HTML", reply_markup=keyboard,link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
 )
             except: 
-                await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
+                await message.answer(text, parse_mode="HTML", reply_markup=keyboard,link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
 )
                 
             # 🆕 ДОБАВЬ ЭТУ СТРОКУ!
@@ -220,6 +226,13 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             f"👋 *С возвращением!*\n"
             f"🍌 Твой баланс: *{bal} {word}*\n\n"
             f"*Я готов творить!*\n"
-            f"Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить 👇"
+            f"Напиши, что создать, или пришли *от 1 до 4 фото*, которые нужно изменить или объединить\n\n"
+            f"*Не знаешь, что создать?👇*"
 )
-            await message.answer(text, parse_mode="Markdown", reply_markup=get_main_kb())
+            # Создаем inline-кнопку для старого юзера
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard_old = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💃 Примерить образ", url="https://t.me/+3ovTRpUPci85ODYy")]
+            ])
+            
+            await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
