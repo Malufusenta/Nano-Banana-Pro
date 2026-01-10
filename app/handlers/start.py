@@ -35,6 +35,7 @@ def get_main_kb():
 async def cmd_start(message: types.Message, command: CommandObject, state: FSMContext, bot: Bot):
     await state.clear()
     user_id = message.from_user.id
+    welcome_bonus = 2
     
     # 1. ЛОВИМ ИСТОЧНИК
     referrer_id = None
@@ -101,21 +102,38 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             await log_new_user(bot, message.from_user, deep_link=args)
 
             # Начисляем бонусы
-            welcome_bonus = 2
             await admin_change_balance(session, user_id, welcome_bonus)
             await track_banana_transaction(session, user_id, welcome_bonus, "welcome", "Welcome bonus")
             await session.commit()
 
-        if referrer_id:
-            try:
-                await admin_change_balance(session, referrer_id, 2)
-                # Трекинг реферального бонуса
-                await track_banana_transaction(session, referrer_id, 2, "earned_ref", f"Referral from {user_id}")
-                await session.commit()
-                
-                await bot.send_message(referrer_id, "🎉 **Друг перешел по ссылке!**\n🍌 +2 банана", parse_mode="Markdown")
-                await log_referral(bot, referrer_id, message.from_user)
-            except: pass
+            if referrer_id:
+                try:
+                    await admin_change_balance(session, referrer_id, 2)
+                    # Трекинг реферального бонуса
+                    await track_banana_transaction(session, referrer_id, 2, "earned_ref", f"Referral from {user_id}")
+                    await session.commit()
+                    
+                    # 🆕 ПОЛУЧАЕМ ОБНОВЛЕННЫЙ БАЛАНС
+                    referrer = await get_user(session, referrer_id)
+                    new_balance = referrer.generations_balance if referrer else 0
+                    
+                    # 🆕 СОЗДАЕМ КНОПКУ "Пригласить ещё"
+                    from aiogram.utils.keyboard import InlineKeyboardBuilder
+                    builder = InlineKeyboardBuilder()
+                    builder.button(text="🤝 Пригласить ещё", callback_data="goto_free")
+                    
+                    # 🆕 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ПО ТЗ
+                    await bot.send_message(
+                        referrer_id,
+                        f"🥳 Ура! По твоей ссылке пришел друг.\n"
+                        f"Баланс пополнен: <b>+2 банана</b> 🍌\n\n"
+                        f"Всего на счету: <b>{new_balance}</b>",
+                        parse_mode="HTML",
+                        reply_markup=builder.as_markup()
+)
+                    
+                    await log_referral(bot, referrer_id, message.from_user)
+                except: pass
 
 # 🔥 ЕСЛИ ЭТО POST LINK - СПЕЦИАЛЬНОЕ ПРИВЕТСТВИЕ
             if is_post_link and post_config:
@@ -143,7 +161,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 
                 await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb())
                 return
-                # Обычное приветствие для новых юзеров
+            # Обычное приветствие для новых юзеров
             word = get_banana_word(welcome_bonus)
             text = (
                 f"👋 Привет! Я <b>Nano Banana Pro 🍌</b> — твой карманный AI-фотошоп.\n\n"
@@ -164,6 +182,9 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             except: 
                 await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(),link_preview_options=types.LinkPreviewOptions(is_disabled=True)  # 👈 ДОБАВЬ ЭТО
 )
+                
+            # 🆕 ДОБАВЬ ЭТУ СТРОКУ!
+            return
         # ЕСЛИ СТАРЫЙ ЮЗЕР
         else:
 

@@ -411,3 +411,25 @@ async def track_banana_transaction(
     )
     session.add(transaction)
     # НЕ делаем commit - он будет в родительской функции
+
+async def get_referral_stats(session: AsyncSession, user_id: int):
+    """
+    Получает статистику рефералов:
+    - referral_count: сколько людей пришло по ссылке
+    - referral_earnings: сколько бананов заработано
+    """
+    # 1. Считаем количество рефералов
+    stmt_count = select(func.count(User.id)).where(User.referrer_id == user_id)
+    referral_count = await session.scalar(stmt_count) or 0
+    
+    # 2. Считаем заработанные бананы (из таблицы транзакций)
+    stmt_earnings = select(func.sum(BananaTransaction.amount)).where(
+        BananaTransaction.user_id == user_id,
+        BananaTransaction.transaction_type == "earned_ref"
+    )
+    referral_earnings = await session.scalar(stmt_earnings) or 0
+    
+    return {
+        "referral_count": referral_count,
+        "referral_earnings": referral_earnings
+    }

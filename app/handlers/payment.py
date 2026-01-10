@@ -309,6 +309,10 @@ async def show_profile(message: types.Message):
     
     async with async_session() as session:
         data = await get_user_profile_data(session, user_id)
+
+                # 🆕 ПОЛУЧАЕМ СТАТИСТИКУ РЕФЕРАЛОВ
+        from app.services.user_service import get_referral_stats
+        ref_stats = await get_referral_stats(session, user_id)
     
     if not data:
         await message.answer("❌ Ошибка загрузки профиля.")
@@ -322,6 +326,7 @@ async def show_profile(message: types.Message):
         f"🆔 ID: <code>{user_id}</code>\n"
         f"🍌 Баланс: <b>{user.generations_balance} шт.</b>\n"
         f"🎨 Создано шедевров: <b>{user.total_generations_used}</b>\n\n"
+        f"👥 Приглашено: <b>{ref_stats['referral_count']}</b> (+{ref_stats['referral_earnings']} 🍌)\n\n"
         "👇 <b>Управление аккаунтом:</b>"
     )
     
