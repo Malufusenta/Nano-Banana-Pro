@@ -180,7 +180,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 await state.set_state(GenState.free_mode)
                 
                 await message.answer(
-                    "✨ <b>Настройки из поста применены!</b>\n\n"
+                    "✨ <b>Промт из поста применен!</b>\n\n"
                     "📸 Присылай фото, чтобы сгенерировать 👇",
                     parse_mode="HTML",
                     reply_markup=get_main_kb()
