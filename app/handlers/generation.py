@@ -520,7 +520,7 @@ async def cmd_start_creating(message: types.Message, state: FSMContext):
     # Создаем inline-кнопку
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💃 Примерить образ", url="https://t.me/+3ovTRpUPci85ODYy")]
+        [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+3ovTRpUPci85ODYy")]
     ])
     
     await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)

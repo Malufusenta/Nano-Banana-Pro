@@ -174,7 +174,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
                         # Создаем клавиатуру с кнопкой
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💃 Примерить образ", url="https://t.me/+qcYoFpW4yXRlZjVi")]
+                [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+qcYoFpW4yXRlZjVi")]
             ])
 
             
@@ -232,7 +232,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             # Создаем inline-кнопку для старого юзера
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             keyboard_old = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💃 Примерить образ", url="https://t.me/+3ovTRpUPci85ODYy")]
+                [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+3ovTRpUPci85ODYy")]
             ])
             
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
