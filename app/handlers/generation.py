@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
-from app.services.admin_logger import log_generation, log_error
+from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor
 from app.models import Broadcast  # 👈 Добавь Broadcast
 from app.database import async_session
 from app.services.user_service import (
@@ -20,6 +20,7 @@ from app.services.user_service import (
 )
 from app.services.ai_engine import generate_image
 from app.utils import prompts
+from app.utils.prompt_validator import is_lazy_prompt
 from app import config
 
 router = Router()
@@ -427,7 +428,7 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(F.chat.type == "private", F.media_group_id, StateFilter(GenState.free_mode, None, GenState.preflight_check, GenState.selecting_ratio))
 async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot, album: list[types.Message] = None):
     """Обработка альбомов (2-10 фото)"""
-    
+
     # 🔥 СОХРАНЯЕМ BROADCAST ДАННЫЕ ДО ОЧИСТКИ STATE 🔥
     data = await state.get_data()
     broadcast_prompt = data.get('broadcast_prompt')
@@ -487,6 +488,11 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     # Обычный флоу (без изменений)
     if count == 1:
         if full_caption:
+        # 🚫 ДОБАВЬ ПРОВЕРКУ ЗДЕСЬ 👇
+            if is_lazy_prompt(full_caption):
+                await send_lazy_prompt_message(message)
+                return
+        # 👆 КОНЕЦ ВСТАВКИ
             await start_preflight_check(message, state, full_caption, image_urls)
         else:
             await state.update_data(pending_image_urls=image_urls)
@@ -498,6 +504,10 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     else:  # >= 2 фото
         await state.update_data(pending_image_urls=image_urls)
         if full_caption:
+                    # 🚫 ДОБАВЬ ПРОВЕРКУ ЗДЕСЬ 👇
+            if is_lazy_prompt(full_caption):
+                await send_lazy_prompt_message(message)
+                return
             await start_preflight_check(message, state, full_caption, image_urls)
         else:
             await state.set_state(GenState.waiting_for_caption)
@@ -555,6 +565,12 @@ async def handle_new_prompt_during_settings(message: types.Message, state: FSMCo
     # 1. Проверяем, не нажал ли он кнопку меню (Старт, Профиль и т.д.)
     if message.text in IGNORED_TEXTS: 
         return
+    
+        # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
+    if is_lazy_prompt(message.text):
+        await state.clear()  # Сбрасываем состояние
+        await send_lazy_prompt_message(message)
+        return
 
     # 2. Сбрасываем старые данные (предыдущий промпт и настройки)
     await state.clear()
@@ -591,6 +607,11 @@ async def handle_new_photo_during_settings(message: types.Message, state: FSMCon
     url = await get_photo_url(bot, message.photo[-1].file_id)
     
     if message.caption:
+        # 🚫 ДОБАВЬ ЭТУ ПРОВЕРКУ 👇
+        if is_lazy_prompt(message.caption):
+            await send_lazy_prompt_message(message)
+            return
+        # 👆 КОНЕЦ ВСТАВКИ
         # Если есть подпись — сразу в настройки
         await start_preflight_check(message, state, message.caption, [url])
     else:
@@ -601,11 +622,52 @@ async def handle_new_photo_during_settings(message: types.Message, state: FSMCon
 
 # 👆 КОНЕЦ ВСТАВКИ 👆
 
+async def send_lazy_prompt_message(message: types.Message):
+    """
+    Отправляет сообщение-заглушку для ленивых промптов
+    Экономит GPU и бананы пользователя
+    """
+    try:
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text="💃 Примерить образ",
+            url="https://t.me/+3ovTRpUPci85ODYy"
+        )
+        
+        text = (
+        "Хочу услышать от тебя <b>«ВАУ!»</b> 😍\n\n"
+        "Но если делать без четкого описания, результат может разочаровать. "
+        "А мы же хотим <b>шедевр</b>?\n\n"
+        "Пожалуйста, <b>напиши подробнее</b>, что ты хочешь увидеть, или "
+        "<b>выбери готовый образ:</b> 👇"
+        )
+        
+        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+       
+           # 📊 Логируем в админский канал
+        await log_lazy_prompt_interceptor(
+        message.bot,
+        message.from_user.id,
+        message.from_user.username,
+        message.text or message.caption or "Без текста"
+    )
+
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+
 @router.message(F.chat.type == "private", F.text, StateFilter(GenState.free_mode, None))
 async def handle_free_text(message: types.Message, state: FSMContext):
     """Обработка текста без фото"""
     if message.text in IGNORED_TEXTS: 
         return
+    
+        # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
+    if is_lazy_prompt(message.text):
+        await send_lazy_prompt_message(message)
+        return
+    
     await start_preflight_check(message, state, message.text, None)
 
 @router.message(F.chat.type == "private", F.photo, StateFilter(GenState.free_mode, None))
@@ -657,6 +719,11 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
     
     # Обычный флоу
     if message.caption:
+        lazy_check = is_lazy_prompt(message.caption)  
+        if lazy_check:
+            await send_lazy_prompt_message(message)
+            return
+
         await start_preflight_check(message, state, message.caption, [url])
     else:
         await state.update_data(pending_image_urls=[url])
@@ -669,6 +736,11 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
 async def handle_delayed_caption(message: types.Message, state: FSMContext):
     """Обработка отложенного текста после фото"""
     user_prompt = message.text
+        # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ 👇
+    if is_lazy_prompt(user_prompt):
+        await send_lazy_prompt_message(message)
+        return
+    # 👆 КОНЕЦ ВСТАВКИ
         # 🎨 Проверяем blend-задачу
     if is_blend_request(user_prompt):
         await state.update_data(is_blend_mode=True)

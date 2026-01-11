@@ -231,3 +231,20 @@ async def log_referral(bot: Bot, referrer_id: int, new_user):
         "#referral"
     )
     asyncio.create_task(send_log(bot, text))
+
+    # 🚫 ТИП 7: ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
+async def log_lazy_prompt_interceptor(bot: Bot, user_id: int, username: str, lazy_text: str):
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    # Обрезаем текст если слишком длинный
+    safe_text = lazy_text[:100] + "..." if len(lazy_text) > 100 else lazy_text
+    
+    text = (
+        "🚫 <b>ПЕРЕХВАТЧИК: Ленивый промпт</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: {u_name} (<code>{user_id}</code>)\n"
+        f"Текст: <code>{safe_text}</code>\n"
+        f"💰 Экономия: 1-3 🍌 (Генерация не запущена)\n"
+        "#lazy_prompt"
+    )
+    asyncio.create_task(send_log(bot, text, disable_notification=True))
