@@ -236,3 +236,38 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             ])
             
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
+
+            # =====================================================================
+# 🏠 ГЛАВНОЕ МЕНЮ (для повторного вызова)
+# =====================================================================
+
+async def send_main_menu(message: types.Message, user_id: int):
+    """
+    Отправляет главное меню пользователю
+    Используется при отмене действий или возврате в меню
+    """
+    async with async_session() as session:
+        user = await get_user(session, user_id)
+        
+        if not user:
+            # Если юзера нет (странная ситуация), просто возвращаем базовое меню
+            await message.answer(
+                "👋 Привет! Используй /start для начала работы.",
+                reply_markup=get_main_kb()
+            )
+            return
+        
+        bal = user.generations_balance
+        word = get_banana_word(bal)
+        
+        text = (
+            f"🏠 *Главное меню*\n\n"
+            f"🍌 Баланс: *{bal} {word}*\n\n"
+            f"Выбери действие на клавиатуре ниже 👇"
+        )
+        
+        await message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_main_kb()
+        )

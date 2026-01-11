@@ -248,3 +248,46 @@ async def log_lazy_prompt_interceptor(bot: Bot, user_id: int, username: str, laz
         "#lazy_prompt"
     )
     asyncio.create_task(send_log(bot, text, disable_notification=True))
+
+    # 🚨 ТИП 8: ФИЛЬТР ЖАЛОБ НА СХОДСТВО
+async def log_complaint_filter(bot: Bot, user_id: int, username: str, complaint_text: str):
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    # Обрезаем текст если слишком длинный
+    safe_text = complaint_text[:100] + "..." if len(complaint_text) > 100 else complaint_text
+    
+    text = (
+        "😡 <b>COMPLAINT FILTER: Жалоба перехвачена</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: {u_name} (<code>{user_id}</code>)\n"
+        f"Текст: <code>{safe_text}</code>\n"
+        f"Действие: Показана инструкция по качественной генерации\n"
+        "#complaint_filter"
+    )
+    asyncio.create_task(send_log(bot, text, disable_notification=True))
+
+# 🔄 ТИП 9: RETRY FLOW - Нажата кнопка "Повторить правильно"
+async def log_retry_flow(bot: Bot, user_id: int):
+    text = (
+        "✅ <b>RETRY FLOW: Запущен правильный сценарий</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: <a href='tg://user?id={user_id}'>{user_id}</a>\n"
+        f"Флаг: <code>force_pro_mode=True</code>\n"
+        f"Статус: Ожидание фото + промпт с правилами\n"
+        "#retry_flow"
+    )
+    asyncio.create_task(send_log(bot, text, disable_notification=True))
+
+# 💎 ТИП 10: ЗАКАЗ СОЗДАН ПОСЛЕ RETRY FLOW
+async def log_order_from_retry(bot: Bot, user_id: int, cost: int, model: str):
+    model_display = "PRO" if model == "pro" else "Standard"
+    text = (
+        "💎 <b>ORDER CREATED: Генерация после Retry Flow</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: <a href='tg://user?id={user_id}'>{user_id}</a>\n"
+        f"Модель: <b>{model_display}</b> (Source: Retry Flow)\n"
+        f"Стоимость: {cost} 🍌\n"
+        f"✅ Клиент прошел через отработку жалобы\n"
+        "#order_retry"
+    )
+    asyncio.create_task(send_log(bot, text))

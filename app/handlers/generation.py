@@ -25,6 +25,9 @@ from app import config
 
 router = Router()
 
+COMPLAINT_INSTRUCTION_PHOTO = "AgACAgIAAxkBAAIEXmljYVg9EmWKVeMfvkyswZTdlygIAALjDWsb9o0ZS5z4N3QcX6nOAQADAgADeQADOAQ"  # 👈 Вставь свой file_id
+
+
 # 👇 ЗАМЕНИТЬ ВЕСЬ СПИСОК IGNORED_TEXTS НА ЭТОТ:
 IGNORED_TEXTS = [
     "✨ Начать творить", "🎨 Создать изображение", "Заработать🍌", "📚 Гайд",
@@ -81,6 +84,64 @@ async def get_smart_alert_message(user_id: int, balance: int, cost: int) -> tupl
     builder.adjust(1)
     return text, builder
 
+@router.message(F.photo)
+async def get_photo_id(message: types.Message):
+    file_id = message.photo[-1].file_id
+    await message.answer(f"<code>{file_id}</code>", parse_mode="HTML")
+
+# =====================================================================
+# 🔥 COMPLAINT FILTER - Обработка жалоб на сходство
+# =====================================================================
+
+async def send_complaint_instruction(message: types.Message):
+    """
+    Отправляет инструкцию при срабатывании фильтра жалоб
+    """
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Повторить правильно", callback_data="retry_correct_flow")
+    builder.button(text="❌ Не сейчас", callback_data="complaint_not_now")
+    builder.adjust(1)
+    
+    # Текст с правилами в блоке кода
+    instruction_text = (
+        "🎯 <b>Как получить хороший результат и 100% сходство:</b>\n\n"
+        "Чтобы нейросеть создала вашего двойника, нужно выполнить <b>все 3 условия:</b>\n\n"
+        "1️⃣ <b>Фото:</b> это 80% успеха. Нейросеть рисует то, что видит. Пришлите четкое фото анфас(прямо в камеру). Важно: хороший дневной свет, без теней, без очков, лицо не закрыто волосами или руками.\n\n"
+        "2️⃣ <b>Режим:</b> Включите <b>PRO модель</b>. Только она переносит черты лица с фотографической точностью. Standard — для артов, общих образов и не сохраняет лицо.\n\n"
+        "3️⃣ <b>Промпт:</b> Добавьте к вашему описанию этот текст (нажмите, чтобы скопировать):\n"
+        "<code>Сохрани идентичные черты: форма лица, глаза, нос, губы, тон кожи и возраст. Без улучшения внешности, без бьюти-фильтров, без морфинга лица.</code>\n\n"
+        "⚠️ <b>Важно:</b> Результат гарантирован только при соблюдении всех трёх пунктов одновременно!\n\n"
+        "<b>Повторить правильно? </b>👇"
+    )
+    
+    try:
+        await message.answer_photo(
+            photo=COMPLAINT_INSTRUCTION_PHOTO,
+            caption=instruction_text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"⚠️ Ошибка отправки фото: {e}")
+        # Fallback: отправляем без фото
+        await message.answer(
+            instruction_text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+
+    
+    # Логируем в админский канал
+    from app.services.admin_logger import log_complaint_filter
+    await log_complaint_filter(
+        message.bot,
+        message.from_user.id,
+        message.from_user.username,
+        message.text
+    )
+
 class GenState(StatesGroup):
     waiting_for_category_input = State() 
     waiting_for_caption = State()
@@ -92,6 +153,8 @@ class GenState(StatesGroup):
     preflight_check = State()
     selecting_ratio = State()
     waiting_for_edit_instruction = State()
+    retry_waiting_photos = State()  # 👈 Новое состояние для ретрая
+
 
 # =====================================================================
 # 🛠 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -242,9 +305,15 @@ def get_categories_kb():
 # =====================================================================
 async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None):
     user_id = message.from_user.id
+
+    # 🔥 FORCE PRO LOGIC - Проверяем флаг перед загрузкой настроек
+    data = await state.get_data()
+    force_pro = data.get("force_pro_mode", False)
     
     async with async_session() as session:
         pref_model = await get_user_model_preference(session, user_id)
+    async with async_session() as session:
+        pref_model = "pro" if force_pro else await get_user_model_preference(session, user_id)
     
     # ✅ Нормализуем URL
     normalized_urls = normalize_image_urls(image_urls)
@@ -418,6 +487,20 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
         is_blend_mode=data.get("is_blend_mode", False)
 
     )
+
+    # 🔥 Сбрасываем флаг после успешной генерации
+    from_retry_flow = data.get("force_pro_mode", False)  # 👈 ПОЛУЧАЕМ ЗДЕСЬ
+    if from_retry_flow:
+        await state.update_data(force_pro_mode=False)
+        
+        # Логируем заказ из Retry Flow с РЕАЛЬНОЙ моделью
+        from app.services.admin_logger import log_order_from_retry
+        await log_order_from_retry(
+            callback.bot,
+            callback.from_user.id,
+            cost,
+            model_type  # 👈 ПЕРЕДАЁМ РЕАЛЬНУЮ МОДЕЛЬ
+        )
     
     # ⚠️ ВАЖНО: Мы НЕ делаем await state.clear()
     # Состояние остается активным, чтобы кнопки в меню продолжали работать
@@ -425,7 +508,7 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
 # =====================================================================
 # ВХОДНЫЕ ТОЧКИ
 # =====================================================================
-@router.message(F.chat.type == "private", F.media_group_id, StateFilter(GenState.free_mode, None, GenState.preflight_check, GenState.selecting_ratio))
+@router.message(F.chat.type == "private", F.media_group_id, StateFilter(GenState.free_mode, None, GenState.preflight_check, GenState.selecting_ratio, GenState.retry_waiting_photos))
 async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot, album: list[types.Message] = None):
     """Обработка альбомов (2-10 фото)"""
 
@@ -433,9 +516,17 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     data = await state.get_data()
     broadcast_prompt = data.get('broadcast_prompt')
     broadcast_ratio = data.get('broadcast_ratio', '1:1')
+    broadcast_model = data.get('broadcast_model', 'standard')  # 👈 СОХРАНЯЕМ МОДЕЛЬ
+
     is_from_broadcast = data.get('from_broadcast', False)
+    force_pro_mode = data.get('force_pro_mode', False)  # 👈 СОХРАНЯЕМ ФЛАГ
+
     
     await state.clear()  # Очищаем state
+
+        # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ
+    if force_pro_mode:
+        await state.update_data(force_pro_mode=True)
     
     messages = album if album else [message]
     count = len(messages)
@@ -461,12 +552,11 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     
     # 🔥 ЕСЛИ ЭТО BROADCAST - ИСПОЛЬЗУЕМ СОХРАНЁННЫЙ ПРОМПТ 🔥
     if is_from_broadcast and broadcast_prompt:
-        model = data.get('broadcast_model', 'standard')
         await state.update_data(
         pf_prompt=broadcast_prompt,
         pf_image_urls=image_urls,
         pf_ratio=broadcast_ratio,
-        pf_model=model,  # 👈 ИСПОЛЬЗУЕМ МОДЕЛЬ ИЗ ПОСТА
+        pf_model=broadcast_model,  # 👈 ИСПОЛЬЗУЕМ МОДЕЛЬ ИЗ ПОСТА
         pf_quality="2k",
         is_broadcast_gen=True  # 👈 ДОБАВЬ ФЛАГ
     )
@@ -553,8 +643,52 @@ async def cb_start_from_guide(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer(text, parse_mode="Markdown")
 
 # 👆 КОНЕЦ ВСТАВКИ 👆
+# =====================================================================
+# 🔥 COMPLAINT HANDLERS - Кнопки инструкции
+# =====================================================================
 
-    # 👇 ВСТАВИТЬ ЭТОТ БЛОК ПЕРЕД handle_free_text 👇
+@router.callback_query(F.data == "retry_correct_flow")
+async def cb_retry_correct_flow(callback: types.CallbackQuery, state: FSMContext):
+    """
+    Запуск правильного сценария генерации после жалобы
+    ALWAYS ACTIVE - работает даже через 2 дня
+    """
+    await callback.answer()
+    
+    # Сбрасываем любое состояние
+    await state.clear()
+    
+    # Устанавливаем флаг force_pro_mode
+    await state.update_data(force_pro_mode=True)
+    await state.set_state(GenState.retry_waiting_photos)
+    
+    # Отправляем сообщение №2
+    text = (
+        "👌 <b>Договорились. Делаем качественно.</b>\n\n"
+        "1. Пришлите <b>1-5 четких селфи</b> (дневной свет).\n"
+        "2. Затем напишите запрос, добавив в него <b>правила для сохранения лица</b> 👆.\n\n"
+        "Жду фото (а следом промпт) 👇"
+    )
+    
+    await callback.message.answer(text, parse_mode="HTML")
+    
+    # Логируем
+    from app.services.admin_logger import log_retry_flow
+    await log_retry_flow(callback.bot, callback.from_user.id)
+
+@router.callback_query(F.data == "complaint_not_now")
+async def cb_complaint_not_now(callback: types.CallbackQuery, state: FSMContext):
+    """
+    Кнопка 'Не сейчас' - возврат в главное меню
+    """
+    await callback.answer()
+    
+    # Сбрасываем состояние
+    await state.clear()
+    
+    # Отправляем главное меню
+    from app.handlers.start import send_main_menu
+    await send_main_menu(callback.message, callback.from_user.id)
 
 @router.message(StateFilter(GenState.preflight_check, GenState.selecting_ratio), F.text)
 async def handle_new_prompt_during_settings(message: types.Message, state: FSMContext):
@@ -685,7 +819,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
     
     # 🔥 ПРОВЕРКА BROADCAST ПРОМПТА 🔥
     data = await state.get_data()
-    
+    force_pro_mode = data.get('force_pro_mode', False)  # 👈 СОХРАНЯЕМ
     if data.get('from_broadcast') and data.get('broadcast_prompt'):
         prompt = data.get('broadcast_prompt')
         ratio = data.get('broadcast_ratio', '1:1')
@@ -717,21 +851,69 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
 )
         return
     
-    # Обычный флоу
+# Обычный флоу
     if message.caption:
         lazy_check = is_lazy_prompt(message.caption)  
         if lazy_check:
             await send_lazy_prompt_message(message)
             return
 
+        # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ 👇
+        if force_pro_mode:
+            await state.update_data(force_pro_mode=True)
+        # 👆 ВСТАВЬ ЭТО
+
         await start_preflight_check(message, state, message.caption, [url])
     else:
+        # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ 👇
+        if force_pro_mode:
+            await state.update_data(force_pro_mode=True)
+        # 👆 И ЭТО
+        
         await state.update_data(pending_image_urls=[url])
         await state.set_state(GenState.waiting_for_caption)
         await message.reply(
             "📸 **Фото принято!** Напиши, что с ним сделать.", 
             parse_mode="Markdown"
         )
+
+@router.message(GenState.retry_waiting_photos, F.photo)
+async def handle_retry_photos(message: types.Message, state: FSMContext, bot: Bot):
+    """
+    Обработка фото в режиме ретрая (после жалобы)
+    """
+    if message.media_group_id:
+        return  # Обработается в handle_album_input
+    
+    url = await get_photo_url(bot, message.photo[-1].file_id)
+    
+    if message.caption:
+        # Если есть подпись - сразу в preflight
+        await state.update_data(pf_image_urls=[url])
+        await start_preflight_check(message, state, message.caption, [url])
+    else:
+        # Если подписи нет - просим промпт
+        await state.update_data(pending_image_urls=[url])
+        await message.reply(
+            "📸 <b>Фото принято!</b>\n"
+            "Теперь напиши запрос с правилами сохранения лица.",
+            parse_mode="HTML"
+        )
+
+@router.message(GenState.retry_waiting_photos, F.text)
+async def handle_retry_text_prompt(message: types.Message, state: FSMContext):
+    """
+    Обработка текстового промпта после фото в режиме ретрая
+    """
+    data = await state.get_data()
+    image_urls = data.get("pending_image_urls")
+    
+    if not image_urls:
+        await message.answer("❌ Сначала пришлите фото.")
+        return
+    
+    await start_preflight_check(message, state, message.text, image_urls)
+
 @router.message(GenState.waiting_for_caption, F.text)
 async def handle_delayed_caption(message: types.Message, state: FSMContext):
     """Обработка отложенного текста после фото"""

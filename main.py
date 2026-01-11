@@ -57,6 +57,9 @@ async def main():
     dp.callback_query.middleware(AntiFraudMiddleware())
     dp.message.middleware(AdminSpyMiddleware())
     dp.callback_query.middleware(AdminSpyMiddleware()) 
+    # 🔥 Фильтр жалоб (должен быть ПЕРЕД AlbumMiddleware)
+    from app.middlewares.complaint_filter import ComplaintFilterMiddleware
+    dp.message.middleware(ComplaintFilterMiddleware())
     dp.message.middleware(AlbumMiddleware()) 
 
     dp.include_router(admin.router)
