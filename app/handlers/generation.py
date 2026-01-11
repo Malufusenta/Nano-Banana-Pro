@@ -25,7 +25,7 @@ from app import config
 
 router = Router()
 
-COMPLAINT_INSTRUCTION_PHOTO = "AgACAgIAAxkBAAIEXmljYVg9EmWKVeMfvkyswZTdlygIAALjDWsb9o0ZS5z4N3QcX6nOAQADAgADeQADOAQ"  # 👈 Вставь свой file_id
+COMPLAINT_INSTRUCTION_PHOTO = "AgACAgIAAxkBAALT5Wljc3V_Fhya4RZZ0xab7eXhFtE-AAIZDGsbxiYgS76CBLyQRXTjAQADAgADeQADOAQ"  # 👈 Вставь свой file_id
 
 
 # 👇 ЗАМЕНИТЬ ВЕСЬ СПИСОК IGNORED_TEXTS НА ЭТОТ:
@@ -83,11 +83,6 @@ async def get_smart_alert_message(user_id: int, balance: int, cost: int) -> tupl
     builder.button(text="Заработать🍌", callback_data="goto_free")
     builder.adjust(1)
     return text, builder
-
-@router.message(F.photo)
-async def get_photo_id(message: types.Message):
-    file_id = message.photo[-1].file_id
-    await message.answer(f"<code>{file_id}</code>", parse_mode="HTML")
 
 # =====================================================================
 # 🔥 COMPLAINT FILTER - Обработка жалоб на сходство
