@@ -1328,12 +1328,12 @@ async def process_generation(
                 except: 
                     pass
             
-# 6. Формирование caption (НОВЫЙ ВАРИАНТ)
+            # 6. Формирование caption (итоговый вариант)
             caption = (
                 f"🍌 <b>Готово!</b>\n"
                 f"🔋 Осталось: <b>{balance_left}</b> 🍌\n\n"
-                f"✨ Получилось круто? <b>Похвастайся результатом </b>в <a href='https://t.me/nanabanan_chat'>нашем чате</a>!\n"
-                f"Авторов лучших работ награждаем бананами 🍌\n\n"
+                f"<b>P.S. Хочешь, чтобы лицо получалось один в один?</b> 👯‍♀️\n"
+                f"👉 <a href='https://t.me/nanobanan_promt/12'><b>Секрет 100% сходства тут</b></a>\n\n"
                 f"Сгенерировано в @nan0banana_bot"
             )
             
