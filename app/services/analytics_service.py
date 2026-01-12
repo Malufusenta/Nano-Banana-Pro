@@ -63,6 +63,61 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         for row in source_revenue_result
     }
     
+    # ========== НОВЫЕ ПОЛЬЗОВАТЕЛИ ПО ИСТОЧНИКАМ ==========
+    
+    # Считаем сколько новых пользователей пришло с каждого источника
+    users_by_source_query = select(
+        User.source,
+        func.count(User.id).label('count')
+    ).where(
+        User.created_at >= date_from,
+        User.created_at <= date_to,
+        User.source.isnot(None)
+    ).group_by(User.source).order_by(func.count(User.id).desc())
+    
+    users_by_source_result = await session.execute(users_by_source_query)
+    users_by_source = {
+        row.source: row.count for row in users_by_source_result
+    }
+    
+    # Считаем сколько уникальных покупателей с каждого источника
+    buyers_by_source_query = select(
+        Purchase.user_source,
+        func.count(func.distinct(Purchase.user_id)).label('buyers')
+    ).where(
+        Purchase.status == 'succeeded',
+        Purchase.completed_at >= date_from,
+        Purchase.completed_at <= date_to
+    ).group_by(Purchase.user_source)
+    
+    buyers_by_source_result = await session.execute(buyers_by_source_query)
+    buyers_by_source = {
+        row.user_source or 'organic': row.buyers for row in buyers_by_source_result
+    }
+    
+    # ========== КОНВЕРСИЯ И СРЕДНИЙ ЧЕК ПО ИСТОЧНИКАМ ==========
+    
+    source_stats = {}
+    for source in set(list(users_by_source.keys()) + list(revenue_by_source.keys())):
+        total_users = users_by_source.get(source, 0)
+        buyers = buyers_by_source.get(source, 0)
+        revenue_info = revenue_by_source.get(source, {'revenue': 0, 'count': 0})
+        
+        # Конверсия
+        conversion = (buyers / total_users * 100) if total_users > 0 else 0
+        
+        # Средний чек
+        avg_check = (revenue_info['revenue'] / buyers) if buyers > 0 else 0
+        
+        source_stats[source] = {
+            'total_users': total_users,
+            'buyers': buyers,
+            'conversion': conversion,
+            'revenue': revenue_info['revenue'],
+            'transactions': revenue_info['count'],
+            'avg_check': avg_check
+        }
+    
     # ========== ОБОРОТ БАНАНОВ ==========
     
     # Потрачено
@@ -199,6 +254,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'avg_check': avg_check
         },
         'revenue_by_source': revenue_by_source,
+        'source_stats': source_stats,  # НОВОЕ!
         'bananas': {
             'spent': spent,
             'earned_ref': earned_ref,
@@ -233,6 +289,7 @@ def format_report_message(data: dict, date_str: str) -> str:
     """
     rev = data['revenue']
     sources = data['revenue_by_source']
+    source_stats = data.get('source_stats', {})  # НОВОЕ!
     bananas = data['bananas']
     tariffs = data['purchases_by_tariff']
     users = data['users']
@@ -248,14 +305,31 @@ def format_report_message(data: dict, date_str: str) -> str:
     text += f"— Повторных: {rev['repeat_purchases']}\n"
     text += f"Средний чек: {rev['avg_check']:.2f} ₽\n\n"
     
-    # ВЫРУЧКА ПО ИСТОЧНИКАМ
-    text += "🎯 ВЫРУЧКА ПО ИСТОЧНИКАМ (За период)\n"
-    if sources:
-        for source, info in sorted(sources.items(), key=lambda x: x[1]['revenue'], reverse=True):
-            text += f"— {source}: {info['revenue']:.0f} ₽ ({info['count']} оплат)\n"
-    else:
-        text += "— Нет данных\n"
-    text += "\n"
+    # ИСТОЧНИКИ ТРАФИКА (НОВЫЙ БЛОК!)
+    if source_stats:
+        text += "📊 ИСТОЧНИКИ ТРАФИКА\n"
+        text += "━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # Топ-5 по новым пользователям
+        text += "👥 Новые пользователи:\n"
+        for source, stats in sorted(source_stats.items(), key=lambda x: x[1]['total_users'], reverse=True)[:5]:
+            if stats['total_users'] > 0:
+                text += f"   • {source}: {stats['total_users']} чел\n"
+        
+        # Топ-5 по конверсии
+        text += "\n💰 Конверсия в покупку:\n"
+        sources_with_users = {s: stats for s, stats in source_stats.items() if stats['total_users'] > 0}
+        for source, stats in sorted(sources_with_users.items(), key=lambda x: x[1]['conversion'], reverse=True)[:5]:
+            text += f"   • {source}: {stats['conversion']:.1f}% ({stats['buyers']}/{stats['total_users']})\n"
+        
+        # Топ-5 по выручке
+        text += "\n💵 Выручка по источникам:\n"
+        for source, stats in sorted(source_stats.items(), key=lambda x: x[1]['revenue'], reverse=True)[:5]:
+            if stats['revenue'] > 0:
+                avg = stats['avg_check']
+                text += f"   • {source}: {stats['revenue']:.0f} ₽ (ср.чек: {avg:.0f} ₽)\n"
+        
+        text += "\n"
     
     # ОБОРОТ БАНАНОВ
     total_earned = bananas['earned_ref'] + bananas['earned_sub'] + bananas['earned_welcome']
@@ -287,7 +361,6 @@ def format_report_message(data: dict, date_str: str) -> str:
     text += "\n"
     
     # ЛЮДИ
-# ЛЮДИ
     text += "👥 ЛЮДИ\n"
     text += f"Новых (Start): {users['new']}\n"
     text += f"Активных (DAU): {users['active']}\n"

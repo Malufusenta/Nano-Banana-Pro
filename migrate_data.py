@@ -28,31 +28,32 @@ async def migrate_data():
         cursor.execute("SELECT * FROM users")
         users = cursor.fetchall()
         
-        for row in users:
-            user = User(
-                id=row['id'],
-                telegram_id=row['telegram_id'],
-                username=row['username'],
-                full_name=row['full_name'],
-                generations_balance=row['generations_balance'],
-                balance_free=row['balance_free'],
-                balance_paid=row['balance_paid'],
-                total_generations_used=row['total_generations_used'],
-                last_generation_at=datetime.fromisoformat(row['last_generation_at']) if row['last_generation_at'] else None,
-                is_sub_bonus_claimed=bool(row['is_sub_bonus_claimed']),
-                preferred_model=row['preferred_model'],
-                is_blocked=bool(row['is_blocked']),
-                is_channel_sub_claimed=bool(row['is_channel_sub_claimed']),
-                is_chat_sub_claimed=bool(row['is_chat_sub_claimed']),
-                referrer_id=row['referrer_id'],
-                source=row['source'],
-                created_at=datetime.fromisoformat(row['created_at']),
-                total_revenue=0,
-                orders_count=0,
-                first_purchase_at=None,
-                had_free_actions_before_purchase=False
+    for row in users:
+        user = User(
+            id=row['id'],
+            telegram_id=row['telegram_id'],
+            username=row['username'],
+            full_name=row['full_name'],
+            generations_balance=row['generations_balance'],
+            balance_free=row['balance_free'],
+            balance_paid=row['balance_paid'],
+            total_generations_used=row['total_generations_used'],
+            last_generation_at=datetime.fromisoformat(row['last_generation_at']) if row['last_generation_at'] else None,
+            is_sub_bonus_claimed=bool(row['is_sub_bonus_claimed']),
+            preferred_model=row['preferred_model'],
+            is_blocked=bool(row['is_blocked']),
+            is_channel_sub_claimed=bool(row['is_channel_sub_claimed']),
+            is_chat_sub_claimed=bool(row['is_chat_sub_claimed']),
+            referrer_id=row['referrer_id'],
+            source=row['source'],
+            created_at=datetime.fromisoformat(row['created_at']),
+            # Читаем реальные значения аналитики
+            total_revenue=row['total_revenue'] if 'total_revenue' in row.keys() else 0,
+            orders_count=row['orders_count'] if 'orders_count' in row.keys() else 0,
+            first_purchase_at=datetime.fromisoformat(row['first_purchase_at']) if ('first_purchase_at' in row.keys() and row['first_purchase_at']) else None,
+            had_free_actions_before_purchase=bool(row['had_free_actions_before_purchase']) if 'had_free_actions_before_purchase' in row.keys() else False
             )
-            session.add(user)
+        session.add(user)
         print(f"✅ Пользователей: {len(users)}")
         
         # PURCHASES
