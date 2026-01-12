@@ -1196,8 +1196,6 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
             parse_mode="HTML"
         )
 
-        from datetime import datetime, timedelta, timezone
-
 def get_today_start_msk():
     """
     Возвращает UTC-время, которое соответствует 00:00:00 по Москве.
