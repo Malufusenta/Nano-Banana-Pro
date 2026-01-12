@@ -36,6 +36,13 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     await state.clear()
     user_id = message.from_user.id
     welcome_bonus = 2
+
+        # 🔥 ПРОВЕРКА БЛОКИРОВКИ
+    async with async_session() as session:
+        check_user = await get_user(session, user_id)
+        if check_user and check_user.is_blocked:
+            # Молча игнорируем - бот не отвечает
+            return
     
     # 1. ЛОВИМ ИСТОЧНИК
     referrer_id = None

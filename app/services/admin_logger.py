@@ -291,3 +291,39 @@ async def log_order_from_retry(bot: Bot, user_id: int, cost: int, model: str):
         "#order_retry"
     )
     asyncio.create_task(send_log(bot, text))
+
+    # 🔒 ТИП 11: БЛОКИРОВКА/РАЗБЛОКИРОВКА ПОЛЬЗОВАТЕЛЯ
+async def log_user_block(bot: Bot, admin_id: int, admin_username: str, user_id: int, user_name: str, user_username: str, is_blocked: bool):
+    """
+    Логирует действие блокировки/разблокировки пользователя
+    
+    Args:
+        bot: экземпляр бота
+        admin_id: ID админа который выполнил действие
+        admin_username: username админа
+        user_id: ID заблокированного пользователя
+        user_name: Имя пользователя
+        user_username: username пользователя
+        is_blocked: True если заблокирован, False если разблокирован
+    """
+    admin_display = f"@{admin_username}" if admin_username else f"ID:{admin_id}"
+    user_display = f"@{user_username}" if user_username else "без ника"
+    
+    emoji = "🔒" if is_blocked else "🔓"
+    action_text = "ЗАБЛОКИРОВАН" if is_blocked else "РАЗБЛОКИРОВАН"
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+    
+    text = (
+        f"{emoji} <b>ПОЛЬЗОВАТЕЛЬ {action_text}</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"👑 Админ: {admin_display}\n"
+        f"👤 Пользователь: <a href='tg://user?id={user_id}'>{user_name}</a>\n"
+        f"🔗 Username: {user_display}\n"
+        f"🆔 ID: <code>{user_id}</code>\n"
+        f"🕐 Время: {timestamp}\n"
+        f"#user_block"
+    )
+    
+    asyncio.create_task(send_log(bot, text))

@@ -596,6 +596,8 @@ async def show_user_card(message: types.Message, user_data: dict):
             last_gen_text = user_data['last_generation_at'].strftime("%d.%m.%Y")
     
     total_balance = user_data['balance_free'] + user_data['balance_paid']
+    block_status = "🔴 Заблокирован" if user.is_blocked else "🟢 Активен"
+
     
     text = (
         f"👤 <b>Карточка пользователя</b>\n\n"
@@ -604,6 +606,8 @@ async def show_user_card(message: types.Message, user_data: dict):
         f"🔗 Ник: @{safe_username}\n"
         f"📅 Дата регистрации: {reg_date} ({days_text} с нами)\n"
         f"📊 Статус: {user_data['status']}\n\n"
+        f"🔒 Доступ: {block_status}\n\n"  # 👈 ДОБАВИЛИ
+
         
         f"💎 <b>Баланс: {total_balance} 🍌</b>\n"
         f"├─ Платные: {user_data['balance_paid']} 🍌\n"
@@ -625,9 +629,13 @@ async def show_user_card(message: types.Message, user_data: dict):
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Добавить", callback_data=f"adm_add_{user.telegram_id}")
     builder.button(text="➖ Отнять", callback_data=f"adm_rem_{user.telegram_id}")
+    # 👇 НОВАЯ КНОПКА
+    block_text = "🔓 Разблокировать" if user.is_blocked else "🔒 Заблокировать"
+    builder.button(text=block_text, callback_data=f"adm_block_{user.telegram_id}")
     builder.button(text="✉️ Написать", callback_data=f"adm_msg_{user.telegram_id}")
     builder.button(text="🔙 Меню", callback_data="admin_menu")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 1, 1, 1)  # 👈 Изменили разметку (добавили строку)
+
     
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
@@ -719,6 +727,52 @@ async def process_balance_change(message: types.Message, state: FSMContext, bot:
     await state.clear()
     await send_admin_menu(message)
 
+@router.callback_query(F.data.startswith("adm_block_"))
+async def cb_toggle_block(callback: types.CallbackQuery, bot: Bot):
+    """Блокировка/разблокировка пользователя"""
+    user_id = int(callback.data.split("_")[2])
+    
+    async with async_session() as session:
+        result = await session.execute(
+            select(User).where(User.telegram_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        # Переключаем статус блокировки
+        user.is_blocked = not user.is_blocked
+        new_status = user.is_blocked
+        
+        await session.commit()
+    
+    # Логируем действие в консоль
+    action = "blocked" if new_status else "unblocked"
+    await log_admin_action(callback.from_user.id, action, user_id)
+    
+    # 🔥 ЛОГИРУЕМ В КАНАЛ
+    from app.services.admin_logger import log_user_block
+    await log_user_block(
+        bot=bot,
+        admin_id=callback.from_user.id,
+        admin_username=callback.from_user.username,
+        user_id=user_id,
+        user_name=user.full_name or "Неизвестно",
+        user_username=user.username,
+        is_blocked=new_status
+    )
+    
+    # Уведомляем текущего админа
+    status_text = "🔴 заблокирован" if new_status else "🟢 разблокирован"
+    await callback.answer(f"✅ Пользователь {status_text}", show_alert=True)
+    
+    # Обновляем карточку пользователя
+    async with async_session() as session:
+        user_data = await get_user_admin_card_data(session, user_id)
+    
+    await show_user_card(callback.message, user_data)
 
 # =====================================================================
 # ОТПРАВКА СООБЩЕНИЯ (Support)

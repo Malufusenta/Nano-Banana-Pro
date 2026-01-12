@@ -6,6 +6,8 @@ from app.handlers import start, generation, payment, menu_actions, admin
 from app.middlewares.album import AlbumMiddleware 
 from app.middlewares.admin_spy import AdminSpyMiddleware
 from app.middlewares.antifraud import AntiFraudMiddleware
+from app.middlewares.block_middleware import BlockCheckMiddleware  # 👈 ДОБАВЬ
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
@@ -52,6 +54,10 @@ async def main():
 
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
+
+    # 🔥 ПРОВЕРКА БЛОКИРОВКИ (ПЕРВАЯ, САМАЯ ВАЖНАЯ!)
+    dp.message.middleware(BlockCheckMiddleware())
+    dp.callback_query.middleware(BlockCheckMiddleware())
 
     dp.message.middleware(AntiFraudMiddleware())
     dp.callback_query.middleware(AntiFraudMiddleware())
