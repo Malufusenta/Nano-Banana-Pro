@@ -84,6 +84,8 @@ class GenerationTask(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     cost: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String, default="processing")
+    deducted_from_paid: Mapped[int] = mapped_column(Integer, server_default='0', nullable=False)
+    deducted_from_free: Mapped[int] = mapped_column(Integer, server_default='0', nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # 5. Таблица Рассылок
