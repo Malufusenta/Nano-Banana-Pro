@@ -8,8 +8,7 @@ from datetime import datetime
 async def migrate_data():
     print("🚀 Начинаю миграцию...\n")
     
-    # Создаем таблицы в PostgreSQL
-# Удаляем старые таблицы и создаем новые
+    # Удаляем старые таблицы и создаем новые
     print("🗑️  Очищаю старые таблицы...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -28,32 +27,31 @@ async def migrate_data():
         cursor.execute("SELECT * FROM users")
         users = cursor.fetchall()
         
-    for row in users:
-        user = User(
-            id=row['id'],
-            telegram_id=row['telegram_id'],
-            username=row['username'],
-            full_name=row['full_name'],
-            generations_balance=row['generations_balance'],
-            balance_free=row['balance_free'],
-            balance_paid=row['balance_paid'],
-            total_generations_used=row['total_generations_used'],
-            last_generation_at=datetime.fromisoformat(row['last_generation_at']) if row['last_generation_at'] else None,
-            is_sub_bonus_claimed=bool(row['is_sub_bonus_claimed']),
-            preferred_model=row['preferred_model'],
-            is_blocked=bool(row['is_blocked']),
-            is_channel_sub_claimed=bool(row['is_channel_sub_claimed']),
-            is_chat_sub_claimed=bool(row['is_chat_sub_claimed']),
-            referrer_id=row['referrer_id'],
-            source=row['source'],
-            created_at=datetime.fromisoformat(row['created_at']),
-            # Читаем реальные значения аналитики
-            total_revenue=row['total_revenue'] if 'total_revenue' in row.keys() else 0,
-            orders_count=row['orders_count'] if 'orders_count' in row.keys() else 0,
-            first_purchase_at=datetime.fromisoformat(row['first_purchase_at']) if ('first_purchase_at' in row.keys() and row['first_purchase_at']) else None,
-            had_free_actions_before_purchase=bool(row['had_free_actions_before_purchase']) if 'had_free_actions_before_purchase' in row.keys() else False
+        for row in users:
+            user = User(
+                id=row['id'],
+                telegram_id=row['telegram_id'],
+                username=row['username'],
+                full_name=row['full_name'],
+                generations_balance=row['generations_balance'],
+                balance_free=row['balance_free'],
+                balance_paid=row['balance_paid'],
+                total_generations_used=row['total_generations_used'],
+                last_generation_at=datetime.fromisoformat(row['last_generation_at']) if row['last_generation_at'] else None,
+                is_sub_bonus_claimed=bool(row['is_sub_bonus_claimed']),
+                preferred_model=row['preferred_model'],
+                is_blocked=bool(row['is_blocked']),
+                is_channel_sub_claimed=bool(row['is_channel_sub_claimed']),
+                is_chat_sub_claimed=bool(row['is_chat_sub_claimed']),
+                referrer_id=row['referrer_id'],
+                source=row['source'],
+                created_at=datetime.fromisoformat(row['created_at']),
+                total_revenue=row['total_revenue'] if 'total_revenue' in row.keys() else 0,
+                orders_count=row['orders_count'] if 'orders_count' in row.keys() else 0,
+                first_purchase_at=datetime.fromisoformat(row['first_purchase_at']) if ('first_purchase_at' in row.keys() and row['first_purchase_at']) else None,
+                had_free_actions_before_purchase=bool(row['had_free_actions_before_purchase']) if 'had_free_actions_before_purchase' in row.keys() else False
             )
-        session.add(user)
+            session.add(user)
         print(f"✅ Пользователей: {len(users)}")
         
         # PURCHASES
@@ -69,10 +67,10 @@ async def migrate_data():
                 price=row['price'],
                 status=row['status'],
                 created_at=datetime.fromisoformat(row['created_at']),
-                tariff_name=None,
-                user_source=None,
-                completed_at=None,
-                payment_id=None
+                tariff_name=row['tariff_name'] if 'tariff_name' in row.keys() else None,
+                user_source=row['user_source'] if 'user_source' in row.keys() else None,
+                completed_at=datetime.fromisoformat(row['completed_at']) if ('completed_at' in row.keys() and row['completed_at']) else None,
+                payment_id=row['payment_id'] if 'payment_id' in row.keys() else None
             )
             session.add(purchase)
         print(f"✅ Покупок: {len(purchases)}")
@@ -96,26 +94,19 @@ async def migrate_data():
             session.add(msg)
         print(f"✅ Сообщений: {len(messages)}")
         
-# GENERATION_TASKS
+        # GENERATION_TASKS
         print("🎨 Мигрирую задачи генерации...")
         cursor.execute("SELECT * FROM generation_tasks")
         tasks = cursor.fetchall()
         
         for row in tasks:
-            try:
-                deducted_paid = row['deducted_from_paid']
-                deducted_free = row['deducted_from_free']
-            except (KeyError, IndexError):
-                deducted_paid = 0
-                deducted_free = 0
-                
             task = GenerationTask(
                 id=row['id'],
                 user_id=row['user_id'],
                 cost=row['cost'],
                 status=row['status'],
-                deducted_from_paid=row['deducted_from_paid'],
-                deducted_from_free=row['deducted_from_free'],
+                deducted_from_paid=row['deducted_from_paid'] if 'deducted_from_paid' in row.keys() else 0,
+                deducted_from_free=row['deducted_from_free'] if 'deducted_from_free' in row.keys() else 0,
                 created_at=datetime.fromisoformat(row['created_at'])
             )
             session.add(task)
@@ -166,11 +157,8 @@ async def migrate_data():
             )
             session.add(cfg)
         print(f"✅ Конфигов: {len(configs)}")
-
-        print("\n💾 Сохраняю...")
-        await session.commit()
-
-# BANANA_TRANSACTIONS
+        
+        # BANANA_TRANSACTIONS
         print("🍌 Мигрирую транзакции бананов...")
         try:
             cursor.execute("SELECT * FROM banana_transactions")
@@ -189,9 +177,11 @@ async def migrate_data():
             print(f"✅ Транзакций: {len(transactions)}")
         except Exception as e:
             print(f"⚠️  Таблица banana_transactions не найдена (пропускаем)")
-    conn.close()
 
+        print("\n💾 Сохраняю...")
+        await session.commit()
     
+    conn.close()
     
     # Проверка
     async with async_session() as session:
