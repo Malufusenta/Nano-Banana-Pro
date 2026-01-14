@@ -9,14 +9,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
-from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor
+from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral
 from app.models import Broadcast  # 👈 Добавь Broadcast
 from app.database import async_session
 from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
     add_history, clear_history, get_history_message_by_id, get_dialog_context,
     start_generation_task, finish_generation_task, admin_change_balance,
-    get_user_model_preference, set_user_model_preference, has_user_purchased
+    get_user_model_preference, set_user_model_preference, has_user_purchased, get_user, track_banana_transaction
 )
 from app.services.ai_engine import generate_image
 from app.utils import prompts
@@ -1400,6 +1400,58 @@ async def process_generation(
                 await sent_msg.edit_reply_markup(
                     reply_markup=get_result_kb(db_id, use_pro_model, cost)
                 )
+            
+            # 🎁 ПРОВЕРКА ПЕРВОЙ ГЕНЕРАЦИИ И НАЧИСЛЕНИЕ РЕФЕРАЛЬНОГО БОНУСА
+            async with async_session() as session:
+                user = await get_user(session, user_id)
+                
+                # Если это первая генерация пользователя
+                if user and not user.first_generation_done:
+                    user.first_generation_done = True
+                    await session.commit()
+                    
+                    # Если у него есть реферер - начисляем бонус
+                    if user.referrer_id:
+                        try:
+                            await admin_change_balance(session, user.referrer_id, 2)
+                            await track_banana_transaction(
+                                session, 
+                                user.referrer_id, 
+                                2, 
+                                "earned_ref", 
+                                f"Active referral from {user_id}"
+                            )
+                            await session.commit()
+                            
+                            # Получаем обновленный баланс реферера
+                            referrer = await get_user(session, user.referrer_id)
+                            new_balance = referrer.generations_balance if referrer else 0
+                            
+                            # Создаем кнопку
+                            from aiogram.utils.keyboard import InlineKeyboardBuilder
+                            builder = InlineKeyboardBuilder()
+                            builder.button(text="🤝 Пригласить ещё", callback_data="goto_free")
+                            
+                            # Отправляем уведомление реферу
+                            await bot.send_message(
+                                user.referrer_id,
+                                f"🥳 Ура! По твоей ссылке пришел друг.\n"
+                                f"Баланс пополнен: <b>+2 банана</b> 🍌\n\n"
+                                f"Всего на счету: <b>{new_balance}</b>",
+                                parse_mode="HTML",
+                                reply_markup=builder.as_markup()
+                            )
+
+                            # Создаем объект для логгера
+                            from types import SimpleNamespace
+                            new_user_obj = SimpleNamespace(
+                                id=user.telegram_id,
+                                username=user.username,
+                                full_name=user.full_name
+                            )
+                            await log_referral(bot, user.referrer_id, new_user_obj)
+                        except Exception as e:
+                            print(f"⚠️ Ошибка начисления реферального бонуса: {e}")
         else:
             # ❌ NULL ОТВЕТ - ВОЗВРАТ ДЕНЕГ
             print("❌ API вернул NULL")
