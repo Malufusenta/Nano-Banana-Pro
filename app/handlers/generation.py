@@ -1195,10 +1195,6 @@ async def process_generation(
         
         # Список слов-триггеров
         BANNED_WORDS = [
-            # English
-            "nsfw", "nude", "naked", "undress", "strip", "porn", "sex", 
-            "breast", "tits", "pussy", "dick", "cock", "topless", "intimate",
-            "uncensored", "no clothes", "remove clothes",
             # Russian
             "голая", "голый", "раздеть", "снять одежду", "без одежды", "ню", 
             "порно", "секс", "сиськи", "соски", "член", "вагина", "обнажен",
@@ -1453,10 +1449,24 @@ async def process_generation(
                     
                     # Если у него есть реферер - начисляем бонус
                     if user.referrer_id:
-                        # 🔥 ФИКС: Проверяем что юзер создан недавно (макс 7 дней)
-                        from datetime import datetime, timedelta, timezone
-                        days_since_creation = (datetime.now(timezone.utc) - user.created_at).days
+# ======================================================
+                        # 🕒 БЕЗОПАСНАЯ ПРОВЕРКА ДАТЫ (Smart Fix)
+                        # ======================================================
+                        from datetime import datetime, timezone
                         
+                        # 1. Берем текущее время (в UTC)
+                        now_utc = datetime.now(timezone.utc)
+                        
+                        # 2. Берем дату регистрации
+                        reg_date = user.created_at
+                        
+                        # 3. ГЛАВНЫЙ ФИКС: Если дата "голая" (без зоны), даем ей UTC
+                        if reg_date.tzinfo is None:
+                            reg_date = reg_date.replace(tzinfo=timezone.utc)
+                            
+                        # 4. Теперь вычитаем (ошибки не будет)
+                        days_since_creation = (now_utc - reg_date).days
+                        # ======================================================
                         if days_since_creation <= 7:  # Только свежие рефералы!
                             try:
                                 await admin_change_balance(session, user.referrer_id, 2)
