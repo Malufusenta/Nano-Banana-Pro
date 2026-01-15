@@ -385,6 +385,7 @@ async def cb_goto_free(callback: types.CallbackQuery, bot: Bot):
     # Вызываем функцию с заданиями (она тоже в этом файле)
     await _show_freebies_logic(callback.message, callback.from_user.id, bot)  # ✅
 
+
 # =====================================================================
 # ОБРАБОТЧИКИ STARS ПЛАТЕЖЕЙ
 # =====================================================================
@@ -392,77 +393,73 @@ async def cb_goto_free(callback: types.CallbackQuery, bot: Bot):
 # Pre-checkout для Stars
 @router.pre_checkout_query()
 async def process_pre_checkout(pre_checkout: PreCheckoutQuery, bot: Bot):
-    await bot.answer_pre_checkout_query(
-        pre_checkout_query_id=pre_checkout.id,
-        ok=True
-    )
+    try:
+        await bot.answer_pre_checkout_query(
+            pre_checkout_query_id=pre_checkout.id,
+            ok=True
+        )
+    except Exception as e:
+        await bot.answer_pre_checkout_query(
+            pre_checkout_query_id=pre_checkout.id,
+            ok=False,
+            error_message="Ошибка обработки платежа. Попробуйте позже."
+        )
 
 # Успешная оплата Stars
 @router.message(F.successful_payment)
 async def process_successful_payment(message: types.Message, bot: Bot):
     payment = message.successful_payment
-    
-    # ✅ FIX 1: Определяем переменную total_amount, которой не хватало
     total_amount = payment.total_amount
-    
     payload = payment.invoice_payload
     user_id = message.from_user.id 
     
-    # Пытаемся распарсить payload
+    # Парсим payload формата: stars_4_627352144
     package = None
+    pkg_key = None
+    
     try:
-        parts = payload.split("_")
-        # Ожидаем формат stars_pack_120 (кол-во бананов)
-        bananas_count = int(parts[2]) 
-        
-        # Ищем пакет по количеству бананов
-        package = next((p for p in STARS_PACKAGES if p["gens"] == bananas_count), None)
+        parts = payload.rsplit("_", 1)
+        pkg_key = parts[0]
+        package = STARS_PACKAGES.get(pkg_key)
     except:
         pass
 
-    # Если по payload не нашли, ищем по цене (Plan B)
+    # План B: ищем по цене
     if not package:
-        package = next((p for p in STARS_PACKAGES if p["price"] == total_amount), None)
+        package = next((p for p in STARS_PACKAGES.values() if p["stars"] == total_amount), None)
 
     if not package:
         await message.answer("❌ Ошибка обработки платежа (Тариф не найден)")
         return
     
-    # ✅ FIX 2: Используем правильную функцию (get_banana_word)
-    suffix = get_banana_word(package['gens'])
+    bananas_count = package['bananas']
+    suffix = get_banana_word(bananas_count)
     
     # Начисляем бананы
     async with async_session() as session:
-        # Записываем покупку в историю
-        await create_purchase_record(session, user_id, total_amount, package['gens'])
-        
-        # ✅ FIX 3: Отмечаем статус как успех (Stars приходят сразу)
+        await create_purchase_record(session, user_id, total_amount, bananas_count)
         await mark_purchase_as_succeeded(session, user_id, total_amount)
+        await admin_change_balance(session, user_id, bananas_count)
         
-        # Начисляем баланс
-        await admin_change_balance(session, user_id, package['gens'])
-        
-        # Логируем платеж С АНАЛИТИКОЙ
+        # Логируем платеж
         try:
             new_bal = await get_user_balance(session, user_id)
-            
-            # 👇 ПОЛУЧАЕМ СТАТИСТИКУ ДЛЯ ЛОГА
             stats = await get_user_financial_stats(session, user_id)
             
             await log_payment(
                 bot, 
                 message.from_user, 
                 f"{total_amount} ⭐️", 
-                f"{package['gens']} {suffix} (Stars)", 
+                f"{bananas_count} {suffix} (Stars)", 
                 new_bal, 
                 stats=stats
             )
         except Exception as e:
-            print(f"Log Stars Error: {e}")
+            print(f"Log Error: {e}")
     
     await message.answer(
         f"✅ <b>Оплата прошла успешно!</b>\n\n"
-        f"🍌 Начислено: <b>+{package['gens']} {suffix}</b>\n"
+        f"🍌 Начислено: <b>+{bananas_count} {suffix}</b>\n"
         f"Спасибо за покупку! 🎨",
         parse_mode="HTML"
     )
