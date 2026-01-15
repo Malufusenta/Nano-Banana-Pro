@@ -1401,7 +1401,6 @@ async def process_generation(
                     reply_markup=get_result_kb(db_id, use_pro_model, cost)
                 )
             
-            # 🎁 ПРОВЕРКА ПЕРВОЙ ГЕНЕРАЦИИ И НАЧИСЛЕНИЕ РЕФЕРАЛЬНОГО БОНУСА
             async with async_session() as session:
                 user = await get_user(session, user_id)
                 
@@ -1412,46 +1411,51 @@ async def process_generation(
                     
                     # Если у него есть реферер - начисляем бонус
                     if user.referrer_id:
-                        try:
-                            await admin_change_balance(session, user.referrer_id, 2)
-                            await track_banana_transaction(
-                                session, 
-                                user.referrer_id, 
-                                2, 
-                                "earned_ref", 
-                                f"Active referral from {user_id}"
-                            )
-                            await session.commit()
-                            
-                            # Получаем обновленный баланс реферера
-                            referrer = await get_user(session, user.referrer_id)
-                            new_balance = referrer.generations_balance if referrer else 0
-                            
-                            # Создаем кнопку
-                            from aiogram.utils.keyboard import InlineKeyboardBuilder
-                            builder = InlineKeyboardBuilder()
-                            builder.button(text="🤝 Пригласить ещё", callback_data="goto_free")
-                            
-                            # Отправляем уведомление реферу
-                            await bot.send_message(
-                                user.referrer_id,
-                                f"🥳 Ура! По твоей ссылке пришел друг.\n"
-                                f"Баланс пополнен: <b>+2 банана</b> 🍌\n\n"
-                                f"Всего на счету: <b>{new_balance}</b>",
-                                parse_mode="HTML",
-                                reply_markup=builder.as_markup()
-                            )
-
-                            # Создаем объект для логгера
-                            from types import SimpleNamespace
-                            new_user_obj = SimpleNamespace(
-                                id=user.telegram_id,
-                                username=user.username,
-                                full_name=user.full_name
-                            )
-                            await log_referral(bot, user.referrer_id, new_user_obj)
-                        except Exception as e:
-                            print(f"⚠️ Ошибка начисления реферального бонуса: {e}")
+                        # 🔥 ФИКС: Проверяем что юзер создан недавно (макс 7 дней)
+                        from datetime import datetime, timedelta, timezone
+                        days_since_creation = (datetime.now(timezone.utc) - user.created_at).days
+                        
+                        if days_since_creation <= 7:  # Только свежие рефералы!
+                            try:
+                                await admin_change_balance(session, user.referrer_id, 2)
+                                await track_banana_transaction(
+                                    session, 
+                                    user.referrer_id, 
+                                    2, 
+                                    "earned_ref", 
+                                    f"Active referral from {user_id}"
+                                )
+                                await session.commit()
+                                
+                                # Получаем обновленный баланс реферера
+                                referrer = await get_user(session, user.referrer_id)
+                                new_balance = referrer.generations_balance if referrer else 0
+                                
+                                # Создаем кнопку
+                                from aiogram.utils.keyboard import InlineKeyboardBuilder
+                                builder = InlineKeyboardBuilder()
+                                builder.button(text="🤝 Пригласить ещё", callback_data="goto_free")
+                                
+                                # Отправляем уведомление реферу
+                                await bot.send_message(
+                                    user.referrer_id,
+                                    f"🥳 Ура! По твоей ссылке пришел друг.\n"
+                                    f"Баланс пополнен: <b>+2 банана</b> 🍌\n\n"
+                                    f"Всего на счету: <b>{new_balance}</b>",
+                                    parse_mode="HTML",
+                                    reply_markup=builder.as_markup()
+                                )
+                                
+                                # Создаем объект для логгера
+                                from types import SimpleNamespace
+                                new_user_obj = SimpleNamespace(
+                                    id=user.telegram_id,
+                                    username=user.username,
+                                    full_name=user.full_name
+                                )
+                                await log_referral(bot, user.referrer_id, new_user_obj)
+                            except Exception as e:
+                                print(f"⚠️ Ошибка начисления реферального бонуса: {e}")
         else:
             # ❌ NULL ОТВЕТ - ВОЗВРАТ ДЕНЕГ
             print("❌ API вернул NULL")
