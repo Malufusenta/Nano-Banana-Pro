@@ -327,3 +327,26 @@ async def log_user_block(bot: Bot, admin_id: int, admin_username: str, user_id: 
     )
     
     asyncio.create_task(send_log(bot, text))
+
+    # 👇 ВСТАВИТЬ В САМЫЙ КОНЕЦ ФАЙЛА 👇
+
+# 🔞 ТИП 12: SECURITY BAN - Попытка генерации 18+
+async def log_security_ban(bot: Bot, user_id: int, username: str, prompt: str, source: str = "Local Filter"):
+    """
+    Логирует попытки генерации запрещенного контента
+    source: "Local Filter" (наши слова) или "API Filter" (ответ нейросети)
+    """
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    # Обрезаем, если промпт огромный
+    safe_prompt = prompt[:300] + "..." if len(prompt) > 300 else prompt
+    
+    text = (
+        "🔞 <b>SECURITY ALERT: Попытка 18+</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"👤 Нарушитель: {u_name} (<code>{user_id}</code>)\n"
+        f"📝 Промпт: <code>{safe_prompt}</code>\n"
+        f"🛡 Источник: <b>{source}</b>\n"
+        "#security_ban"
+    )
+    asyncio.create_task(send_log(bot, text))

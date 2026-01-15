@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
-from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral
+from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban
 from app.models import Broadcast  # 👈 Добавь Broadcast
 from app.database import async_session
 from app.services.user_service import (
@@ -1186,6 +1186,48 @@ async def process_generation(
 ):
     """Основная функция генерации изображений"""
     bot = message.bot 
+
+# ==========================================================================
+    # 🚫 ЛОКАЛЬНЫЙ ФИЛЬТР (STOP-WORDS) - БЕЗОПАСНАЯ ВЕРСИЯ
+    # ==========================================================================
+    if prompt:
+        prompt_lower = prompt.lower()
+        
+        # Список слов-триггеров
+        BANNED_WORDS = [
+            # English
+            "nsfw", "nude", "naked", "undress", "strip", "porn", "sex", 
+            "breast", "tits", "pussy", "dick", "cock", "topless", "intimate",
+            "uncensored", "no clothes", "remove clothes",
+            # Russian
+            "голая", "голый", "раздеть", "снять одежду", "без одежды", "ню", 
+            "порно", "секс", "сиськи", "соски", "член", "вагина", "обнажен",
+            "без трусов", "без лифчика", "интим", "18+"
+        ]
+        
+        for bad_word in BANNED_WORDS:
+            if bad_word in prompt_lower:
+                print(f"🚫 Локальный фильтр поймал слово: {bad_word}")
+                await log_security_ban(bot, user_id, message.chat.username, prompt, source="Local Filter (Стоп-слова)")
+                
+                # 1. Формируем текст (тот самый, красивый)
+                user_friendly_text = (
+                    "🔞 <b>Сработал фильтр безопасности!</b>\n"
+                    "Нейросеть посчитала запрос недопустимым (18+, насилие или запрещенные темы).\n"
+                    "Пожалуйста, измените формулировку промпта."
+                )
+                
+                # 2. Отправляем сообщение напрямую
+                # Мы используем message.answer, так как wait_msg еще не создан
+                try:
+                    await message.answer(user_friendly_text, parse_mode="HTML")
+                except Exception as e:
+                    print(f"⚠️ Не удалось отправить сообщение о бане: {e}")
+                
+                # 3. ВАЖНО: Останавливаем функцию.
+                # Деньги не спишутся, запрос никуда не уйдет.
+                return 
+    # ==========================================================================
     
     # 1. Проверка и списание баланса
     async with async_session() as session:
@@ -1305,7 +1347,7 @@ async def process_generation(
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_PHOTO)
         
-        # 4. Генерация
+# 4. Генерация
         result_data = await generate_image(
             bot, prompt, final_urls, False, 
             aspect_ratio, use_pro_model, None, resolution
@@ -1503,59 +1545,66 @@ async def process_generation(
         async with async_session() as session: 
             await admin_change_balance(session, user_id, cost)
         
-        # 3. 🛡️ ПЕРЕВОДЧИК ОШИБОК ДЛЯ ПОЛЬЗОВАТЕЛЯ
+# 3. 🛡️ ПЕРЕВОДЧИК ОШИБОК ДЛЯ ПОЛЬЗОВАТЕЛЯ
         err_msg = str(e).lower()
 
-        if "500" in err_msg or "internal server" in err_msg:
+        # Лог в консоль для тебя (чтобы видеть реальный код ошибки)
+        print(f"❌ API ERROR: {err_msg}")
+
+# --- ГРУППА 1: Цензура и контент (Самый приоритетный чек) ---
+        # Добавили: "violated", "policy", "prohibited" — специально под твою ошибку 501
+        if any(x in err_msg for x in ["sensitive", "nsfw", "safety", "banned", "content found", "violated", "policy", "prohibited"]):
+            await log_security_ban(bot, user_id, message.chat.username, prompt, source="API Filter (Нейросеть)")
             user_friendly_text = (
-        "🔧 <b>Nano Banana Pro временно недоступен.</b>\n"
-        "Обычно это решается за 1-2 минуты. Попробуйте ещё раз!"
-    )
-        
-        # Сценарий А: NSFW / Цензура
-        elif "sensitive" in err_msg or "nsfw" in err_msg or "safety" in err_msg:
-            user_friendly_text = (
-                "🔞 <b>Сработал фильтр контента!</b>\n"
+                "🔞 <b>Сработал фильтр безопасности!</b>\n"
                 "Нейросеть посчитала запрос недопустимым (18+, насилие или запрещенные темы).\n"
-                "Пожалуйста, измените формулировку запроса."
-            )
-        
-        # Сценарий Б: Тайм-аут (долго думал)
-        elif "timeout" in err_msg:
-            user_friendly_text = (
-                "🐢 <b>Время ожидания истекло.</b>\n"
-                "Сервер перегружен сложными задачами (например, 2K + много лиц).\n"
-                "Попробуйте позже или выберите качество Standard."
-            )
-            
-        # Сценарий В: Перегрузка (Busy)
-        elif "busy" in err_msg or "queue" in err_msg:
-            user_friendly_text = (
-                "🚦 <b>Высокая нагрузка.</b>\n"
-                "Все графические процессоры заняты.\n"
-                "Пожалуйста, повторите попытку через минуту."
+                "Пожалуйста, измените формулировку промпта."
             )
 
-        # 🆕 Сценарий Д: Пустой ответ (Скрытый фильтр)
-        elif "no image" in err_msg or "empty" in err_msg or "content found" in err_msg:
+        # --- ГРУППА 2: Ошибки ввода пользователя (422) ---
+        elif "422" in err_msg or "validation error" in err_msg:
             user_friendly_text = (
-                "🫥 <b>Нейросеть не выдала результат.</b>\n"
-                "Обычно это происходит, если в генерации промелькнуло что-то запрещенное (Soft Filter).\n"
-                "Пожалуйста, измените формулировку запроса."
+                "📝 <b>Ошибка в параметрах запроса.</b>\n"
+                "Возможно, промпт слишком длинный или выбрано несовместимое разрешение.\n"
+                "Попробуйте упростить запрос."
             )
 
-        # Сценарий Г: Остальные ошибки (был последним)
+        # --- ГРУППА 3: Временные проблемы на сервере (Попробуй позже) ---
+        # 429 (Лимиты), 455 (Обслуживание), 500 (Ошибка сервера), 501 (Сбой генерации) + Твои старые кейсы
+        elif any(x in err_msg for x in ["429", "455", "500", "501", "internal", "reject", "timeout", "busy", "queue"]):
+            user_friendly_text = (
+                "🚦 <b>Сервис временно перегружен.</b>\n"
+                "Нейросеть сейчас обрабатывает слишком много задач или находится на техобслуживании.\n"
+                "Обычно это проходит за 1-2 минуты. Попробуйте снова!"
+            )
+
+        # --- ГРУППА 4: Критические ошибки администратора (401, 402, 404, 505) ---
+        # 401 (Нет доступа), 402 (НЕТ ДЕНЕГ), 404 (Не найдено), 505 (Функция отключена)
+        elif any(x in err_msg for x in ["401", "402", "404", "505", "unauthorized", "insufficient credits"]):
+            # Важно: Пользователю не говорим "нет денег", говорим "Техработы"
+            user_friendly_text = (
+                "🛠 <b>Технические работы на линии.</b>\n"
+                "Мы обновляем ключи доступа к нейросетям.\n"
+                "Пожалуйста, подождите, скоро всё заработает!"
+            )
+            # ТУТ МОЖНО ДОБАВИТЬ ОТПРАВКУ СООБЩЕНИЯ ТЕБЕ В ЛИЧКУ:
+            # await bot.send_message(ADMIN_ID, f"🚨 ДЖЕЙ! АЛЯРМ! Ошибка оплаты или ключа: {err_msg}")
+
+        # --- ГРУППА 5: Всё остальное (Неизвестная ошибка) ---
         else:
-            user_friendly_text = f"⚠️ <b>Техническая ошибка:</b>\n<code>{str(e)[:100]}</code>"
+            user_friendly_text = (
+                "⚠️ <b>Неизвестная ошибка.</b>\n"
+                "Мы уже получили отчет и разбираемся.\n"
+                "Попробуйте повторить попытку чуть позже."
+            )
 
-        # 4. Отправляем красивое сообщение
+        # 4. Финал: Отправка сообщения + Возврат средств
         final_text = f"{user_friendly_text}\n\n💰 <b>{cost} 🍌 возвращены на баланс.</b>"
 
         try: 
             await wait_msg.edit_text(final_text, parse_mode="HTML")
         except: 
             await message.answer(final_text, parse_mode="HTML")
-
 @router.callback_query(F.data.startswith("bc_"))
 async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext):
     """Обработка нажатия кнопки генерации из рассылки"""

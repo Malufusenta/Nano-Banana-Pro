@@ -111,8 +111,9 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
     try:
         resp = requests.post(f"{config.KIE_URL}/createTask", headers=headers, json={"model": model, "input": input_data})
         if resp.status_code != 200:
-            print(f"❌ Kie Error: {resp.text}")
-            return None
+            # Мы принудительно вызываем ошибку с кодом и текстом
+            # Это перебросит нас прямиком в except в файле бота
+            raise Exception(f"{resp.status_code} {resp.text}")
         
         resp_json = resp.json()
         if resp_json.get("code") != 200:
