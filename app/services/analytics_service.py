@@ -1,6 +1,6 @@
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import User, Purchase, BananaTransaction
+from app.models import User, Purchase, BananaTransaction, Broadcast, PostConfig
 from datetime import datetime, timedelta
 
 async def get_analytics_report(session: AsyncSession, date_from: datetime, date_to: datetime):
@@ -236,12 +236,79 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     )
     veteran_buyers = await session.scalar(veteran_buyers_query) or 0
     
-    # Заблокировали (всего за всё время, т.к. нет поля blocked_at)
+# Заблокировали (всего за всё время, т.к. нет поля blocked_at)
     blocked = await session.scalar(
         select(func.count(User.id)).where(
             User.is_blocked == True
         )
     ) or 0
+    
+    # ========== СТАТИСТИКА ПРОМПТОВ ==========
+    
+    # Получаем broadcasts за период
+    broadcasts_query = select(
+        Broadcast.id,
+        Broadcast.message_text,
+        func.date(Broadcast.created_at).label('date')
+    ).where(
+        Broadcast.created_at >= date_from,
+        Broadcast.created_at <= date_to
+    )
+    broadcasts_result = await session.execute(broadcasts_query)
+    broadcasts_by_date = {}
+    for row in broadcasts_result:
+        date_key = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+        broadcasts_by_date[date_key] = {
+            'id': row.id,
+            'name': row.message_text
+        }
+    
+    # Получаем post_configs за период
+    post_configs_query = select(
+        PostConfig.id,
+        PostConfig.prompt,
+        PostConfig.clicks_count,
+        func.date(PostConfig.created_at).label('date')
+    ).where(
+        PostConfig.created_at >= date_from,
+        PostConfig.created_at <= date_to
+    )
+    post_configs_result = await session.execute(post_configs_query)
+    post_configs_by_date = {}
+    for row in post_configs_result:
+        date_key = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+        if date_key not in post_configs_by_date:
+            post_configs_by_date[date_key] = []
+        post_configs_by_date[date_key].append({
+            'id': row.id,
+            'prompt': row.prompt,
+            'clicks': row.clicks_count
+        })
+    
+    # Объединяем по датам: одна дата = один промпт-кампания
+    prompt_campaigns = []
+    all_dates = set(broadcasts_by_date.keys()) | set(post_configs_by_date.keys())
+    
+    for date_key in all_dates:
+        broadcast = broadcasts_by_date.get(date_key)
+        post_configs = post_configs_by_date.get(date_key, [])
+        
+        # Название из broadcast, клики из post_configs
+        campaign_name = broadcast['name'] if broadcast else None
+        total_clicks = sum(pc['clicks'] for pc in post_configs)
+        
+        # Если есть название или есть клики - добавляем
+        if campaign_name or total_clicks > 0:
+            # Обрезаем название до первых 50 символов для читаемости
+            display_name = campaign_name[:50] if campaign_name else f"Промпт {date_key}"
+            prompt_campaigns.append({
+                'name': display_name,
+                'clicks': total_clicks,
+                'date': date_key
+            })
+    
+    # Сортируем по популярности
+    prompt_campaigns.sort(key=lambda x: x['clicks'], reverse=True)
     
     # ========== ФОРМИРУЕМ РЕЗУЛЬТАТ ==========
     
@@ -255,6 +322,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         },
         'revenue_by_source': revenue_by_source,
         'source_stats': source_stats,  # НОВОЕ!
+        'prompt_campaigns': prompt_campaigns,  # ← ДОБАВЬ ЭТУ СТРОКУ
         'bananas': {
             'spent': spent,
             'earned_ref': earned_ref,
@@ -290,6 +358,7 @@ def format_report_message(data: dict, date_str: str) -> str:
     rev = data['revenue']
     sources = data['revenue_by_source']
     source_stats = data.get('source_stats', {})  # НОВОЕ!
+    prompt_campaigns = data.get('prompt_campaigns', [])  # ← ДОБАВЬ ЭТУ СТРОКУ
     bananas = data['bananas']
     tariffs = data['purchases_by_tariff']
     users = data['users']
@@ -330,6 +399,22 @@ def format_report_message(data: dict, date_str: str) -> str:
                 text += f"   • {source}: {stats['revenue']:.0f} ₽ (ср.чек: {avg:.0f} ₽)\n"
         
         text += "\n"
+    
+    # ПОПУЛЯРНЫЕ ПРОМПТЫ (НОВЫЙ БЛОК!)
+    if prompt_campaigns:
+        text += "🎨 ПОПУЛЯРНЫЕ ПРОМПТЫ\n"
+        text += "━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # Топ-10 промптов
+        total_prompt_clicks = sum(p['clicks'] for p in prompt_campaigns)
+        for i, prompt in enumerate(prompt_campaigns[:10], 1):
+            if prompt['clicks'] > 0:
+                percentage = (prompt['clicks'] / total_prompt_clicks * 100) if total_prompt_clicks > 0 else 0
+                text += f"{i}. {prompt['name']} — {prompt['clicks']} ген. ({percentage:.1f}%)\n"
+        
+        # Итоговая статистика
+        text += f"\n📊 Всего уникальных промптов: {len(prompt_campaigns)}\n"
+        text += f"🔥 Всего генераций: {total_prompt_clicks}\n\n"
     
     # ОБОРОТ БАНАНОВ
     total_earned = bananas['earned_ref'] + bananas['earned_sub'] + bananas['earned_welcome']

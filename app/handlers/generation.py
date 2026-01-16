@@ -10,7 +10,7 @@ from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
 from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban
-from app.models import Broadcast  # 👈 Добавь Broadcast
+from app.models import User, Broadcast, PostConfig  # ← добавь PostConfig
 from app.database import async_session
 from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
@@ -20,6 +20,7 @@ from app.services.user_service import (
 )
 from app.services.ai_engine import generate_image
 from app.utils import prompts
+from sqlalchemy import func
 from app.utils.prompt_validator import is_lazy_prompt
 from app import config
 
@@ -1594,6 +1595,19 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     if not broadcast or not broadcast.hidden_prompt:
         await callback.answer("⚠️ Ошибка: промпт не найден", show_alert=True)
         return
+    
+    # ✅ НОВОЕ: Увеличиваем счётчик clicks_count для PostConfig
+    # Находим PostConfig созданный в тот же день что и broadcast
+    post_config_result = await session.execute(
+        select(PostConfig).where(
+            func.date(PostConfig.created_at) == func.date(broadcast.created_at)
+        )
+    )
+    post_config = post_config_result.scalar_one_or_none()
+    
+    if post_config:
+        post_config.clicks_count += 1
+        await session.commit()
     
     # Сохраняем промпт И ФОРМАТ в state
     await state.update_data(
