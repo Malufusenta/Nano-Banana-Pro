@@ -19,6 +19,7 @@ LAZY_TRIGGERS = [
     "шедевр",
     "удиви меня",
     "просто фото"
+    "вау", "Вау"
 ]
 
 def clean_text(text: str) -> str:
