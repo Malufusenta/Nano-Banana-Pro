@@ -43,6 +43,9 @@ class PostLinkState(StatesGroup):
     waiting_for_model = State()
     waiting_for_aspect_ratio = State()
 
+class PromptsState(StatesGroup):
+    waiting_for_dates = State()
+
 
 # =====================================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -55,8 +58,9 @@ def get_admin_menu_kb():
     builder.button(text="📢 Рассылка", callback_data="admin_broadcast") 
     builder.button(text="🔗 Создать ссылку", callback_data="admin_create_postlink")  # 👈 НОВАЯ КНОПКА
     builder.button(text="📈 Отчёты", callback_data="admin_stats_new")  # Новая
+    builder.button(text="🎨 Промпты", callback_data="admin_prompts")  # ← НОВАЯ КНОПКА
     builder.button(text="❌ Выйти", callback_data="close_admin")
-    builder.adjust(1)
+    builder.adjust(1)  # 2-1-2-1-1 для красоты
     return builder.as_markup()
 
 
@@ -1300,3 +1304,206 @@ async def cb_stats_navigate(callback: types.CallbackQuery):
         "📊 Навигация по датам:",
         reply_markup=create_date_navigation_keyboard(target_date)
     )
+
+@router.callback_query(F.data == "admin_prompts")
+async def cb_admin_prompts_menu(callback: types.CallbackQuery):
+    """Главное меню статистики промптов"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📅 За сегодня", callback_data="prompts_today")
+    builder.button(text="📅 За вчера", callback_data="prompts_yesterday")
+    builder.button(text="📅 За неделю", callback_data="prompts_week")
+    builder.button(text="📅 За месяц", callback_data="prompts_month")
+    builder.button(text="📅 За всё время", callback_data="prompts_alltime")
+    builder.button(text="🔧 Свой период", callback_data="prompts_custom")
+    builder.button(text="🔙 Назад", callback_data="admin_menu")
+    builder.adjust(1)
+    
+    await callback.message.edit_text(
+        "🎨 <b>Статистика промптов</b>\n\n"
+        "Выберите период для просмотра популярных промптов:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("prompts_"))
+async def cb_prompts_period(callback: types.CallbackQuery, state: FSMContext):
+    """Показывает статистику промптов за период"""
+    period = callback.data.split("_")[1]
+    
+    # Кастомный период - отдельный handler
+    if period == "custom":
+        await cb_prompts_custom_start(callback, state)
+        return
+    
+    now = datetime.now()
+    
+    # Определяем период (как в отчётах)
+    if period == "today":
+        date_from = get_today_start_msk()
+        date_to = datetime.now()
+        date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
+    
+    elif period == "yesterday":
+        yesterday = now - timedelta(days=1)
+        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
+    
+    elif period == "week":
+        date_from = now - timedelta(days=7)
+        date_to = now
+        date_str = "7 дней"
+    
+    elif period == "month":
+        date_from = now - timedelta(days=30)
+        date_to = now
+        date_str = "30 дней"
+    
+    elif period == "alltime":
+        async with async_session() as session:
+            first_user = await session.execute(
+                select(User).order_by(User.created_at).limit(1)
+            )
+            first = first_user.scalar_one_or_none()
+            date_from = first.created_at if first else now - timedelta(days=365)
+        date_to = now
+        date_str = "всё время"
+    
+    else:
+        await callback.answer("❌ Неизвестный период")
+        return
+    
+    # Показываем индикатор
+    await callback.answer("⏳ Собираю данные...")
+    
+    # Собираем статистику (только промпты!)
+    async with async_session() as session:
+        data = await get_analytics_report(session, date_from, date_to)
+    
+    # Форматируем ТОЛЬКО блок промптов
+    prompt_campaigns = data.get('prompt_campaigns', [])
+    
+    if not prompt_campaigns:
+        text = f"🎨 <b>Промпты за {date_str}</b>\n\n❌ Нет данных за этот период"
+    else:
+        text = f"🎨 <b>Промпты за {date_str}</b>\n\n"
+        text += "━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # Топ-10 промптов
+        total_prompt_clicks = sum(p['clicks'] for p in prompt_campaigns)
+        for i, prompt in enumerate(prompt_campaigns[:10], 1):
+            if prompt['clicks'] > 0:
+                percentage = (prompt['clicks'] / total_prompt_clicks * 100) if total_prompt_clicks > 0 else 0
+                text += f"{i}. {prompt['name']} — {prompt['clicks']} ген. ({percentage:.1f}%)\n"
+        
+        # Итоговая статистика
+        text += f"\n📊 Всего уникальных промптов: {len(prompt_campaigns)}\n"
+        text += f"🔥 Всего генераций: {total_prompt_clicks}"
+    
+    # Отправляем
+    await callback.message.answer(text, parse_mode="HTML")
+    
+    # Кнопки
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🎨 Ещё период", callback_data="admin_prompts")
+    builder.button(text="🔙 В админку", callback_data="admin_menu")
+    builder.adjust(1)
+    
+    await callback.message.answer("✅ Готово!", reply_markup=builder.as_markup())
+
+
+# Состояние для кастомного периода промптов
+class PromptsState(StatesGroup):
+    waiting_for_dates = State()
+
+
+@router.callback_query(F.data == "prompts_custom")
+async def cb_prompts_custom_start(callback: types.CallbackQuery, state: FSMContext):
+    """Запрос кастомного периода для промптов"""
+    await state.set_state(PromptsState.waiting_for_dates)
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Отмена", callback_data="admin_prompts")
+    
+    await callback.message.edit_text(
+        "🔧 <b>Свой период для промптов</b>\n\n"
+        "Введите даты в формате:\n"
+        "<code>ДД.ММ.ГГГГ - ДД.ММ.ГГГГ</code>\n\n"
+        "Примеры:\n"
+        "• <code>01.01.2026 - 09.01.2026</code>\n"
+        "• <code>15.12.2025 - 31.12.2025</code>\n\n"
+        "Или одну дату:\n"
+        "• <code>05.01.2026</code>",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.message(PromptsState.waiting_for_dates, F.text)
+async def cb_prompts_custom_process(message: types.Message, state: FSMContext):
+    """Обработка кастомных дат для промптов"""
+    text = message.text.strip()
+    
+    try:
+        # Парсим даты
+        if " - " in text:
+            date_from_str, date_to_str = text.split(" - ")
+            date_from = datetime.strptime(date_from_str.strip(), "%d.%m.%Y")
+            date_to = datetime.strptime(date_to_str.strip(), "%d.%m.%Y").replace(hour=23, minute=59, second=59)
+            date_str = f"{date_from_str.strip()} — {date_to_str.strip()}"
+        else:
+            date_from = datetime.strptime(text, "%d.%m.%Y")
+            date_to = date_from.replace(hour=23, minute=59, second=59)
+            date_str = text
+        
+        # Показываем индикатор
+        wait_msg = await message.answer("⏳ Собираю данные...")
+        
+        # Собираем статистику
+        async with async_session() as session:
+            data = await get_analytics_report(session, date_from, date_to)
+        
+        # Форматируем ТОЛЬКО промпты
+        prompt_campaigns = data.get('prompt_campaigns', [])
+        
+        if not prompt_campaigns:
+            report = f"🎨 <b>Промпты за {date_str}</b>\n\n❌ Нет данных за этот период"
+        else:
+            report = f"🎨 <b>Промпты за {date_str}</b>\n\n"
+            report += "━━━━━━━━━━━━━━━━━━━━\n"
+            
+            total_prompt_clicks = sum(p['clicks'] for p in prompt_campaigns)
+            for i, prompt in enumerate(prompt_campaigns[:10], 1):
+                if prompt['clicks'] > 0:
+                    percentage = (prompt['clicks'] / total_prompt_clicks * 100) if total_prompt_clicks > 0 else 0
+                    report += f"{i}. {prompt['name']} — {prompt['clicks']} ген. ({percentage:.1f}%)\n"
+            
+            report += f"\n📊 Всего уникальных промптов: {len(prompt_campaigns)}\n"
+            report += f"🔥 Всего генераций: {total_prompt_clicks}"
+        
+        # Удаляем индикатор и отправляем
+        await wait_msg.delete()
+        await message.answer(report, parse_mode="HTML")
+        
+        # Очищаем состояние
+        await state.clear()
+        
+        # Кнопки
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🎨 Ещё период", callback_data="admin_prompts")
+        builder.button(text="🔙 В админку", callback_data="admin_menu")
+        builder.adjust(1)
+        
+        await message.answer("✅ Готово!", reply_markup=builder.as_markup())
+        
+    except ValueError:
+        await message.answer(
+            "❌ <b>Неверный формат!</b>\n\n"
+            "Используйте:\n"
+            "• <code>01.01.2026 - 09.01.2026</code> (диапазон)\n"
+            "• <code>05.01.2026</code> (один день)",
+            parse_mode="HTML"
+        )

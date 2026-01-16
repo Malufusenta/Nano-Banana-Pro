@@ -403,22 +403,6 @@ def format_report_message(data: dict, date_str: str) -> str:
         
         text += "\n"
     
-    # ПОПУЛЯРНЫЕ ПРОМПТЫ (НОВЫЙ БЛОК!)
-    if prompt_campaigns:
-        text += "🎨 ПОПУЛЯРНЫЕ ПРОМПТЫ\n"
-        text += "━━━━━━━━━━━━━━━━━━━━\n"
-        
-        # Топ-10 промптов
-        total_prompt_clicks = sum(p['clicks'] for p in prompt_campaigns)
-        for i, prompt in enumerate(prompt_campaigns[:10], 1):
-            if prompt['clicks'] > 0:
-                percentage = (prompt['clicks'] / total_prompt_clicks * 100) if total_prompt_clicks > 0 else 0
-                text += f"{i}. {prompt['name']} — {prompt['clicks']} ген. ({percentage:.1f}%)\n"
-        
-        # Итоговая статистика
-        text += f"\n📊 Всего уникальных промптов: {len(prompt_campaigns)}\n"
-        text += f"🔥 Всего генераций: {total_prompt_clicks}\n\n"
-    
     # ОБОРОТ БАНАНОВ
     total_earned = bananas['earned_ref'] + bananas['earned_sub'] + bananas['earned_welcome']
     text += "🍌 ОБОРОТ БАНАНОВ\n"
