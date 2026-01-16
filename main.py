@@ -79,10 +79,10 @@ async def main():
     # Создаём планировщик для автоматических отчётов
     scheduler = AsyncIOScheduler()
     
-    # Добавляем задачу: каждый день в 08:30
+    # Добавляем задачу: каждый день в 04:30
     scheduler.add_job(
         send_daily_report,
-        CronTrigger(hour=8, minute=30),
+        CronTrigger(hour=4, minute=30),
         args=[bot],
         id='daily_report',
         replace_existing=True
