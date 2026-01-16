@@ -18,13 +18,14 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     # ========== ДЕНЬГИ ==========
     
     # Выручка и транзакции
+    # Выручка и транзакции
     revenue_query = select(
         func.sum(Purchase.price).label('total_revenue'),
         func.count(Purchase.id).label('total_transactions')
     ).where(
         Purchase.status == 'succeeded',
-        Purchase.completed_at >= date_from,
-        Purchase.completed_at <= date_to
+        Purchase.created_at >= date_from,
+        Purchase.created_at <= date_to
     )
     revenue_result = await session.execute(revenue_query)
     revenue_data = revenue_result.first()
