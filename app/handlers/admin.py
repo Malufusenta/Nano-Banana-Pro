@@ -1046,7 +1046,7 @@ async def cb_admin_stats(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-@router.callback_query(F.data.startswith("stats_"))
+@router.callback_query(F.data.regexp(r"^stats_(today|yesterday|week|month|alltime|custom)$"))
 async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     """Показывает статистику за выбранный период"""
     period = callback.data.split("_")[1]
@@ -1113,13 +1113,21 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     # Отправляем новым сообщением (т.к. может быть длинным)
     await callback.message.answer(message)
 
-    # Показываем кнопки
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📊 Ещё отчёт", callback_data="admin_stats_new")
-    builder.button(text="🔙 В админку", callback_data="admin_menu")
-    builder.adjust(1)
-
-    await callback.message.answer("✅ Отчёт готов!", reply_markup=builder.as_markup())
+    # Показываем кнопки навигации для отчётов за один день
+    if period in ["today", "yesterday"]:
+        # Для сегодня/вчера добавляем навигацию
+        report_date = now if period == "today" else now - timedelta(days=1)
+        await callback.message.answer(
+            "📊 Навигация по датам:",
+            reply_markup=create_date_navigation_keyboard(report_date)
+        )
+    else:
+        # Для недели/месяца/всего времени - обычные кнопки
+        builder = InlineKeyboardBuilder()
+        builder.button(text="📊 Ещё отчёт", callback_data="admin_stats_new")
+        builder.button(text="🔙 В админку", callback_data="admin_menu")
+        builder.adjust(1)
+        await callback.message.answer("✅ Отчёт готов!", reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "stats_custom")
 async def cb_stats_custom_start(callback: types.CallbackQuery, state: FSMContext):
@@ -1179,13 +1187,19 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
         # Очищаем состояние
         await state.clear()
         
-        # Показываем кнопки
-        builder = InlineKeyboardBuilder()
-        builder.button(text="📊 Ещё отчёт", callback_data="admin_stats_new")
-        builder.button(text="🔙 В админку", callback_data="admin_menu")
-        builder.adjust(1)
-        
-        await message.answer("✅ Отчёт готов!", reply_markup=builder.as_markup())
+        # Показываем кнопки навигации
+        # Если это отчёт за один день - добавляем стрелки
+        if " - " not in text:  # Один день
+            await message.answer(
+                "📊 Навигация по датам:",
+                reply_markup=create_date_navigation_keyboard(date_from)
+            )
+        else:  # Диапазон дат
+            builder = InlineKeyboardBuilder()
+            builder.button(text="📊 Ещё отчёт", callback_data="admin_stats_new")
+            builder.button(text="🔙 В админку", callback_data="admin_menu")
+            builder.adjust(1)
+            await message.answer("✅ Отчёт готов!", reply_markup=builder.as_markup())
         
     except ValueError:
         await message.answer(
@@ -1216,3 +1230,73 @@ def get_today_start_msk():
     
     # 5. Убираем информацию о зоне (делаем naive), так как в базе даты "голые"
     return start_of_day_utc.replace(tzinfo=None)
+
+def create_date_navigation_keyboard(date: datetime):
+    """Создаёт кнопки навигации по датам"""
+    builder = InlineKeyboardBuilder()
+    
+    prev_date = date - timedelta(days=1)
+    next_date = date + timedelta(days=1)
+    
+    # Форматируем даты для отображения
+    prev_str = prev_date.strftime("%d.%m")
+    next_str = next_date.strftime("%d.%m")
+    
+    # Для callback сохраняем в ISO формате
+    date_iso = date.strftime("%Y-%m-%d")
+    
+    builder.button(text=f"◀️ {prev_str}", callback_data=f"stats_nav_{date_iso}_prev")
+    builder.button(text="📅 Выбрать дату", callback_data="admin_stats_new")
+    builder.button(text=f"{next_str} ▶️", callback_data=f"stats_nav_{date_iso}_next")
+    builder.button(text="🔙 В админку", callback_data="admin_menu")
+    
+    builder.adjust(3, 1)
+    return builder.as_markup()
+
+@router.callback_query(F.data.startswith("stats_nav_"))
+async def cb_stats_navigate(callback: types.CallbackQuery):
+    """Навигация по датам в отчётах"""
+    # Парсим callback: stats_nav_2026-01-12_prev
+    parts = callback.data.split("_")
+    date_str = parts[2]  # 2026-01-12
+    direction = parts[3]  # prev или next
+    
+    current_date = datetime.strptime(date_str, "%Y-%m-%d")
+    
+    if direction == "prev":
+        target_date = current_date - timedelta(days=1)
+    else:  # next
+        target_date = current_date + timedelta(days=1)
+    
+    # Формируем диапазон (весь день)
+    date_from = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    date_to = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Форматируем дату для отображения
+    date_str_display = target_date.strftime("%d.%m.%Y")
+    
+    # Определяем относительное описание
+    now = datetime.now()
+    if target_date.date() == now.date():
+        date_str_display += " (сегодня)"
+    elif target_date.date() == (now - timedelta(days=1)).date():
+        date_str_display += " (вчера)"
+    elif target_date.date() == (now + timedelta(days=1)).date():
+        date_str_display += " (завтра)"
+    
+    # Показываем индикатор
+    await callback.answer("⏳ Загружаю...")
+    
+    # Собираем статистику
+    async with async_session() as session:
+        data = await get_analytics_report(session, date_from, date_to)
+    
+    # Форматируем отчёт
+    report = format_report_message(data, date_str_display)
+    
+    # Отправляем новым сообщением с кнопками навигации
+    await callback.message.answer(report)
+    await callback.message.answer(
+        "📊 Навигация по датам:",
+        reply_markup=create_date_navigation_keyboard(target_date)
+    )
