@@ -108,7 +108,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         conversion = (buyers / total_users * 100) if total_users > 0 else 0
         
         # Средний чек
-        avg_check = (revenue_info['revenue'] / buyers) if buyers > 0 else 0
+        source_avg_check = (revenue_info['revenue'] / buyers) if buyers > 0 else 0
+
         
         source_stats[source] = {
             'total_users': total_users,
@@ -116,7 +117,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'conversion': conversion,
             'revenue': revenue_info['revenue'],
             'transactions': revenue_info['count'],
-            'avg_check': avg_check
+            'avg_check': source_avg_check  # ← ПЕРЕИМЕНОВАЛИ
+
         }
     
     # ========== ОБОРОТ БАНАНОВ ==========
