@@ -9,8 +9,10 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
-from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban
+from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban,log_content_filter
 from app.models import User, Broadcast, PostConfig  # ← добавь PostConfig
+from app.middlewares.content_filter import ContentFilter, FilterMode, get_filter_message
+
 from app.database import async_session
 from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
@@ -23,6 +25,9 @@ from app.utils import prompts
 from sqlalchemy import func
 from app.utils.prompt_validator import is_lazy_prompt
 from app import config
+content_filter = ContentFilter(
+    FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
+)
 
 router = Router()
 
@@ -696,6 +701,11 @@ async def handle_new_prompt_during_settings(message: types.Message, state: FSMCo
     if message.text in IGNORED_TEXTS: 
         return
     
+        # 🛡️ ФИЛЬТР КОНТЕНТА (ДОБАВЬ ЭТО)
+    if await check_content_filter(message, message.text):
+        await state.clear()  # Сбрасываем состояние
+        return
+    
         # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
     if is_lazy_prompt(message.text):
         await state.clear()  # Сбрасываем состояние
@@ -787,10 +797,61 @@ async def send_lazy_prompt_message(message: types.Message):
         import traceback
         traceback.print_exc()
 
+async def check_content_filter(message: types.Message, text: str) -> bool:
+    """
+    Проверяет текст через фильтр контента
+    
+    Returns:
+        True - если сообщение заблокировано (нужно остановить обработку)
+        False - если всё ок (продолжаем генерацию)
+    """
+    should_block, trigger_type, matched_word = content_filter.check(text)
+    
+    # Если триггер НЕ сработал - пропускаем
+    if trigger_type is None:
+        return False
+    
+    # Логируем в админский канал
+    await log_content_filter(
+        message.bot,
+        message.from_user.id,
+        message.from_user.username,
+        text,
+        trigger_type.value,
+        matched_word,
+        was_blocked=should_block
+    )
+    
+    # Если режим активный - блокируем и отправляем сообщение
+    if should_block:
+        filter_msg = get_filter_message(trigger_type)
+        
+        # Создаем кнопку поддержки
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        builder = InlineKeyboardBuilder()
+        builder.button(text="💬 Поддержка", url="https://t.me/nan0banana_help")
+        builder.button(text="💃 Выбрать образ", url="https://t.me/+3ovTRpUPci85ODYy")
+        builder.adjust(1)
+        
+        await message.answer(
+            filter_msg,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+        
+        return True  # Блокируем дальнейшую обработку
+    
+    # Теневой режим - только логируем, не блокируем
+    return False
+
 @router.message(F.chat.type == "private", F.text, StateFilter(GenState.free_mode, None))
 async def handle_free_text(message: types.Message, state: FSMContext):
     """Обработка текста без фото"""
     if message.text in IGNORED_TEXTS: 
+        return
+    
+        # 🛡️ ФИЛЬТР КОНТЕНТА (добавь ПЕРЕД lazy_prompt)
+    if await check_content_filter(message, message.text):
         return
     
         # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
@@ -901,6 +962,11 @@ async def handle_retry_text_prompt(message: types.Message, state: FSMContext):
     """
     Обработка текстового промпта после фото в режиме ретрая
     """
+
+        # 🛡️ ФИЛЬТР КОНТЕНТА (ДОБАВЬ ЭТО)
+    if await check_content_filter(message, message.text):
+        return
+    
     data = await state.get_data()
     image_urls = data.get("pending_image_urls")
     
@@ -914,6 +980,11 @@ async def handle_retry_text_prompt(message: types.Message, state: FSMContext):
 async def handle_delayed_caption(message: types.Message, state: FSMContext):
     """Обработка отложенного текста после фото"""
     user_prompt = message.text
+
+        # 🛡️ ФИЛЬТР КОНТЕНТА (добавь ПЕРЕД lazy_prompt)
+    if await check_content_filter(message, message.text):
+        return
+    
         # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ 👇
     if is_lazy_prompt(user_prompt):
         await send_lazy_prompt_message(message)

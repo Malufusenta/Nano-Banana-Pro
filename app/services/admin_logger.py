@@ -1,5 +1,6 @@
 import asyncio
-from aiogram import Bot
+from datetime import datetime
+from aiogram import Bot, html
 from app import config
 
 # Если config.py нет, раскомментируй и вставь
@@ -328,25 +329,101 @@ async def log_user_block(bot: Bot, admin_id: int, admin_username: str, user_id: 
     
     asyncio.create_task(send_log(bot, text))
 
-    # 👇 ВСТАВИТЬ В САМЫЙ КОНЕЦ ФАЙЛА 👇
-
-# 🔞 ТИП 12: SECURITY BAN - Попытка генерации 18+
-async def log_security_ban(bot: Bot, user_id: int, username: str, prompt: str, source: str = "Local Filter"):
+async def log_content_filter(
+    bot: Bot,
+    user_id: int,
+    username: str,
+    text: str,
+    trigger_type: str,
+    matched_word: str,
+    was_blocked: bool
+):
     """
-    Логирует попытки генерации запрещенного контента
-    source: "Local Filter" (наши слова) или "API Filter" (ответ нейросети)
+    Логирует срабатывание фильтра контента
+    
+    Args:
+        bot: Экземпляр бота
+        user_id: ID пользователя
+        username: Username пользователя
+        text: Текст который проверялся
+        trigger_type: Тип триггера (question_mark, stop_word, nsfw_word)
+        matched_word: Конкретное слово/символ который сработал
+        was_blocked: Был ли заблокирован запрос (или только залогирован)
     """
-    u_name = f"@{username}" if username else f"ID:{user_id}"
     
-    # Обрезаем, если промпт огромный
-    safe_prompt = prompt[:300] + "..." if len(prompt) > 300 else prompt
+    if not config.FILTER_LOG_CHANNEL_ID:
+        return
     
-    text = (
-        "🔞 <b>SECURITY ALERT: Попытка 18+</b>\n"
-        "➖➖➖➖➖➖➖\n"
-        f"👤 Нарушитель: {u_name} (<code>{user_id}</code>)\n"
-        f"📝 Промпт: <code>{safe_prompt}</code>\n"
-        f"🛡 Источник: <b>{source}</b>\n"
-        "#security_ban"
+    # Определяем эмодзи и статус
+    status_emoji = "🚫" if was_blocked else "⚠️"
+    status_text = "ЗАБЛОКИРОВАНО" if was_blocked else "ТЕСТ (разрешено)"
+    
+    # Маппинг типов триггеров
+    trigger_names = {
+        "question_mark": "Знак вопроса (?)",
+        "stop_word": "Стоп-слово",
+        "nsfw_word": "NSFW контент",
+        "whitelist": "Белый список (разрешено)"
+    }
+    
+    trigger_name = trigger_names.get(trigger_type, trigger_type)
+    
+    # Форматируем текст (обрезаем если длинный)
+    display_text = text[:200] + "..." if len(text) > 200 else text
+    
+    message_text = (
+        f"{status_emoji} <b>СРАБОТАЛ ФИЛЬТР</b> ({status_text})\n\n"
+        f"👤 Юзер: <code>{user_id}</code> (@{username or 'нет'})\n"
+        f"📝 Текст: <code>{html.quote(display_text)}</code>\n\n"
+        f"🎯 Триггер: <b>{trigger_name}</b>\n"
+        f"🔍 Найдено: <code>{html.quote(matched_word)}</code>\n"
+        f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
     )
-    asyncio.create_task(send_log(bot, text))
+    
+    try:
+        await bot.send_message(
+            chat_id=config.FILTER_LOG_CHANNEL_ID,
+            text=message_text,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"⚠️ Ошибка отправки лога фильтра: {e}")
+
+async def log_security_ban(
+    bot: Bot,
+    user_id: int,
+    username: str,
+    prompt: str,
+    source: str = "Unknown"
+):
+    """
+    Логирует срабатывание цензуры/фильтра безопасности
+    
+    Args:
+        bot: Экземпляр бота
+        user_id: ID пользователя
+        username: Username пользователя
+        prompt: Промпт который заблокирован
+        source: Источник блокировки (API Filter, Local Filter и т.д.)
+    """
+    from app import config
+    
+    if not config.ADMIN_LOG_CHANNEL_ID:
+        return
+    
+    message_text = (
+        f"🔞 <b>ЦЕНЗУРА СРАБОТАЛА</b>\n\n"
+        f"👤 Юзер: <code>{user_id}</code> (@{username or 'нет'})\n"
+        f"🛡️ Источник: <b>{source}</b>\n"
+        f"📝 Промпт: <code>{html.quote(prompt[:200])}</code>\n"
+        f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+    )
+    
+    try:
+        await bot.send_message(
+            chat_id=config.ADMIN_LOG_CHANNEL_ID,
+            text=message_text,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"⚠️ Ошибка отправки лога цензуры: {e}")
