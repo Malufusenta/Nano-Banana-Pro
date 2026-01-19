@@ -261,7 +261,7 @@ def get_preflight_kb(model_type: str, ratio: str, quality: str):
         builder.button(text=qual_btn, callback_data="pf_toggle_quality")
     
     cost = config.COST_PRO if model_type == "pro" else config.COST_STANDARD
-    builder.button(text=f"🚀 Сгенерировать ({cost}🍌)", callback_data="pf_start")
+    builder.button(text=f"🚀 Запуск (спишем {cost} 🍌)", callback_data="pf_start")
     
     builder.adjust(2, 1, 1) if model_type == "pro" else builder.adjust(2, 1)
     return builder.as_markup()
@@ -333,7 +333,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         f"🎨 *Параметры генерации*\n\n"
         f"📝 **Запрос:** {prompt[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
+        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     await message.answer(text, reply_markup=get_preflight_kb(pref_model, "1:1", "hd"), parse_mode="Markdown")
 
@@ -359,7 +359,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
         # Упрощённый текст для broadcast
         text = (
             f"🎨 *Параметры генерации*\n\n"
-            f"Выбери модель и жми *\"Сгенерировать\"*👇"
+            f"Выбери модель и жми *\"🚀 Запуск\"*👇"
         )
     else:
     
@@ -367,7 +367,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
         f"🎨 *Параметры генерации*\n\n"
         f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
+        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     
     await callback.message.edit_text(
@@ -421,7 +421,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
         # Упрощённый текст для broadcast
         text = (
             f"🎨 *Параметры генерации*\n\n"
-            f"Выбери модель и жми \"Сгенерировать\"👇"
+            f"Выбери модель и жми \"🚀 Запуск\"👇"
         )
     else:
     
@@ -429,7 +429,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
         f"🎨 *Параметры генерации*\n\n"
         f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
         f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"*Настрой параметры и жми \"Сгенерировать\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
+        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     
     await callback.message.edit_text(
@@ -563,10 +563,13 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     )
         await state.set_state(GenState.preflight_check)
     
+
+        cost = config.COST_STANDARD
+
     # 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
         text = (
         f"🎨 *Параметры генерации*\n\n"
-        f"Выбери модель и жми \"Сгенерировать\"👇"
+        f"Выбери модель и жми \"🚀 Запуск\"👇"
     )
         await message.answer(
         text,
@@ -897,9 +900,11 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
         await state.set_state(GenState.preflight_check)
 
 # 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
+        cost = config.COST_STANDARD
+
         text = (
     f"🎨 *Параметры генерации*\n\n"
-    f"Выбери модель и жми \"Сгенерировать\"👇"
+    f"Выбери модель и жми \"🚀 Запуск\"👇"
 )
         await message.answer(
     text,
