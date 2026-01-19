@@ -304,7 +304,7 @@ def get_categories_kb():
 # =====================================================================
 # 🛫 ПРЕДПОЛЕТНЫЙ ЧЕК
 # =====================================================================
-async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None):
+async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None, is_edit_mode=False):
     user_id = message.from_user.id
 
     # 🔥 FORCE PRO LOGIC - Проверяем флаг перед загрузкой настроек
@@ -329,12 +329,24 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     await state.set_state(GenState.preflight_check)
     
     cost = config.COST_PRO if pref_model == "pro" else config.COST_STANDARD
-    text = (
-        f"🎨 *Параметры генерации*\n\n"
-        f"📝 **Запрос:** {prompt[:100]}...\n"
-        f"💰 **Стоимость:** {cost} банан(а)\n\n"
-        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
-    )
+    has_photo = normalized_urls is not None and len(normalized_urls) > 0
+
+    if not has_photo or is_edit_mode:
+        # Предупреждение, если фото нет ИЛИ режим редактирования
+        text = (
+            f"⚙️ *Настройки генерации*\n\n"
+            f"📝 **Запрос:** {prompt[:50]}...\n\n"
+            f"⚠️ *Внимание:* Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
+            f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+        )
+    else:
+        # Обычный текст, если есть фото и НЕ редактирование
+        text = (
+            f"🎨 *Параметры генерации*\n\n"
+            f"📝 **Запрос:** {prompt[:35]}...\n\n"
+            f"💰 Стоимость:* {cost} банан(а)*\n\n"
+            f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+        )
     await message.answer(text, reply_markup=get_preflight_kb(pref_model, "1:1", "hd"), parse_mode="Markdown")
 
 @router.callback_query(GenState.preflight_check, F.data == "pf_toggle_model")
@@ -365,8 +377,8 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
     
         text = (
         f"🎨 *Параметры генерации*\n\n"
-        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
-        f"💰 **Стоимость:** {cost} банан(а)\n\n"
+        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
+        f"💰 Стоимость:* {cost} банан(а)*\n\n"
         f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     
@@ -427,8 +439,8 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
     
         text = (
         f"🎨 *Параметры генерации*\n\n"
-        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n"
-        f"💰 **Стоимость:** {cost} банан(а)\n\n"
+        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
+        f"💰 Стоимость:* {cost} банан(а)*\n\n"
         f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
     )
     
@@ -1140,7 +1152,8 @@ async def cb_edit_result(callback: types.CallbackQuery, state: FSMContext, bot: 
         await state.set_state(GenState.waiting_for_edit_instruction)
         
         await callback.message.reply(
-            f"🎨 **Режим редактирования** ({cost}🍌)\nЧто изменить?", 
+            f"🎨 **Режим редактирования** ({cost}🍌)\n\n"   
+            f"*Что изменить?*",
             reply_markup=get_cancel_kb(), 
             parse_mode="Markdown"
         )
@@ -1167,7 +1180,7 @@ async def handle_edit_instruction(message: types.Message, state: FSMContext, bot
         await state.clear()
         return
     
-    await start_preflight_check(message, state, instruction, [img_url])
+    await start_preflight_check(message, state, instruction, [img_url], is_edit_mode=True)
 
 # =====================================================================
 # КОМАНДЫ
