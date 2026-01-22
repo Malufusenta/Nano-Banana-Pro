@@ -1123,7 +1123,7 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     message = format_report_message(data, date_str)
     
     # Отправляем новым сообщением (т.к. может быть длинным)
-    await callback.message.answer(message)
+    await callback.message.answer(message, parse_mode="HTML")
 
     # Показываем кнопки навигации для отчётов за один день
     if period in ["today", "yesterday"]:
@@ -1194,7 +1194,7 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
         
         # Удаляем индикатор и отправляем отчёт
         await wait_msg.delete()
-        await message.answer(report)
+        await message.answer(report, parse_mode="HTML")
         
         # Очищаем состояние
         await state.clear()
