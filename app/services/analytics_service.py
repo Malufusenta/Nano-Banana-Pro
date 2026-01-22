@@ -444,24 +444,32 @@ def format_report_message(data: dict, date_str: str) -> str:
     return text
 
 
+# ... (начало файла с импортами и функцией get_analytics_report не трогаем) ...
+
 async def get_payment_depth_stats(session: AsyncSession, date_from: datetime, date_to: datetime) -> dict:
     """
-    Считает глубину платежей: какой по счету была покупка для пользователя.
+    Считает глубину платежей (общую и по источникам трафика).
     """
-    # 1. Подзапрос: Нумеруем ВСЕ успешные покупки каждого пользователя за всю историю
-    # ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at) создает нумерацию 1, 2, 3... для каждого юзера
+    # 1. Подзапрос: Нумеруем покупки + тянем источник и цену
     p_alias = Purchase
     subquery = select(
         p_alias.user_id,
         p_alias.created_at,
+        p_alias.price,       # 👈 Нужно для выручки
+        p_alias.user_source, # 👈 Нужно для группировки
         func.row_number().over(
             partition_by=p_alias.user_id,
             order_by=p_alias.created_at
         ).label('purchase_num')
     ).where(p_alias.status == 'succeeded').subquery()
 
-    # 2. Основной запрос: Выбираем только те покупки, которые попали в наш период
-    query = select(subquery.c.purchase_num, subquery.c.user_id).where(
+    # 2. Основной запрос: Фильтруем по дате
+    query = select(
+        subquery.c.purchase_num, 
+        subquery.c.user_id,
+        subquery.c.price,
+        subquery.c.user_source
+    ).where(
         subquery.c.created_at >= date_from,
         subquery.c.created_at <= date_to
     )
@@ -469,72 +477,141 @@ async def get_payment_depth_stats(session: AsyncSession, date_from: datetime, da
     result = await session.execute(query)
     rows = result.all()
 
-    # 3. Агрегация данных (Python)
-    stats = {
+    # 3. Структура данных
+    # Общая статистика
+    global_stats = {
         'total': 0,
         1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
-        '6-10': 0,
-        '11-20': 0,
-        '21+': 0,
+        '6-10': 0, '11-20': 0, '21+': 0,
         'record': {'user_id': None, 'n': 0}
     }
+    
+    # Статистика по источникам: {'source_name': {'revenue': 0, 1: 0, 2: 0 ...}}
+    sources_stats = {}
 
     for row in rows:
         n = row.purchase_num
         user_id = row.user_id
-        stats['total'] += 1
+        price = row.price or 0
+        source = row.user_source or "organic" # Если пусто, считаем органикой
 
-        # Распределение по группам
-        if n <= 5:
-            stats[n] += 1
-        elif 6 <= n <= 10:
-            stats['6-10'] += 1
-        elif 11 <= n <= 20:
-            stats['11-20'] += 1
-        else:
-            stats['21+'] += 1
+        # --- Обновляем общую статистику ---
+        global_stats['total'] += 1
         
-        # Поиск рекорда (максимальный номер покупки)
-        if n > stats['record']['n']:
-            stats['record'] = {'user_id': user_id, 'n': n}
+        # Обновляем рекорд
+        if n > global_stats['record']['n']:
+            global_stats['record'] = {'user_id': user_id, 'n': n}
 
-    return stats
+        # Категория глубины
+        depth_key = None
+        if n <= 5:
+            global_stats[n] += 1
+            depth_key = n
+        elif 6 <= n <= 10:
+            global_stats['6-10'] += 1
+            depth_key = '6-10'
+        elif 11 <= n <= 20:
+            global_stats['11-20'] += 1
+            depth_key = '11-20'
+        else:
+            global_stats['21+'] += 1
+            depth_key = '21+'
+
+        # --- Обновляем статистику источника ---
+        if source not in sources_stats:
+            sources_stats[source] = {
+                'revenue': 0,
+                1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
+                '6-10': 0, '11-20': 0, '21+': 0
+            }
+        
+        sources_stats[source]['revenue'] += price
+        sources_stats[source][depth_key] += 1
+
+    return {
+        'global': global_stats,
+        'sources': sources_stats
+    }
 
 
 def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> str:
     """
-    Формирует красивый текст для отчета "Глубина платежей"
+    Формирует отчет: Общая воронка + Детализация по источникам (Strict ТЗ Version)
     """
-    total = data['total']
+    g_stats = data['global']
+    s_stats = data['sources']
+    total = g_stats['total']
+
     if total == 0:
         return f"📊 ГЛУБИНА ПЛАТЕЖЕЙ ({start_date} - {end_date})\n\nДанных за этот период нет."
 
-    def calc_percent(val):
-        return f"{(val / total * 100):.1f}%"
+    def calc_percent(val, total_val):
+        return f"{(val / total_val * 100):.1f}%" if total_val > 0 else "0%"
 
-    text = f"📊 ГЛУБИНА ПЛАТЕЖЕЙ (Период: {start_date} - {end_date})\n"
-    text += f"Всего транзакций в выборке: {total}\n\n"
+# === БЛОК 1: ОБЩАЯ СТАТИСТИКА ===
+    text = f"📊 <b>ГЛУБИНА ПЛАТЕЖЕЙ</b> (Период: {start_date} - {end_date})\n"
+    text += f"Всего транзакций: <b>{total}</b>\n\n"
 
-    # 1-5 покупки
-    text += f"1️⃣ 1-я покупка: {data[1]} шт. ({calc_percent(data[1])})\n"
-    text += f"2️⃣ 2-я покупка: {data[2]} шт. ({calc_percent(data[2])})\n"
-    text += f"3️⃣ 3-я покупка: {data[3]} шт. ({calc_percent(data[3])})\n"
-    text += f"4️⃣ 4-я покупка: {data[4]} шт. ({calc_percent(data[4])})\n"
-    text += f"5️⃣ 5-я покупка: {data[5]} шт. ({calc_percent(data[5])})\n"
-
-    # Группы
-    text += f"🔄 6-10 покупок: {data['6-10']} шт. ({calc_percent(data['6-10'])})\n"
-    text += "— Постоянники.\n"
-
-    text += f"🐳 11-20 покупок: {data['11-20']} шт. ({calc_percent(data['11-20'])})\n"
-    text += "— Лояльные (Киты).\n"
-
-    text += f"👑 21+ покупок: {data['21+']} шт. ({calc_percent(data['21+'])})\n"
-    text += "— Супер-VIP (Коммерческие).\n\n"
-
-    # Рекорд
-    record = data['record']
-    if record['user_id']:
-        text += f"🏆 Рекорд периода: Юзер `{record['user_id']}` совершил свою {record['n']}-ю покупку."
+    # Вывод общей статистики
+    text += f"1️⃣ 1-я покупка: <b>{g_stats[1]} шт. ({calc_percent(g_stats[1], total)})</b>\n"
+    text += f"2️⃣ 2-я покупка: <b>{g_stats[2]} шт. ({calc_percent(g_stats[2], total)})</b>\n"
+    text += f"3️⃣ 3-я покупка: <b>{g_stats[3]} шт. ({calc_percent(g_stats[3], total)})</b>\n"
+    text += f"4️⃣ 4-я покупка: <b>{g_stats[4]} шт. ({calc_percent(g_stats[4], total)})</b>\n"
+    text += f"5️⃣ 5-я покупка: <b>{g_stats[5]} шт. ({calc_percent(g_stats[5], total)})</b>\n"
     
+    text += f"🔄 6-10 покупок: <b>{g_stats['6-10']} шт. ({calc_percent(g_stats['6-10'], total)})</b>\n"
+    text += "<b>— Постоянники.</b>\n"
+    
+    text += f"🐳 11-20 покупок: <b>{g_stats['11-20']} шт. ({calc_percent(g_stats['11-20'], total)})</b>\n"
+    text += "<b>— Наши лояльные «Киты».</b>\n"
+    
+    text += f"👑 21+ покупок: <b>{g_stats['21+']} шт. ({calc_percent(g_stats['21+'], total)})</b>\n"
+    text += "<b>— Супер-VIP / Коммерческий трафик.</b>\n\n"
+
+    if g_stats['record']['user_id']:
+        text += f"🏆 Рекорд периода: Юзер `{g_stats['record']['user_id']}` совершил свою <b>{g_stats['record']['n']}-ю</b> покупку.\n"
+
+    # === БЛОК 2: КАЧЕСТВО ТРАФИКА (ПО ИСТОЧНИКАМ) ===
+    if s_stats:
+        text += "\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
+        text += "🎯 <b>КАЧЕСТВО ТРАФИКА (Детализация по источникам)</b>\n\n"
+
+        # Сортируем источники по Выручке
+        sorted_sources = sorted(s_stats.items(), key=lambda x: x[1]['revenue'], reverse=True)
+
+        count_shown = 0
+        for source, stat in sorted_sources:
+            # Скрываем источники без покупок в этом периоде
+            src_total = sum([stat[k] for k in [1,2,3,4,5,'6-10','11-20','21+']])
+            if src_total == 0: continue
+
+            # Лимит вывода (чтобы не упереться в лимит сообщения Телеграм)
+            if count_shown >= 15:
+                text += f"<i>... и еще {len(sorted_sources) - 15} источников скрыто</i>"
+                break
+            
+            count_shown += 1
+
+            # Заголовок источника
+            text += f"📌 <b>Источник: {source}</b> (Выручка: {stat['revenue']:.0f} ₽)\n"
+            
+            # Строки выводим только если там есть значения, чтобы отчет был чистым
+            if stat[1] > 0: text += f"   1️⃣ 1-я покупка: {stat[1]} шт.\n"
+            if stat[2] > 0: text += f"   2️⃣ 2-я покупка: {stat[2]} шт.\n"
+            if stat[3] > 0: text += f"   3️⃣ 3-я покупка: {stat[3]} шт.\n"
+            if stat[4] > 0: text += f"   4️⃣ 4-я покупка: {stat[4]} шт.\n"
+            if stat[5] > 0: text += f"   5️⃣ 5-я покупка: {stat[5]} шт.\n"
+            
+            if stat['6-10'] > 0:
+                text += f"   🔄 6-10 покупок: {stat['6-10']} шт.\n"
+            
+            # Жирным выделяем важное
+            if stat['11-20'] > 0:
+                text += f"   🐳 <b>11-20 покупок: {stat['11-20']} шт. — Наши лояльные «Киты»</b>\n"
+            
+            if stat['21+'] > 0:
+                text += f"   👑 <b>21+ покупок: {stat['21+']} шт. — Супер-VIP</b>\n"
+            
+            text += "\n"
+
     return text

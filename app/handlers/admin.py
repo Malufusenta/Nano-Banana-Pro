@@ -1607,7 +1607,7 @@ async def cb_payment_depth_period(callback: types.CallbackQuery, state: FSMConte
     builder.button(text="🔙 В админку", callback_data="admin_menu")
     builder.adjust(1)
     
-    await callback.message.answer(text, reply_markup=builder.as_markup())
+    await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 
 # --- Кастомный период для Глубины ---
@@ -1656,6 +1656,7 @@ async def cb_depth_custom_process(message: types.Message, state: FSMContext):
         report = format_payment_depth_message(data, date_label_start, date_label_end)
         
         await wait_msg.delete()
+        await message.answer(report, parse_mode="HTML")
         await message.answer(report)
         await state.clear()
         
