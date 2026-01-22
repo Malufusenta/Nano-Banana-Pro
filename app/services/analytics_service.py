@@ -430,21 +430,20 @@ def format_report_message(data: dict, date_str: str) -> str:
             if stats['total_users'] > 0:
                 text += f"   • {source}: <b>{stats['total_users']}</b> чел\n"
         
-        # 2. Конверсия (Гибридный режим)
-        text += "\n💰 <b>КОНВЕРСИЯ (Day 0) + ДОЖИМЫ:</b>\n"
+# 2. Конверсия
+        text += "\n💰 <b>Конверсия в покупку:</b>\n" # Вернули старое название
         
-        # Сортируем по количеству СВЕЖИХ покупателей (по эффективности рекламы)
-        # Можно сортировать по сумме (fresh + delayed), если важно общее число продаж
-        sorted_conv = sorted(source_stats.items(), key=lambda x: (x[1]['fresh_buyers'] + x[1]['delayed_buyers']), reverse=True)
+        # Вернули сортировку по ПРОЦЕНТУ (от большего к меньшему)
+        sorted_conv = sorted(source_stats.items(), key=lambda x: x[1]['conversion_percent'], reverse=True)
         
         count_conv_shown = 0
         for source, stats in sorted_conv:
             fresh = stats['fresh_buyers']
             delayed = stats['delayed_buyers']
-            regs = stats['total_users'] # Новые регистрации
+            regs = stats['total_users']
             percent = stats['conversion_percent']
             
-            # Показываем, если есть хоть одна продажа (молния или черепаха)
+            # Показываем, если есть хоть одна продажа (быстрая или отложенная)
             if (fresh + delayed) > 0:
                 # Формат: • source: 5.0% (5/100) ⚡️ + 🐢 3 шт.
                 text += (
