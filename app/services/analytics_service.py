@@ -81,21 +81,23 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         row.source: row.count for row in users_by_source_result
     }
     
-    # Считаем сколько уникальных покупателей с каждого источника
+# ========== ЧЕСТНАЯ КОНВЕРСИЯ (КОГОРТЫ) ==========
+    
+    # Считаем, сколько пользователей, ПРИШЕДШИХ в этот период, сделали хотя бы 1 покупку.
+    # Мы смотрим таблицу User, а не Purchase, чтобы отсечь "старичков".
     buyers_by_source_query = select(
-        Purchase.user_source,
-        func.count(func.distinct(Purchase.user_id)).label('buyers')
+        User.source,
+        func.count(User.id).label('buyers')
     ).where(
-        Purchase.status == 'succeeded',
-        Purchase.completed_at >= date_from,
-        Purchase.completed_at <= date_to
-    ).group_by(Purchase.user_source)
+        User.created_at >= date_from,
+        User.created_at <= date_to,
+        User.orders_count > 0  # Условие: стал клиентом (есть покупки)
+    ).group_by(User.source)
     
     buyers_by_source_result = await session.execute(buyers_by_source_query)
     buyers_by_source = {
-        row.user_source or 'organic': row.buyers for row in buyers_by_source_result
+        row.source or 'organic': row.buyers for row in buyers_by_source_result
     }
-    
     # ========== КОНВЕРСИЯ И СРЕДНИЙ ЧЕК ПО ИСТОЧНИКАМ ==========
     
     source_stats = {}
