@@ -1119,11 +1119,24 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     async with async_session() as session:
         data = await get_analytics_report(session, date_from, date_to)
     
-    # Форматируем сообщение
+# Форматируем сообщение
     message = format_report_message(data, date_str)
     
-    # Отправляем новым сообщением (т.к. может быть длинным)
-    await callback.message.answer(message, parse_mode="HTML")
+    # 🔥 УМНАЯ ОТПРАВКА (разбиваем, если длиннее 4096 символов)
+    if len(message) <= 4096:
+        await callback.message.answer(message, parse_mode="HTML")
+    else:
+        # Разбиваем по строкам, чтобы не порвать HTML-теги
+        current_part = ""
+        for line in message.split('\n'):
+            # Проверяем: если добавим эту строку, не превысим ли лимит?
+            if len(current_part) + len(line) + 1 > 4096:
+                await callback.message.answer(current_part, parse_mode="HTML")
+                current_part = ""
+            current_part += line + "\n"
+        # Отправляем остаток
+        if current_part:
+            await callback.message.answer(current_part, parse_mode="HTML")
 
     # Показываем кнопки навигации для отчётов за один день
     if period in ["today", "yesterday"]:
@@ -1189,15 +1202,29 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
         async with async_session() as session:
             data = await get_analytics_report(session, date_from, date_to)
         
-        # Форматируем сообщение
+
         report = format_report_message(data, date_str)
         
-        # Удаляем индикатор и отправляем отчёт
+        # Удаляем индикатор
         await wait_msg.delete()
-        await message.answer(report, parse_mode="HTML")
+
+        # 🔥 УМНАЯ ОТПРАВКА (разбиение длинного текста)
+        if len(report) <= 4096:
+            await message.answer(report, parse_mode="HTML")
+        else:
+            current_part = ""
+            for line in report.split('\n'):
+                if len(current_part) + len(line) + 1 > 4096:
+                    await message.answer(current_part, parse_mode="HTML")
+                    current_part = ""
+                current_part += line + "\n"
+            if current_part:
+                await message.answer(current_part, parse_mode="HTML")
         
         # Очищаем состояние
         await state.clear()
+        
+        # ... (дальше код с кнопками оставляем как был) ...
         
         # Показываем кнопки навигации
         # Если это отчёт за один день - добавляем стрелки

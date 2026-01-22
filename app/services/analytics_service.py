@@ -377,31 +377,29 @@ def format_report_message(data: dict, date_str: str) -> str:
     text += f"— Повторных: {rev['repeat_purchases']}\n"
     text += f"Средний чек: {rev['avg_check']:.2f} ₽\n\n"
     
-    # ИСТОЧНИКИ ТРАФИКА
+# ИСТОЧНИКИ ТРАФИКА
     if source_stats:
         text += "📊 <b>ИСТОЧНИКИ ТРАФИКА</b>\n"
         text += "━━━━━━━━━━━━━━━━━━━━\n"
         
-        # 1. Новые пользователи
+        # 1. Новые пользователи (Все источники)
         text += "👥 <b>Новые пользователи:</b>\n"
+        # Сортируем и выводим ВСЕХ
         for source, stats in sorted(source_stats.items(), key=lambda x: x[1]['total_users'], reverse=True):
             if stats['total_users'] > 0:
-                # Жирным выделяем количество
                 text += f"   • {source}: <b>{stats['total_users']}</b> чел\n"
         
-        # 2. Конверсия
+        # 2. Конверсия (Все источники)
         text += "\n💰 <b>Конверсия в покупку:</b>\n"
         sources_with_users = {s: stats for s, stats in source_stats.items() if stats['total_users'] > 0}
         for source, stats in sorted(sources_with_users.items(), key=lambda x: x[1]['conversion'], reverse=True):
-            # Жирным выделяем процент
             text += f"   • {source}: <b>{stats['conversion']:.1f}%</b> ({stats['buyers']}/{stats['total_users']})\n"
         
-        # 3. Выручка
+        # 3. Выручка (Все источники)
         text += "\n💵 <b>Выручка по источникам:</b>\n"
         for source, stats in sorted(source_stats.items(), key=lambda x: x[1]['revenue'], reverse=True):
             if stats['revenue'] > 0:
                 avg = stats['avg_check']
-                # Жирным выделяем сумму выручки
                 text += f"   • {source}: <b>{stats['revenue']:.0f} ₽</b> (ср.чек: {avg:.0f} ₽)\n"
         
         text += "\n"
