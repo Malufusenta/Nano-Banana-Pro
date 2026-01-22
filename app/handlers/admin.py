@@ -13,12 +13,19 @@ import json     # 👈 Для парсинга JSON (если ещё нет)
 from sqlalchemy import select, func
 from app.models import User, Purchase, Broadcast
 from app import config
-from app.services.analytics_service import get_analytics_report, format_report_message
+from app.services.analytics_service import (
+    get_analytics_report, 
+    format_report_message,
+    get_payment_depth_stats,       # 👈 Новое
+    format_payment_depth_message   # 👈 Новое
+)
 from datetime import datetime, timedelta, timezone
 from aiogram.fsm.state import State, StatesGroup
 
 class StatsState(StatesGroup):
     waiting_for_custom_dates = State()
+class PaymentDepthState(StatesGroup):
+    waiting_for_dates = State()
 
 router = Router()
 
@@ -54,6 +61,7 @@ def get_admin_menu_kb():
     """Клавиатура главного меню админки"""
     builder = InlineKeyboardBuilder()
     builder.button(text="📊 Статистика", callback_data="admin_stats")
+    builder.button(text="🐳 Глубокая аналитика", callback_data="admin_payment_depth")
     builder.button(text="🔍 Найти пользователя", callback_data="admin_find_user")
     builder.button(text="📢 Рассылка", callback_data="admin_broadcast") 
     builder.button(text="🔗 Создать ссылку", callback_data="admin_create_postlink")  # 👈 НОВАЯ КНОПКА
@@ -1505,5 +1513,162 @@ async def cb_prompts_custom_process(message: types.Message, state: FSMContext):
             "Используйте:\n"
             "• <code>01.01.2026 - 09.01.2026</code> (диапазон)\n"
             "• <code>05.01.2026</code> (один день)",
+            parse_mode="HTML"
+        )
+
+        # =====================================================================
+# 🐳 ГЛУБИНА ПЛАТЕЖЕЙ (Payment Depth)
+# =====================================================================
+
+@router.callback_query(F.data == "admin_payment_depth")
+async def cb_payment_depth_menu(callback: types.CallbackQuery):
+    """Меню выбора периода для Глубины платежей"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📅 За сегодня", callback_data="depth_today")
+    builder.button(text="📅 За вчера", callback_data="depth_yesterday")
+    builder.button(text="📅 За неделю", callback_data="depth_week")
+    builder.button(text="📅 За месяц", callback_data="depth_month")
+    builder.button(text="📅 За всё время", callback_data="depth_alltime")
+    builder.button(text="🔧 Свой период", callback_data="depth_custom")
+    builder.button(text="🔙 Назад", callback_data="admin_menu")
+    builder.adjust(1)
+    
+    await callback.message.edit_text(
+        "🐳 <b>Глубина платежей (LTV)</b>\n\n"
+        "Этот отчет показывает, какой по счету была покупка.\n"
+        "Помогает понять, сколько у нас новичков, а сколько китов.\n\n"
+        "Выберите период:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("depth_"))
+async def cb_payment_depth_period(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка выбора периода для Глубины"""
+    period = callback.data.split("_")[1]
+    
+    # Кастомный период обрабатываем отдельно
+    if period == "custom":
+        await cb_depth_custom_start(callback, state)
+        return
+    
+    now = datetime.now()
+    
+    # Логика дат (аналогична обычной статистике)
+    if period == "today":
+        date_from = get_today_start_msk() # Используем твою функцию
+        date_to = datetime.now()
+        date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
+        
+    elif period == "yesterday":
+        yesterday = now - timedelta(days=1)
+        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
+        
+    elif period == "week":
+        date_from = now - timedelta(days=7)
+        date_to = now
+        date_str = "7 дней"
+        
+    elif period == "month":
+        date_from = now - timedelta(days=30)
+        date_to = now
+        date_str = "30 дней"
+        
+    elif period == "alltime":
+        async with async_session() as session:
+            first_purch = await session.execute(
+                select(Purchase).order_by(Purchase.created_at).limit(1)
+            )
+            first = first_purch.scalar_one_or_none()
+            date_from = first.created_at if first else now - timedelta(days=365)
+        date_to = now
+        date_str = "всё время"
+    else:
+        await callback.answer("❌ Ошибка периода")
+        return
+
+    await callback.answer("⏳ Считаю воронку...")
+
+    # Сбор данных
+    async with async_session() as session:
+        # Вызываем функцию, которую добавили в analytics_service
+        data = await get_payment_depth_stats(session, date_from, date_to)
+
+    # Форматирование
+    text = format_payment_depth_message(data, date_str, "") # date_str используется как start, end пустой для пресетов
+    
+    # Кнопки
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🐳 Ещё период", callback_data="admin_payment_depth")
+    builder.button(text="🔙 В админку", callback_data="admin_menu")
+    builder.adjust(1)
+    
+    await callback.message.answer(text, reply_markup=builder.as_markup())
+
+
+# --- Кастомный период для Глубины ---
+
+async def cb_depth_custom_start(callback: types.CallbackQuery, state: FSMContext):
+    """Запрос дат для Глубины"""
+    await state.set_state(PaymentDepthState.waiting_for_dates)
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Отмена", callback_data="admin_payment_depth")
+    
+    await callback.message.edit_text(
+        "🔧 <b>Глубина платежей: Свой период</b>\n\n"
+        "Введите даты в формате:\n"
+        "<code>ДД.ММ.ГГГГ - ДД.ММ.ГГГГ</code>\n\n"
+        "Или одну дату:\n"
+        "<code>05.01.2026</code>",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+
+@router.message(PaymentDepthState.waiting_for_dates, F.text)
+async def cb_depth_custom_process(message: types.Message, state: FSMContext):
+    """Обработка ввода дат для Глубины"""
+    text = message.text.strip()
+    
+    try:
+        if " - " in text:
+            start_str, end_str = text.split(" - ")
+            date_from = datetime.strptime(start_str.strip(), "%d.%m.%Y")
+            date_to = datetime.strptime(end_str.strip(), "%d.%m.%Y").replace(hour=23, minute=59, second=59)
+            date_label_start = start_str.strip()
+            date_label_end = end_str.strip()
+        else:
+            date_from = datetime.strptime(text, "%d.%m.%Y")
+            date_to = date_from.replace(hour=23, minute=59, second=59)
+            date_label_start = text
+            date_label_end = "(один день)"
+
+        wait_msg = await message.answer("⏳ Считаю воронку...")
+
+        async with async_session() as session:
+            data = await get_payment_depth_stats(session, date_from, date_to)
+        
+        # Формируем отчет. Передаем даты для заголовка
+        report = format_payment_depth_message(data, date_label_start, date_label_end)
+        
+        await wait_msg.delete()
+        await message.answer(report)
+        await state.clear()
+        
+        # Кнопки возврата
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🐳 Ещё период", callback_data="admin_payment_depth")
+        builder.button(text="🔙 В админку", callback_data="admin_menu")
+        builder.adjust(1)
+        await message.answer("✅ Готово!", reply_markup=builder.as_markup())
+
+    except ValueError:
+        await message.answer(
+            "❌ <b>Неверный формат даты!</b>\n"
+            "Попробуйте: <code>01.01.2026 - 31.01.2026</code>",
             parse_mode="HTML"
         )
