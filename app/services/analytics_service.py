@@ -1,4 +1,4 @@
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Purchase, BananaTransaction, Broadcast, PostConfig
 from datetime import datetime, timedelta
@@ -81,46 +81,85 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         row.source: row.count for row in users_by_source_result
     }
     
-# ========== ЧЕСТНАЯ КОНВЕРСИЯ (КОГОРТЫ) ==========
+# ========== КОНВЕРСИЯ: ГИБРИДНАЯ (⚡️ Day 0 vs 🐢 Delayed) ==========
     
-    # Считаем, сколько пользователей, ПРИШЕДШИХ в этот период, сделали хотя бы 1 покупку.
-    # Мы смотрим таблицу User, а не Purchase, чтобы отсечь "старичков".
-    buyers_by_source_query = select(
+    # Мы смотрим на тех, кто сделал ПЕРВУЮ покупку в выбранном периоде.
+    # И делим их по дате регистрации.
+    hybrid_conversion_query = select(
         User.source,
-        func.count(User.id).label('buyers')
+        # ⚡️ Fresh: Дата регистрации ВХОДИТ в выбранный период
+        func.sum(
+            case(
+                (User.created_at >= date_from, 1),
+                else_=0
+            )
+        ).label('fresh_buyers'),
+        
+        # 🐢 Delayed: Дата регистрации МЕНЬШЕ начала периода (пришли раньше)
+        func.sum(
+            case(
+                (User.created_at < date_from, 1),
+                else_=0
+            )
+        ).label('delayed_buyers')
     ).where(
-        User.created_at >= date_from,
-        User.created_at <= date_to,
-        User.orders_count > 0  # Условие: стал клиентом (есть покупки)
+        User.first_purchase_at >= date_from,
+        User.first_purchase_at <= date_to
     ).group_by(User.source)
     
-    buyers_by_source_result = await session.execute(buyers_by_source_query)
-    buyers_by_source = {
-        row.source or 'organic': row.buyers for row in buyers_by_source_result
-    }
-    # ========== КОНВЕРСИЯ И СРЕДНИЙ ЧЕК ПО ИСТОЧНИКАМ ==========
+    hybrid_result = await session.execute(hybrid_conversion_query)
+    
+    # Собираем словарь: {'source': {'fresh': 5, 'delayed': 3}}
+    conversion_stats = {}
+    for row in hybrid_result:
+        src = row.source or 'organic'
+        conversion_stats[src] = {
+            'fresh': row.fresh_buyers or 0,
+            'delayed': row.delayed_buyers or 0
+        }
+
+    # ========== СБОРКА ИТОГОВОЙ СТАТИСТИКИ ПО ИСТОЧНИКАМ ==========
     
     source_stats = {}
-    for source in set(list(users_by_source.keys()) + list(revenue_by_source.keys())):
+    # Объединяем все источники из трех словарей (юзеры, деньги, конверсии)
+    all_sources = set(list(users_by_source.keys()) + list(revenue_by_source.keys()) + list(conversion_stats.keys()))
+    
+    for source in all_sources:
         total_users = users_by_source.get(source, 0)
-        buyers = buyers_by_source.get(source, 0)
-        revenue_info = revenue_by_source.get(source, {'revenue': 0, 'count': 0})
         
-        # Конверсия
-        conversion = (buyers / total_users * 100) if total_users > 0 else 0
+        # Данные по выручке (из предыдущего шага)
+        revenue_info = revenue_by_source.get(source, {'revenue': 0, 'count': 0, 'new_revenue': 0, 'old_revenue': 0})
         
-        # Средний чек
-        source_avg_check = (revenue_info['revenue'] / buyers) if buyers > 0 else 0
+        # Данные по конверсии (новые)
+        conv_data = conversion_stats.get(source, {'fresh': 0, 'delayed': 0})
+        fresh_buyers = conv_data['fresh']
+        delayed_buyers = conv_data['delayed']
+        
+        # 1. Честная конверсия (Только новички / Всего регистраций)
+        if total_users > 0:
+            conversion_percent = (fresh_buyers / total_users * 100)
+        else:
+            conversion_percent = 0.0
+            
+        # 2. Средний чек (Выручка / Количество транзакций)
+        # Лучше делить на транзакции, т.к. покупателей теперь сложно посчитать одной цифрой
+        if revenue_info['count'] > 0:
+            source_avg_check = revenue_info['revenue'] / revenue_info['count']
+        else:
+            source_avg_check = 0
 
-        
         source_stats[source] = {
             'total_users': total_users,
-            'buyers': buyers,
-            'conversion': conversion,
+            'conversion_percent': conversion_percent,  # % честной конверсии
+            'fresh_buyers': fresh_buyers,              # ⚡️ Числитель (Day 0)
+            'delayed_buyers': delayed_buyers,          # 🐢 Дожимы
+            
             'revenue': revenue_info['revenue'],
+            'new_revenue': revenue_info.get('new_revenue', 0), # Из детализации выручки
+            'old_revenue': revenue_info.get('old_revenue', 0), # Из детализации выручки
+            
             'transactions': revenue_info['count'],
-            'avg_check': source_avg_check  # ← ПЕРЕИМЕНОВАЛИ
-
+            'avg_check': source_avg_check
         }
     
     # ========== ОБОРОТ БАНАНОВ ==========
@@ -391,11 +430,31 @@ def format_report_message(data: dict, date_str: str) -> str:
             if stats['total_users'] > 0:
                 text += f"   • {source}: <b>{stats['total_users']}</b> чел\n"
         
-        # 2. Конверсия (Все источники)
-        text += "\n💰 <b>Конверсия в покупку:</b>\n"
-        sources_with_users = {s: stats for s, stats in source_stats.items() if stats['total_users'] > 0}
-        for source, stats in sorted(sources_with_users.items(), key=lambda x: x[1]['conversion'], reverse=True):
-            text += f"   • {source}: <b>{stats['conversion']:.1f}%</b> ({stats['buyers']}/{stats['total_users']})\n"
+        # 2. Конверсия (Гибридный режим)
+        text += "\n💰 <b>КОНВЕРСИЯ (Day 0) + ДОЖИМЫ:</b>\n"
+        
+        # Сортируем по количеству СВЕЖИХ покупателей (по эффективности рекламы)
+        # Можно сортировать по сумме (fresh + delayed), если важно общее число продаж
+        sorted_conv = sorted(source_stats.items(), key=lambda x: (x[1]['fresh_buyers'] + x[1]['delayed_buyers']), reverse=True)
+        
+        count_conv_shown = 0
+        for source, stats in sorted_conv:
+            fresh = stats['fresh_buyers']
+            delayed = stats['delayed_buyers']
+            regs = stats['total_users'] # Новые регистрации
+            percent = stats['conversion_percent']
+            
+            # Показываем, если есть хоть одна продажа (молния или черепаха)
+            if (fresh + delayed) > 0:
+                # Формат: • source: 5.0% (5/100) ⚡️ + 🐢 3 шт.
+                text += (
+                    f"   • {source}: <b>{percent:.1f}%</b> ({fresh}/{regs}) ⚡️ "
+                    f"+ 🐢 <b>{delayed} шт.</b>\n"
+                )
+                count_conv_shown += 1
+        
+        if count_conv_shown == 0:
+             text += "   <i>Нет первых покупок за этот период</i>\n"
         
         # 3. Выручка (Все источники)
         text += "\n💵 <b>Выручка по источникам:</b>\n"
