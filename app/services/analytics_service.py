@@ -64,21 +64,21 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         for row in source_revenue_result
     }
     
-    # ========== НОВЫЕ ПОЛЬЗОВАТЕЛИ ПО ИСТОЧНИКАМ ==========
+# ========== НОВЫЕ ПОЛЬЗОВАТЕЛИ ПО ИСТОЧНИКАМ ==========
     
     # Считаем сколько новых пользователей пришло с каждого источника
+    # Убрали фильтр User.source.isnot(None), чтобы считалась и органика
     users_by_source_query = select(
         User.source,
         func.count(User.id).label('count')
     ).where(
         User.created_at >= date_from,
-        User.created_at <= date_to,
-        User.source.isnot(None)
+        User.created_at <= date_to
     ).group_by(User.source).order_by(func.count(User.id).desc())
     
     users_by_source_result = await session.execute(users_by_source_query)
     users_by_source = {
-        row.source: row.count for row in users_by_source_result
+        row.source or 'organic': row.count for row in users_by_source_result
     }
     
 # ========== КОНВЕРСИЯ: ГИБРИДНАЯ (⚡️ Day 0 vs 🐢 Delayed) ==========
