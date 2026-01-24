@@ -63,8 +63,56 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         row.user_source or 'organic': {'revenue': row.revenue, 'count': row.count}
         for row in source_revenue_result
     }
+
+# ========== ВЫРУЧКА ПО ИСТОЧНИКАМ (ЕДИНЫЙ ЗАПРОС) ==========
     
-# ========== НОВЫЕ ПОЛЬЗОВАТЕЛИ ПО ИСТОЧНИКАМ ==========
+    # Подзапрос: кто сделал первую покупку В этом периоде
+    first_time_buyers_subquery = select(User.telegram_id).where(
+        User.first_purchase_at >= date_from,
+        User.first_purchase_at <= date_to
+    )
+    
+    # 🔥 ЕДИНЫЙ ЗАПРОС: всё считаем за раз
+    unified_revenue_query = select(
+        Purchase.user_source,
+        # Общая выручка
+        func.sum(Purchase.price).label('total_revenue'),
+        # Количество транзакций
+        func.count(Purchase.id).label('transactions'),
+        # New revenue
+        func.sum(
+            case(
+                (Purchase.user_id.in_(first_time_buyers_subquery), Purchase.price),
+                else_=0
+            )
+        ).label('new_revenue'),
+        # Old revenue
+        func.sum(
+            case(
+                (~Purchase.user_id.in_(first_time_buyers_subquery), Purchase.price),
+                else_=0
+            )
+        ).label('old_revenue')
+    ).where(
+        Purchase.status == 'succeeded',
+        Purchase.completed_at >= date_from,
+        Purchase.completed_at <= date_to
+    ).group_by(Purchase.user_source).order_by(func.sum(Purchase.price).desc())
+    
+    unified_result = await session.execute(unified_revenue_query)
+    
+    # Формируем словарь с ПОЛНЫМИ данными
+    revenue_by_source = {}
+    for row in unified_result:
+        source = row.user_source or 'organic'
+        revenue_by_source[source] = {
+            'revenue': row.total_revenue or 0,
+            'count': row.transactions or 0,
+            'new_revenue': row.new_revenue or 0,
+            'old_revenue': row.old_revenue or 0
+        }
+
+    # ========== НОВЫЕ ПОЛЬЗОВАТЕЛИ ПО ИСТОЧНИКАМ ==========
     
     # Считаем сколько новых пользователей пришло с каждого источника
     # Убрали фильтр User.source.isnot(None), чтобы считалась и органика
@@ -455,14 +503,20 @@ def format_report_message(data: dict, date_str: str) -> str:
         if count_conv_shown == 0:
              text += "   <i>Нет первых покупок за этот период</i>\n"
         
-        # 3. Выручка (Все источники)
+# 3. Выручка (Все источники) - ДВУХЭТАЖНЫЙ ФОРМАТ
         text += "\n💵 <b>Выручка по источникам:</b>\n"
         for source, stats in sorted(source_stats.items(), key=lambda x: x[1]['revenue'], reverse=True):
             if stats['revenue'] > 0:
-                avg = stats['avg_check']
-                text += f"   • {source}: <b>{stats['revenue']:.0f} ₽</b> (ср.чек: {avg:.0f} ₽)\n"
-        
-        text += "\n"
+                total_rev = stats['revenue']
+                avg_check = stats['avg_check']
+                new_rev = stats.get('new_revenue', 0)
+                old_rev = stats.get('old_revenue', 0)
+                
+                # Первая строка: источник, общая выручка, средний чек
+                text += f"   • {source}: <b>{total_rev:.0f} ₽</b> (ср: {avg_check:.0f} ₽)\n"
+                
+                # Вторая строка: детализация New + Old
+                text += f"     ↳ {new_rev:.0f} ₽ (New) + {old_rev:.0f} ₽ (Old)\n"
     
     # ОБОРОТ БАНАНОВ
     total_earned = bananas['earned_ref'] + bananas['earned_sub'] + bananas['earned_welcome']
@@ -542,19 +596,25 @@ async def get_payment_depth_stats(session: AsyncSession, date_from: datetime, da
     # Общая статистика
     global_stats = {
         'total': 0,
-        1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
-        '6-10': 0, '11-20': 0, '21+': 0,
+        1: {'count': 0, 'prices': {}},
+        2: {'count': 0, 'prices': {}},
+        3: {'count': 0, 'prices': {}},
+        4: {'count': 0, 'prices': {}},
+        5: {'count': 0, 'prices': {}},
+        '6-10': {'count': 0, 'prices': {}},
+        '11-20': {'count': 0, 'prices': {}},
+        '21+': {'count': 0, 'prices': {}},
         'record': {'user_id': None, 'n': 0}
     }
-    
-    # Статистика по источникам: {'source_name': {'revenue': 0, 1: 0, 2: 0 ...}}
+
+    # Статистика по источникам
     sources_stats = {}
 
     for row in rows:
         n = row.purchase_num
         user_id = row.user_id
         price = row.price or 0
-        source = row.user_source or "organic" # Если пусто, считаем органикой
+        source = row.user_source or "organic"
 
         # --- Обновляем общую статистику ---
         global_stats['total'] += 1
@@ -564,78 +624,114 @@ async def get_payment_depth_stats(session: AsyncSession, date_from: datetime, da
             global_stats['record'] = {'user_id': user_id, 'n': n}
 
         # Категория глубины
-        depth_key = None
         if n <= 5:
-            global_stats[n] += 1
             depth_key = n
         elif 6 <= n <= 10:
-            global_stats['6-10'] += 1
             depth_key = '6-10'
         elif 11 <= n <= 20:
-            global_stats['11-20'] += 1
             depth_key = '11-20'
         else:
-            global_stats['21+'] += 1
             depth_key = '21+'
+
+        # Обновляем счетчик и цены в глобальной статистике
+        global_stats[depth_key]['count'] += 1
+        global_stats[depth_key]['prices'][price] = global_stats[depth_key]['prices'].get(price, 0) + 1
 
         # --- Обновляем статистику источника ---
         if source not in sources_stats:
             sources_stats[source] = {
                 'revenue': 0,
-                1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
-                '6-10': 0, '11-20': 0, '21+': 0
+                1: {'count': 0, 'prices': {}},
+                2: {'count': 0, 'prices': {}},
+                3: {'count': 0, 'prices': {}},
+                4: {'count': 0, 'prices': {}},
+                5: {'count': 0, 'prices': {}},
+                '6-10': {'count': 0, 'prices': {}},
+                '11-20': {'count': 0, 'prices': {}},
+                '21+': {'count': 0, 'prices': {}}
             }
         
         sources_stats[source]['revenue'] += price
-        sources_stats[source][depth_key] += 1
+        sources_stats[source][depth_key]['count'] += 1
+        sources_stats[source][depth_key]['prices'][price] = sources_stats[source][depth_key]['prices'].get(price, 0) + 1
 
     return {
         'global': global_stats,
         'sources': sources_stats
     }
 
-
-def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> str:
+def format_price_breakdown(prices: dict) -> str:
     """
-    Формирует отчет: Общая воронка + Детализация по источникам (Strict ТЗ Version)
+    Форматирует разбивку по ценам: (15×79₽, 5×299₽)
+    
+    Args:
+        prices: словарь {цена: количество}
+    
+    Returns:
+        строка вида "(15×79₽, 5×299₽)" или пустая строка
+    """
+    if not prices:
+        return ""
+    
+    # Сортируем по частоте (от большего к меньшему)
+    sorted_prices = sorted(prices.items(), key=lambda x: x[1], reverse=True)
+    
+    # Форматируем: "15×79₽, 5×299₽"
+    parts = [f"{count}×{int(price)}₽" for price, count in sorted_prices]
+    
+    return f" ({', '.join(parts)})"
+
+def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> tuple[str, str]:
+    """
+    Формирует отчет: Общая воронка + Детализация по источникам
+    
+    Returns:
+        (text_general, text_sources) - две части отчета
     """
     g_stats = data['global']
     s_stats = data['sources']
     total = g_stats['total']
 
     if total == 0:
-        return f"📊 ГЛУБИНА ПЛАТЕЖЕЙ ({start_date} - {end_date})\n\nДанных за этот период нет."
+        return f"📊 ГЛУБИНА ПЛАТЕЖЕЙ ({start_date} - {end_date})\n\nДанных за этот период нет.", ""
 
     def calc_percent(val, total_val):
         return f"{(val / total_val * 100):.1f}%" if total_val > 0 else "0%"
 
-# === БЛОК 1: ОБЩАЯ СТАТИСТИКА ===
-    text = f"📊 <b>ГЛУБИНА ПЛАТЕЖЕЙ</b> (Период: {start_date} - {end_date})\n"
-    text += f"Всего транзакций: <b>{total}</b>\n\n"
+    # === БЛОК 1: ЗАГОЛОВОК ===
+    if start_date == end_date:
+        text_header = f"📊 <b>ГЛУБИНА ПЛАТЕЖЕЙ</b> (Период: {start_date})\n"
+    else:
+        text_header = f"📊 <b>ГЛУБИНА ПЛАТЕЖЕЙ</b> (Период: {start_date} - {end_date})\n"
+    text_header += f"Всего транзакций: <b>{total}</b>\n\n"
 
-    # Вывод общей статистики
-    text += f"1️⃣ 1-я покупка: <b>{g_stats[1]} шт. ({calc_percent(g_stats[1], total)})</b>\n"
-    text += f"2️⃣ 2-я покупка: <b>{g_stats[2]} шт. ({calc_percent(g_stats[2], total)})</b>\n"
-    text += f"3️⃣ 3-я покупка: <b>{g_stats[3]} шт. ({calc_percent(g_stats[3], total)})</b>\n"
-    text += f"4️⃣ 4-я покупка: <b>{g_stats[4]} шт. ({calc_percent(g_stats[4], total)})</b>\n"
-    text += f"5️⃣ 5-я покупка: <b>{g_stats[5]} шт. ({calc_percent(g_stats[5], total)})</b>\n"
+    # === БЛОК 2: ОБЩАЯ СТАТИСТИКА ===
+    text_global = ""
+    text_global += f"1️⃣ 1-я покупка: <b>{g_stats[1]['count']} шт.{format_price_breakdown(g_stats[1]['prices'])} ({calc_percent(g_stats[1]['count'], total)})</b>\n"
+    text_global += f"2️⃣ 2-я покупка: <b>{g_stats[2]['count']} шт.{format_price_breakdown(g_stats[2]['prices'])} ({calc_percent(g_stats[2]['count'], total)})</b>\n"
+    text_global += f"3️⃣ 3-я покупка: <b>{g_stats[3]['count']} шт.{format_price_breakdown(g_stats[3]['prices'])} ({calc_percent(g_stats[3]['count'], total)})</b>\n"
+    text_global += f"4️⃣ 4-я покупка: <b>{g_stats[4]['count']} шт.{format_price_breakdown(g_stats[4]['prices'])} ({calc_percent(g_stats[4]['count'], total)})</b>\n"
+    text_global += f"5️⃣ 5-я покупка: <b>{g_stats[5]['count']} шт.{format_price_breakdown(g_stats[5]['prices'])} ({calc_percent(g_stats[5]['count'], total)})</b>\n"
     
-    text += f"🔄 6-10 покупок: <b>{g_stats['6-10']} шт. ({calc_percent(g_stats['6-10'], total)})</b>\n"
-    text += "<b>— Постоянники.</b>\n"
+    text_global += f"🔄 6-10 покупок: <b>{g_stats['6-10']['count']} шт.{format_price_breakdown(g_stats['6-10']['prices'])} ({calc_percent(g_stats['6-10']['count'], total)})</b>\n"
+    text_global += "<b>— Постоянники.</b>\n"
     
-    text += f"🐳 11-20 покупок: <b>{g_stats['11-20']} шт. ({calc_percent(g_stats['11-20'], total)})</b>\n"
-    text += "<b>— Наши лояльные «Киты».</b>\n"
+    text_global += f"🐳 11-20 покупок: <b>{g_stats['11-20']['count']} шт.{format_price_breakdown(g_stats['11-20']['prices'])} ({calc_percent(g_stats['11-20']['count'], total)})</b>\n"
+    text_global += "<b>— Наши лояльные «Киты».</b>\n"
     
-    text += f"👑 21+ покупок: <b>{g_stats['21+']} шт. ({calc_percent(g_stats['21+'], total)})</b>\n"
-    text += "<b>— Супер-VIP / Коммерческий трафик.</b>\n\n"
+    text_global += f"👑 21+ покупок: <b>{g_stats['21+']['count']} шт.{format_price_breakdown(g_stats['21+']['prices'])} ({calc_percent(g_stats['21+']['count'], total)})</b>\n"
+    text_global += "<b>— Супер-VIP / Коммерческий трафик.</b>\n\n"
 
+    # === БЛОК 3: РЕКОРД ===
+    text_record = ""
     if g_stats['record']['user_id']:
-        text += f"🏆 Рекорд периода: Юзер `{g_stats['record']['user_id']}` совершил свою <b>{g_stats['record']['n']}-ю</b> покупку.\n"
+        text_record = f"🏆 Рекорд периода: Юзер `{g_stats['record']['user_id']}` совершил свою <b>{g_stats['record']['n']}-ю</b> покупку.\n"
 
-    # === БЛОК 2: КАЧЕСТВО ТРАФИКА (ПО ИСТОЧНИКАМ) ===
+    # === БЛОК 4: КАЧЕСТВО ТРАФИКА (ПО ИСТОЧНИКАМ) ===
+    text_sources_block = ""
     if s_stats:
-        text += "\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-        text += "🎯 <b>КАЧЕСТВО ТРАФИКА (Детализация по источникам)</b>\n\n"
+        text_sources_block += "\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
+        text_sources_block += "🎯 <b>КАЧЕСТВО ТРАФИКА (Детализация по источникам)</b>\n\n"
 
         # Сортируем источники по Выручке
         sorted_sources = sorted(s_stats.items(), key=lambda x: x[1]['revenue'], reverse=True)
@@ -643,36 +739,44 @@ def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> 
         count_shown = 0
         for source, stat in sorted_sources:
             # Скрываем источники без покупок в этом периоде
-            src_total = sum([stat[k] for k in [1,2,3,4,5,'6-10','11-20','21+']])
+            src_total = sum([stat[k]['count'] for k in [1,2,3,4,5,'6-10','11-20','21+']])
             if src_total == 0: continue
 
-            # Лимит вывода (чтобы не упереться в лимит сообщения Телеграм)
-            if count_shown >= 15:
-                text += f"<i>... и еще {len(sorted_sources) - 15} источников скрыто</i>"
+            # Лимит вывода (урезан до 10 для экономии места)
+            if count_shown >= 10:
+                text_sources_block += f"<i>... и еще {len(sorted_sources) - 10} источников скрыто</i>\n"
                 break
             
             count_shown += 1
 
             # Заголовок источника
-            text += f"📌 <b>Источник: {source}</b> (Выручка: {stat['revenue']:.0f} ₽)\n"
+            text_sources_block += f"📌 <b>Источник: {source}</b> (Выручка: {stat['revenue']:.0f} ₽)\n"
             
-            # Строки выводим только если там есть значения, чтобы отчет был чистым
-            if stat[1] > 0: text += f"   1️⃣ 1-я покупка: {stat[1]} шт.\n"
-            if stat[2] > 0: text += f"   2️⃣ 2-я покупка: {stat[2]} шт.\n"
-            if stat[3] > 0: text += f"   3️⃣ 3-я покупка: {stat[3]} шт.\n"
-            if stat[4] > 0: text += f"   4️⃣ 4-я покупка: {stat[4]} шт.\n"
-            if stat[5] > 0: text += f"   5️⃣ 5-я покупка: {stat[5]} шт.\n"
+            # Строки выводим только если там есть значения
+            if stat[1]['count'] > 0:
+                text_sources_block += f"   1️⃣ 1-я покупка: {stat[1]['count']} шт.{format_price_breakdown(stat[1]['prices'])}\n"
+            if stat[2]['count'] > 0:
+                text_sources_block += f"   2️⃣ 2-я покупка: {stat[2]['count']} шт.{format_price_breakdown(stat[2]['prices'])}\n"
+            if stat[3]['count'] > 0:
+                text_sources_block += f"   3️⃣ 3-я покупка: {stat[3]['count']} шт.{format_price_breakdown(stat[3]['prices'])}\n"
+            if stat[4]['count'] > 0:
+                text_sources_block += f"   4️⃣ 4-я покупка: {stat[4]['count']} шт.{format_price_breakdown(stat[4]['prices'])}\n"
+            if stat[5]['count'] > 0:
+                text_sources_block += f"   5️⃣ 5-я покупка: {stat[5]['count']} шт.{format_price_breakdown(stat[5]['prices'])}\n"
             
-            if stat['6-10'] > 0:
-                text += f"   🔄 6-10 покупок: {stat['6-10']} шт.\n"
+            if stat['6-10']['count'] > 0:
+                text_sources_block += f"   🔄 6-10 покупок: {stat['6-10']['count']} шт.{format_price_breakdown(stat['6-10']['prices'])}\n"
             
             # Жирным выделяем важное
-            if stat['11-20'] > 0:
-                text += f"   🐳 <b>11-20 покупок: {stat['11-20']} шт. — Наши лояльные «Киты»</b>\n"
+            if stat['11-20']['count'] > 0:
+                text_sources_block += f"   🐳 <b>11-20 покупок: {stat['11-20']['count']} шт.{format_price_breakdown(stat['11-20']['prices'])} — Наши лояльные «Киты»</b>\n"
             
-            if stat['21+'] > 0:
-                text += f"   👑 <b>21+ покупок: {stat['21+']} шт. — Супер-VIP</b>\n"
+            if stat['21+']['count'] > 0:
+                text_sources_block += f"   👑 <b>21+ покупок: {stat['21+']['count']} шт.{format_price_breakdown(stat['21+']['prices'])} — Супер-VIP</b>\n"
             
-            text += "\n"
+            text_sources_block += "\n"
 
-    return text
+    # Разделяем на 2 части
+    text_general = text_header + text_global + text_record
+    
+    return text_general, text_sources_block

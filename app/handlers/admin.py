@@ -1334,7 +1334,7 @@ async def cb_stats_navigate(callback: types.CallbackQuery):
     report = format_report_message(data, date_str_display)
     
     # Отправляем новым сообщением с кнопками навигации
-    await callback.message.answer(report)
+    await callback.message.answer(report, parse_mode="HTML")
     await callback.message.answer(
         "📊 Навигация по датам:",
         reply_markup=create_date_navigation_keyboard(target_date)
@@ -1570,74 +1570,7 @@ async def cb_payment_depth_menu(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-
-@router.callback_query(F.data.startswith("depth_"))
-async def cb_payment_depth_period(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка выбора периода для Глубины"""
-    period = callback.data.split("_")[1]
-    
-    # Кастомный период обрабатываем отдельно
-    if period == "custom":
-        await cb_depth_custom_start(callback, state)
-        return
-    
-    now = datetime.now()
-    
-    # Логика дат (аналогична обычной статистике)
-    if period == "today":
-        date_from = get_today_start_msk() # Используем твою функцию
-        date_to = datetime.now()
-        date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
-        
-    elif period == "yesterday":
-        yesterday = now - timedelta(days=1)
-        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
-        date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
-        
-    elif period == "week":
-        date_from = now - timedelta(days=7)
-        date_to = now
-        date_str = "7 дней"
-        
-    elif period == "month":
-        date_from = now - timedelta(days=30)
-        date_to = now
-        date_str = "30 дней"
-        
-    elif period == "alltime":
-        async with async_session() as session:
-            first_purch = await session.execute(
-                select(Purchase).order_by(Purchase.created_at).limit(1)
-            )
-            first = first_purch.scalar_one_or_none()
-            date_from = first.created_at if first else now - timedelta(days=365)
-        date_to = now
-        date_str = "всё время"
-    else:
-        await callback.answer("❌ Ошибка периода")
-        return
-
-    await callback.answer("⏳ Считаю воронку...")
-
-    # Сбор данных
-    async with async_session() as session:
-        # Вызываем функцию, которую добавили в analytics_service
-        data = await get_payment_depth_stats(session, date_from, date_to)
-
-    # Форматирование
-    text = format_payment_depth_message(data, date_str, "") # date_str используется как start, end пустой для пресетов
-    
-    # Кнопки
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🐳 Ещё период", callback_data="admin_payment_depth")
-    builder.button(text="🔙 В админку", callback_data="admin_menu")
-    builder.adjust(1)
-    
-    await callback.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-
-
-# --- Кастомный период для Глубины ---
+    # --- Кастомный период для Глубины ---
 
 async def cb_depth_custom_start(callback: types.CallbackQuery, state: FSMContext):
     """Запрос дат для Глубины"""
@@ -1656,6 +1589,90 @@ async def cb_depth_custom_start(callback: types.CallbackQuery, state: FSMContext
         parse_mode="HTML"
     )
 
+
+@router.callback_query(F.data.startswith("depth_"))
+async def cb_payment_depth_period(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка выбора периода для Глубины"""
+    period = callback.data.split("_")[1]
+    
+    # Кастомный период обрабатываем отдельно
+    if period == "custom":
+        await cb_depth_custom_start(callback, state)
+        return
+    
+    now = datetime.now()
+    
+    # Логика дат (аналогична обычной статистике)
+    if period == "today":
+        date_from = get_today_start_msk()
+        date_to = datetime.now()
+        date_label_start = datetime.now().strftime("%d.%m.%Y")
+        date_label_end = datetime.now().strftime("%d.%m.%Y")
+        
+    elif period == "yesterday":
+        yesterday = now - timedelta(days=1)
+        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        date_label_start = yesterday.strftime("%d.%m.%Y")
+        date_label_end = yesterday.strftime("%d.%m.%Y")
+        
+    elif period == "week":
+        date_from = now - timedelta(days=7)
+        date_to = now
+        date_label_start = date_from.strftime("%d.%m.%Y")
+        date_label_end = now.strftime("%d.%m.%Y")
+
+        
+    elif period == "month":
+        date_from = now - timedelta(days=30)
+        date_to = now
+        date_label_start = date_from.strftime("%d.%m.%Y")
+        date_label_end = now.strftime("%d.%m.%Y")
+        
+    elif period == "alltime":
+        async with async_session() as session:
+            first_purch = await session.execute(
+                select(Purchase).order_by(Purchase.created_at).limit(1)
+            )
+            first = first_purch.scalar_one_or_none()
+            date_from = first.created_at if first else now - timedelta(days=365)
+        date_to = now
+        date_label_start = date_from.strftime("%d.%m.%Y")
+        date_label_end = now.strftime("%d.%m.%Y")
+    else:
+        await callback.answer("❌ Ошибка периода")
+        return
+
+    await callback.answer("⏳ Считаю воронку...")
+
+    # Сбор данных
+    async with async_session() as session:
+        # Вызываем функцию, которую добавили в analytics_service
+        data = await get_payment_depth_stats(session, date_from, date_to)
+
+    # Форматирование
+    text_general, text_sources = format_payment_depth_message(data, date_label_start, date_label_end)
+
+    # Кнопки
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🐳 Ещё период", callback_data="admin_payment_depth")
+    builder.button(text="🔙 В админку", callback_data="admin_menu")
+    builder.adjust(1)
+
+    # Проверяем длину: если влезает в один - отправляем одним
+    full_text = text_general + text_sources
+    if len(full_text) <= 4000:  # Запас 96 символов на кнопки
+        await callback.message.answer(full_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    else:
+        # Разделяем на 2 сообщения
+        await callback.message.answer(text_general, parse_mode="HTML")
+        if text_sources:
+            await callback.message.answer(text_sources, reply_markup=builder.as_markup(), parse_mode="HTML")
+        else:
+            await callback.message.answer("✅ Готово!", reply_markup=builder.as_markup())
+
+
+
 @router.message(PaymentDepthState.waiting_for_dates, F.text)
 async def cb_depth_custom_process(message: types.Message, state: FSMContext):
     """Обработка ввода дат для Глубины"""
@@ -1672,7 +1689,7 @@ async def cb_depth_custom_process(message: types.Message, state: FSMContext):
             date_from = datetime.strptime(text, "%d.%m.%Y")
             date_to = date_from.replace(hour=23, minute=59, second=59)
             date_label_start = text
-            date_label_end = "(один день)"
+            date_label_end = text
 
         wait_msg = await message.answer("⏳ Считаю воронку...")
 
@@ -1680,11 +1697,18 @@ async def cb_depth_custom_process(message: types.Message, state: FSMContext):
             data = await get_payment_depth_stats(session, date_from, date_to)
         
         # Формируем отчет. Передаем даты для заголовка
-        report = format_payment_depth_message(data, date_label_start, date_label_end)
-        
+        text_general, text_sources = format_payment_depth_message(data, date_label_start, date_label_end)        
         await wait_msg.delete()
-        await message.answer(report, parse_mode="HTML")
-        await message.answer(report)
+
+        # Проверяем длину
+        full_text = text_general + text_sources
+        if len(full_text) <= 4000:
+            await message.answer(full_text, parse_mode="HTML")
+        else:
+            await message.answer(text_general, parse_mode="HTML")
+            if text_sources:
+                await message.answer(text_sources, parse_mode="HTML")
+
         await state.clear()
         
         # Кнопки возврата

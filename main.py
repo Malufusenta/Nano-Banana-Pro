@@ -42,7 +42,7 @@ async def send_daily_report(bot):
     # Отправляем всем админам
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(admin_id, message)
+            await bot.send_message(admin_id, message, parse_mode="HTML")
         except Exception as e:
             print(f"❌ Ошибка отправки отчёта админу {admin_id}: {e}")
 
