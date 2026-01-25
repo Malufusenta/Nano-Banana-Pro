@@ -1688,12 +1688,12 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     # ✅ НОВОЕ: Увеличиваем счётчик clicks_count для PostConfig
     # Находим PostConfig созданный в тот же день что и broadcast
     post_config_result = await session.execute(
-        select(PostConfig).where(
-            func.date(PostConfig.created_at) == func.date(broadcast.created_at)
-        )
+        select(PostConfig)
+        .where(func.date(PostConfig.created_at) == func.date(broadcast.created_at))
+        .limit(1)  # ← Берём только первую запись
     )
-    post_config = post_config_result.scalar_one_or_none()
-    
+    post_config = post_config_result.scalars().first()  # ← scalars().first() вместо scalar_one_or_none()
+        
     if post_config:
         post_config.clicks_count += 1
         await session.commit()
