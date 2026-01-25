@@ -206,7 +206,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         else:
             # ✨ ДОБАВЬ ЭТО В САМОЕ НАЧАЛО:
             # Обновляем ClientID если пришел новый
-            if yandex_client_id and user.yandex_client_id != yandex_client_id:
+            if user and yandex_client_id and user.yandex_client_id != yandex_client_id:
                 user.yandex_client_id = yandex_client_id
                 await session.commit()
 
@@ -232,7 +232,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
             # Если перешел по рекламе - обновляем источник!
             if source and source != "ref_friend":
-                if user.source != source:
+                if user and user.source != source:
                     user.source = source
                     await session.commit()
 
