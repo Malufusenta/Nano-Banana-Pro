@@ -131,12 +131,13 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 source=source if not is_post_link else f"post_{post_config.config_id if post_config else 'unknown'}"
             )
 
-        # ✨ ДОБАВЬ СЮДА (сразу после create_user):
-        if yandex_client_id:
-            user = await get_user(session, user_id)
-            if user:
-                user.yandex_client_id = yandex_client_id
-                await session.commit()
+        # ✨ ПОЛУЧАЕМ USER ОБРАТНО (ВСЕГДА!)
+        user = await get_user(session, user_id)
+        
+        # Сохраняем ClientID если есть
+        if yandex_client_id and user:
+            user.yandex_client_id = yandex_client_id
+            await session.commit()
 
             # Шлем лог админу
             await log_new_user(bot, message.from_user, deep_link=args)
