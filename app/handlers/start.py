@@ -134,15 +134,16 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         # ✨ ПОЛУЧАЕМ USER ОБРАТНО (ВСЕГДА!)
         user = await get_user(session, user_id)
         
+        # ✨ ЛОГГЕР СРАЗУ ПОСЛЕ ПОЛУЧЕНИЯ USER (для всех новых)
+        if user:
+            await log_new_user(bot, message.from_user, deep_link=args)
+        
         # Сохраняем ClientID если есть
         if yandex_client_id and user:
             user.yandex_client_id = yandex_client_id
             await session.commit()
 
-            # Шлем лог админу
-            await log_new_user(bot, message.from_user, deep_link=args)
-
-            # Начисляем бонусы
+        # Начисляем бонусы
             await admin_change_balance(session, user_id, welcome_bonus)
             await track_banana_transaction(session, user_id, welcome_bonus, "welcome", "Welcome bonus")
             await session.commit()
