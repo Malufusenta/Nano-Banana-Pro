@@ -11,6 +11,8 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     full_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    yandex_client_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     
     # Баланс
     generations_balance: Mapped[int] = mapped_column(Integer, default=0)

@@ -7,6 +7,8 @@ from app.services.admin_logger import log_payment
 from app.models import User
 from sqlalchemy import select
 from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
+from app.services.yandex_metrica import metrica_service
+
 
 # Настройки
 WEBHOOK_PORT = 5001
@@ -56,6 +58,7 @@ async def handle_yookassa(request):
                     # 3. Начисляем бананы
                     await add_paid_balance(session, user_id, gens_to_add)
                     await session.commit()
+
                     # ======================================================
                     # 📊 ВОТ ЭТОГО НЕ ХВАТАЛО В СТАРОЙ ВЕРСИИ
                     # ======================================================
@@ -77,10 +80,33 @@ async def handle_yookassa(request):
                         amount, 
                         tariff_name, 
                         new_bal, 
-                        stats=stats # <--- ПЕРЕДАЕМ СТАТИСТИКУ
+                        stats=stats
                     )
                     
-# Уведомление юзеру
+                    # ✨ ОТПРАВКА КОНВЕРСИИ В ЯНДЕКС.МЕТРИКУ
+                    if db_user and db_user.yandex_client_id:
+                        from app.services.yandex_metrica import metrica_service
+                        from app.models import Purchase
+                        from sqlalchemy import desc
+                        
+                        # Получаем ID последней покупки
+                        purchase_result = await session.execute(
+                            select(Purchase)
+                            .where(Purchase.user_id == user_id, Purchase.status == "succeeded")
+                            .order_by(desc(Purchase.id))
+                            .limit(1)
+                        )
+                        last_purchase = purchase_result.scalar_one_or_none()
+                        
+                        if last_purchase and metrica_service:
+                            await metrica_service.send_purchase_conversion(
+                                client_id=db_user.yandex_client_id,
+                                order_id=last_purchase.id,
+                                revenue=amount,
+                                tariff_name=tariff_name
+                            )
+                    
+                    # Уведомление юзеру
                     try:
                         await bot_instance.send_message(
                             user_id,

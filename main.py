@@ -7,6 +7,7 @@ from app.middlewares.album import AlbumMiddleware
 from app.middlewares.admin_spy import AdminSpyMiddleware
 from app.middlewares.antifraud import AntiFraudMiddleware
 from app.middlewares.block_middleware import BlockCheckMiddleware  # 👈 ДОБАВЬ
+from app.services.yandex_metrica import init_metrica_service
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -73,6 +74,13 @@ async def main():
     dp.include_router(payment.router)
     dp.include_router(menu_actions.router)
     dp.include_router(generation.router)
+
+    # Инициализация Яндекс.Метрики
+    init_metrica_service(
+        counter_id=config.YANDEX_METRICA_COUNTER_ID,
+        token=config.YANDEX_METRICA_TOKEN,
+        enabled=config.YANDEX_METRICA_ENABLED  # False для теста
+    )
 
     print("✅ Бот запущен!")
 

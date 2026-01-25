@@ -7,6 +7,7 @@ from app.services.admin_logger import log_new_user, log_referral
 from app.database import async_session
 from app.services.user_service import get_user, create_user, admin_change_balance
 from app import config
+import re
 from sqlalchemy import select
 from app.models import PostConfig
 from app.services.user_service import get_user, create_user, admin_change_balance, track_banana_transaction
@@ -48,6 +49,18 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     referrer_id = None
     source = None
     args = command.args # Хвостик ссылки
+
+    # ========== СОХРАНЕНИЕ YANDEX CLIENT ID ==========
+    yandex_client_id = None
+    if args and args.startswith("cid_"):
+        # Извлекаем ClientID из deep-link
+        potential_cid = args.replace("cid_", "")
+        # Валидация: только цифры, 15-20 символов
+        if re.match(r'^\d{15,20}$', potential_cid):
+            yandex_client_id = potential_cid
+            # Убираем cid_ из args чтобы не мешал дальнейшей логике
+            args = None
+# ==================================================
 
     # 🔥 НОВАЯ ЛОГИКА: Проверяем на post_XX
     is_post_link = False
@@ -104,6 +117,13 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 referrer_id=referrer_id,
                 source=source if not is_post_link else f"post_{post_config.config_id if post_config else 'unknown'}"
             )
+
+        # ✨ ДОБАВЬ СЮДА (сразу после create_user):
+        if yandex_client_id:
+            user = await get_user(session, user_id)
+            if user:
+                user.yandex_client_id = yandex_client_id
+                await session.commit()
 
             # Шлем лог админу
             await log_new_user(bot, message.from_user, deep_link=args)
@@ -169,8 +189,13 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 
             # 🆕 ДОБАВЬ ЭТУ СТРОКУ!
             return
-        # ЕСЛИ СТАРЫЙ ЮЗЕР
+# ЕСЛИ СТАРЫЙ ЮЗЕР
         else:
+            # ✨ ДОБАВЬ ЭТО В САМОЕ НАЧАЛО:
+            # Обновляем ClientID если пришел новый
+            if yandex_client_id and user.yandex_client_id != yandex_client_id:
+                user.yandex_client_id = yandex_client_id
+                await session.commit()
 
 # 🔥 ЕСЛИ POST LINK - ПРИМЕНЯЕМ НАСТРОЙКИ И УВЕДОМЛЯЕМ
             if is_post_link and post_config:

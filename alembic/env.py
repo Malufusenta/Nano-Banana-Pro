@@ -11,16 +11,32 @@ from app.database import Base
 # Важно импортировать сами модели, чтобы они зарегистрировались
 from app.models import User, Purchase, MessageHistory, GenerationTask 
 
+from app.models import User, Purchase, MessageHistory, GenerationTask 
+
 target_metadata = Base.metadata
+
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
 from alembic import context
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+# this is the Alembic Config object
 config = context.config
+
+# ✨ ПРАВИЛЬНЫЙ ПОРЯДОК - ВСЁ ПОСЛЕ config = context.config:
+from dotenv import load_dotenv
+env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=env_path)
+
+# Переопределяем URL из .env
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
+    print(f"🔗 Alembic использует БД: {database_url.split('@')[0]}@...")
+
+# Interpret the config file for Python logging.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
