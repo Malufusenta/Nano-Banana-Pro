@@ -50,17 +50,30 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     source = None
     args = command.args # Хвостик ссылки
 
-    # ========== СОХРАНЕНИЕ YANDEX CLIENT ID ==========
+# В функции cmd_start, в блоке где извлекается ClientID:
+
     yandex_client_id = None
-    if args and args.startswith("cid_"):
-        # Извлекаем ClientID из deep-link
-        potential_cid = args.replace("cid_", "")
-        # Валидация: только цифры, 15-20 символов
-        if re.match(r'^\d{15,20}$', potential_cid):
-            yandex_client_id = potential_cid
-            # Убираем cid_ из args чтобы не мешал дальнейшей логике
-            args = None
-# ==================================================
+    if args:
+        # Проверяем формат: source__cid_123456 или просто cid_123456
+        if '__cid_' in args:
+            # Разделяем: yandex_rsya_4__cid_123456
+            parts = args.split('__cid_')
+            source_part = parts[0]  # yandex_rsya_4
+            cid_part = parts[1] if len(parts) > 1 else None  # 123456
+            
+            # Проверяем что ClientID валидный
+            if cid_part and re.match(r'^\d{15,20}$', cid_part):
+                yandex_client_id = cid_part
+            
+            # Оставляем source для дальнейшей обработки
+            args = source_part
+            
+        elif args.startswith("cid_"):
+            # Старый формат: только ClientID без источника
+            potential_cid = args.replace("cid_", "")
+            if re.match(r'^\d{15,20}$', potential_cid):
+                yandex_client_id = potential_cid
+                args = None  # Очистка для дальнейшей логики
 
     # 🔥 НОВАЯ ЛОГИКА: Проверяем на post_XX
     is_post_link = False
