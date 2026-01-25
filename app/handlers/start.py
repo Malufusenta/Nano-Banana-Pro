@@ -119,9 +119,13 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     async with async_session() as session:
         user = await get_user(session, user_id)
         
+        is_new_user = False  # ← Флаг
+        
         # ЕСЛИ НОВЫЙ ЮЗЕР
         if not user:
-            # Передаем source в функцию создания
+           
+            
+            # Создаём
             await create_user(
                 session, 
                 telegram_id=user_id, 
@@ -130,20 +134,22 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 referrer_id=referrer_id,
                 source=source if not is_post_link else f"post_{post_config.config_id if post_config else 'unknown'}"
             )
+            
+            # Получаем обратно
+            user = await get_user(session, user_id)
 
-        # ✨ ПОЛУЧАЕМ USER ОБРАТНО (ВСЕГДА!)
-        user = await get_user(session, user_id)
         
-        # ✨ ЛОГГЕР СРАЗУ ПОСЛЕ ПОЛУЧЕНИЯ USER (для всех новых)
-        if user:
-            await log_new_user(bot, message.from_user, deep_link=args)
+            # Логгер только для новых
+            if user:
+                await log_new_user(bot, message.from_user, deep_link=args)
         
-        # Сохраняем ClientID если есть
-        if yandex_client_id and user:
-            user.yandex_client_id = yandex_client_id
-            await session.commit()
+            # Сохраняем ClientID если есть
+            if yandex_client_id and user:
+                user.yandex_client_id = yandex_client_id
+                await session.commit()
 
-        # Начисляем бонусы
+        # Начисляем бонусы ТОЛЬКО НОВЫМ
+       
             await admin_change_balance(session, user_id, welcome_bonus)
             await track_banana_transaction(session, user_id, welcome_bonus, "welcome", "Welcome bonus")
             await session.commit()
