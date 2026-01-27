@@ -427,3 +427,62 @@ async def log_security_ban(
         )
     except Exception as e:
         print(f"⚠️ Ошибка отправки лога цензуры: {e}")
+
+        # 🎬 ТИП 12: ГЕНЕРАЦИЯ ВИДЕО
+async def log_video_generation_start(bot: Bot, user_id: int, username: str, cost: int, task_id: str):
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    text = (
+        "🎬 <b>ВИДЕО: Генерация запущена</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: {u_name} (<code>{user_id}</code>)\n"
+        f"Стоимость: <b>{cost} 🍌</b>\n"
+        f"Статус: ⏳ Ожидание (3-10 мин)\n"
+        "#video_start"
+    )
+    asyncio.create_task(send_log(bot, text))
+
+async def log_video_generation_success(bot: Bot, user_id: int, username: str, video_file_id: str, task_id: str):
+    """
+    Логирует успешную генерацию видео (с самим видео)
+    """
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    caption = (
+        "✅ <b>ВИДЕО: Генерация завершена!</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: {u_name}\n"
+        f"Task ID: <code>{task_id}</code>\n"
+        f"Статус: 🎉 Успешно отправлено\n"
+        "#video_success"
+    )
+    
+    # Отправляем видео в канал
+    try:
+        await bot.send_video(
+            chat_id=config.ADMIN_CHANNEL_ID,
+            video=video_file_id,
+            caption=caption,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"⚠️ Ошибка отправки видео в лог: {e}")
+        # Fallback - отправляем текст
+        asyncio.create_task(send_log(bot, caption))
+
+async def log_video_generation_error(bot: Bot, user_id: int, username: str, task_id: str, error_msg: str):
+    """
+    Логирует ошибку генерации видео
+    """
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    text = (
+        "❌ <b>ВИДЕО: Ошибка генерации</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: {u_name} (<code>{user_id}</code>)\n"
+        f"Task ID: <code>{task_id}</code>\n"
+        f"Ошибка: <code>{error_msg[:200]}</code>\n"
+        f"💰 Возврат: 12 🍌\n"
+        "#video_error"
+    )
+    asyncio.create_task(send_log(bot, text))

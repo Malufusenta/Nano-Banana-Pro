@@ -150,3 +150,33 @@ class BananaTransaction(Base):
     transaction_type: Mapped[str] = mapped_column(String)  # "spent", "earned_ref", "earned_sub", "purchased", "welcome"
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+# 8. Таблица задач генерации видео
+class VideoGenerationTask(Base):
+    __tablename__ = "video_generation_tasks"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    
+    # Kling API
+    task_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)  # ID задачи от Kling
+    
+    # Исходник
+    source_image_file_id: Mapped[str] = mapped_column(String, nullable=False)  # file_id картинки из Telegram
+    source_image_url: Mapped[str | None] = mapped_column(String, nullable=True)  # URL картинки (если загружали)
+    
+    # Результат
+    status: Mapped[str] = mapped_column(String, default="waiting")  # waiting, success, fail
+    result_video_url: Mapped[str | None] = mapped_column(String, nullable=True)  # URL готового видео
+    result_video_file_id: Mapped[str | None] = mapped_column(String, nullable=True)  # file_id видео в Telegram (после отправки)
+    
+    # Ошибки
+    fail_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    fail_message: Mapped[str | None] = mapped_column(String, nullable=True)
+    
+    # Финансы
+    cost: Mapped[int] = mapped_column(Integer, default=10)  # 10 бананов
+    refunded: Mapped[bool] = mapped_column(Boolean, default=False)  # Возврат средств при ошибке
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

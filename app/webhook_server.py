@@ -4,6 +4,7 @@ from app.database import async_session
 from app.services.payment_service import mark_purchase_as_succeeded
 from app.services.user_service import add_paid_balance, get_user_balance, get_user_financial_stats
 from app.services.admin_logger import log_payment
+from app.kling_webhook import handle_kling_callback  # ← Добавь в начало
 from app.models import User
 from sqlalchemy import select
 from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
@@ -125,6 +126,8 @@ async def start_webhook_server(bot: Bot):
     app = web.Application()
     app['bot'] = bot
     app.router.add_post(WEBHOOK_PATH, handle_yookassa)
+    app.router.add_post("/kling_webhook", handle_kling_callback)  # ← Добавь эту строку
+
     
     runner = web.AppRunner(app)
     await runner.setup()

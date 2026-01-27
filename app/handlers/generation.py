@@ -155,6 +155,7 @@ class GenState(StatesGroup):
     selecting_ratio = State()
     waiting_for_edit_instruction = State()
     retry_waiting_photos = State()  # 👈 Новое состояние для ретрая
+    waiting_for_video_source = State()  # Ожидание фото для генерации видео
 
 
 # =====================================================================
@@ -284,9 +285,10 @@ def get_result_kb(db_message_id: int, is_pro: bool, cost: int):
     builder = InlineKeyboardBuilder()
     builder.button(text=f"🔄 Ещё раз ({cost}🍌)", callback_data=f"reroll_{db_message_id}")
     builder.button(text=f"🎨 Изменить ({cost}🍌)", callback_data=f"edit_{db_message_id}")
+    builder.button(text=f"🎬 Оживить фото (спишем {config.COST_VIDEO}🍌)", callback_data=f"animate_{db_message_id}")
     if is_pro:
         builder.button(text="📂 Скачать без сжатия", callback_data=f"download_{db_message_id}")
-    builder.adjust(2, 1) if is_pro else builder.adjust(2)
+    builder.adjust(2, 1, 1) if is_pro else builder.adjust(2, 1)  # ← ИЗМЕНИЛИ adjust
     return builder.as_markup()
 
 def get_categories_kb():
@@ -594,12 +596,19 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     # Обычный флоу (без изменений)
     if count == 1:
         if full_caption:
-        # 🚫 ДОБАВЬ ПРОВЕРКУ ЗДЕСЬ 👇
+            # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО (ПРОВЕРЯЕМ ПЕРВЫМ!)
+            video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate"]
+            if any(keyword in full_caption.lower() for keyword in video_keywords):
+                await send_video_offer_message(message, state, has_photo=True, photo_file_id=image_urls[0] if image_urls else None)
+                return
+            
+            # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
             if is_lazy_prompt(full_caption):
                 await send_lazy_prompt_message(message)
                 return
-        # 👆 КОНЕЦ ВСТАВКИ
+            
             await start_preflight_check(message, state, full_caption, image_urls)
+
         else:
             await state.update_data(pending_image_urls=image_urls)
             await state.set_state(GenState.waiting_for_caption)
@@ -615,6 +624,13 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
                 await send_lazy_prompt_message(message)
                 return
             await start_preflight_check(message, state, full_caption, image_urls)
+
+        # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО  
+        video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate"]
+        if full_caption and any(keyword in full_caption.lower() for keyword in video_keywords):
+            await send_video_offer_message(message, state, has_photo=True, photo_file_id=image_urls[0] if image_urls else None)
+            return
+
         else:
             await state.set_state(GenState.waiting_for_caption)
             await message.answer(
@@ -865,6 +881,12 @@ async def handle_free_text(message: types.Message, state: FSMContext):
     if message.text in IGNORED_TEXTS: 
         return
     
+    # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО
+    video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate"]
+    if any(keyword in message.text.lower() for keyword in video_keywords):
+        await send_video_offer_message(message, state, has_photo=False)
+        return
+    
         # 🛡️ ФИЛЬТР КОНТЕНТА (добавь ПЕРЕД lazy_prompt)
     if await check_content_filter(message, message.text):
         return
@@ -925,26 +947,28 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
 )
         return
     
-# Обычный флоу
     if message.caption:
+        # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО (ПРОВЕРЯЕМ ПЕРВЫМ!)
+        video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate"]
+        if any(keyword in message.caption.lower() for keyword in video_keywords):
+            await send_video_offer_message(message, state, has_photo=True, photo_file_id=message.photo[-1].file_id)
+            return
+        
+        # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
         lazy_check = is_lazy_prompt(message.caption)  
         if lazy_check:
             await send_lazy_prompt_message(message)
             return
-
-        # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ 👇
-        if force_pro_mode:
-            await state.update_data(force_pro_mode=True)
-        # 👆 ВСТАВЬ ЭТО
-
-        await start_preflight_check(message, state, message.caption, [url])
+    
     else:
         # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ 👇
         if force_pro_mode:
             await state.update_data(force_pro_mode=True)
-        # 👆 И ЭТО
         
-        await state.update_data(pending_image_urls=[url])
+        await state.update_data(
+            pending_image_urls=[url],
+            pending_photo_file_id=message.photo[-1].file_id  # ← СОХРАНЯЕМ FILE_ID
+        )
         await state.set_state(GenState.waiting_for_caption)
         await message.reply(
             "📸 **Фото принято!** Напиши, что с ним сделать.", 
@@ -1000,6 +1024,14 @@ async def handle_delayed_caption(message: types.Message, state: FSMContext):
 
         # 🛡️ ФИЛЬТР КОНТЕНТА (добавь ПЕРЕД lazy_prompt)
     if await check_content_filter(message, message.text):
+        return
+    
+    # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО
+    video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate"]
+    if any(keyword in user_prompt.lower() for keyword in video_keywords):
+        data = await state.get_data()
+        file_id = data.get("pending_photo_file_id")
+        await send_video_offer_message(message, state, has_photo=True, photo_file_id=file_id)
         return
     
         # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ 👇
@@ -1058,27 +1090,37 @@ async def cb_reroll(callback: types.CallbackQuery, bot: Bot):
         print(f"❌ Ошибка reroll: {e}")
         await callback.answer("❌ Ошибка перегенерации", show_alert=True)
 
-@router.callback_query(F.data.startswith("download_"))
-async def cb_download(callback: types.CallbackQuery, bot: Bot):
+@router.callback_query(F.data.startswith("download_video_"))
+async def cb_download_video(callback: types.CallbackQuery, bot: Bot):
+    print(f"🔥 DOWNLOAD VIDEO TRIGGERED: {callback.data}")  # ← ДОБАВЬ
+
+    """Скачивание видео без сжатия"""
     await callback.answer("📥 Скачиваю оригинал...")
     
     try:
-        db_id = int(callback.data.split("_")[1])
-        async with async_session() as session: 
-            history_item = await get_history_message_by_id(session, db_id)
+# Парсим: download_video_<task_id>
+        parts = callback.data.split("_")
+        task_id = "_".join(parts[2:])  # Всё после "download_video_"
         
-        if not history_item:
+        # Получаем задачу из БД
+        async with async_session() as session:
+            from app.services.video_service import get_task_by_id
+            task = await get_task_by_id(session, task_id)
+        
+        if not task:
             await callback.answer("❌ Запись не найдена.", show_alert=True)
             return
 
-        if history_item.image_url:
+        if task.result_video_url:
             try:
-                # 🛡️ ДОБАВИЛИ ТАЙМАУТ: Если качает дольше 30 сек — обрываем, чтобы не вешать сервер
-                timeout = aiohttp.ClientTimeout(total=30)
+                # 🛡️ ТАЙМАУТ: Если качает дольше 60 сек (видео тяжелее картинок)
                 
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    # ssl=False оставляем, это необходимость для этого провайдера
-                    async with session.get(history_item.image_url, ssl=False) as resp:
+                
+                timeout = aiohttp.ClientTimeout(total=300)  # 5 минут
+                connector = aiohttp.TCPConnector(ssl=False)
+                    
+                async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
+                    async with http_session.get(task.result_video_url) as resp:
                         if resp.status == 200:
                             # Читаем файл
                             data = await resp.read()
@@ -1087,38 +1129,40 @@ async def cb_download(callback: types.CallbackQuery, bot: Bot):
                             if len(data) == 0:
                                 raise Exception("Пустой файл")
 
-                            input_file = types.BufferedInputFile(data, filename=f"image_{db_id}.png")
+                            input_file = types.BufferedInputFile(data, filename=f"video_{task_id}.mp4")
                             
                             await bot.send_document(
                                 chat_id=callback.from_user.id, 
                                 document=input_file, 
-                                caption="💎 Исходное качество (Original)"
+                                caption="💎 Видео без сжатия (Оригинал)"
                             )
                         else:
-                            await callback.answer(f"Ошибка сервера IMG: {resp.status}", show_alert=True)
+                            await callback.answer(f"Ошибка сервера: {resp.status}", show_alert=True)
             except Exception as e:
-                print(f"Ошибка скачивания: {e}")
-                # Если не вышло скачать (таймаут или ошибка), пробуем отправить ссылку как текст/файл
+                print(f"Ошибка скачивания видео: {e}")
+                # Fallback: отправляем ссылку
                 try:
                     await bot.send_message(
                         chat_id=callback.from_user.id,
-                        text=f"💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{history_item.image_url}"
+                        text=f"💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{task.result_video_url}"
                     )
                 except:
                     await callback.answer("❌ Не удалось получить файл.", show_alert=True)
 
-        elif history_item.file_id:
-            await bot.send_photo(
+        elif task.result_video_file_id:
+            # Fallback: отправляем из Telegram (уже сжатое)
+            await bot.send_video(
                 chat_id=callback.from_user.id, 
-                photo=history_item.file_id, 
+                video=task.result_video_file_id, 
                 caption="📸 Копия из Telegram (Оригинал недоступен)"
             )
         else: 
             await callback.answer("❌ Файл потерян.", show_alert=True)
 
     except Exception as e:
-        print(f"❌ Ошибка download: {e}")
+        print(f"❌ Ошибка download_video: {e}")
         await callback.answer("❌ Ошибка загрузки", show_alert=True)
+
 
 @router.callback_query(F.data.startswith("edit_"))
 async def cb_edit_result(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
@@ -1716,3 +1760,232 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     )
     
     await callback.answer()
+
+    # =====================================================================
+# 🎬 VIDEO GENERATION HANDLERS
+# =====================================================================
+
+async def send_video_offer_message(message: types.Message, state: FSMContext, has_photo: bool = False, photo_file_id: str = None):
+    """
+    Отправляет предложение создать видео
+    """
+    builder = InlineKeyboardBuilder()
+
+    # Добавляем file_id в callback_data если есть
+    if has_photo and photo_file_id:
+        callback_data = f"video_start_{photo_file_id}"
+    else:
+        callback_data = "video_start"
+
+    builder.button(text=f"🎬 Оживить фото (спишем {config.COST_VIDEO}🍌)", callback_data="video_start")
+    builder.button(text="❌ Отмена", callback_data="video_cancel")
+    builder.adjust(1)
+    
+    text = (
+        "<b>О, ты хочешь видео! </b>🎬\n\n"
+        "Я использую лучшую нейросеть мира — <b>Kling AI</b>, поэтому качество будет киношное! 🔥\n\n"
+        "Сделаем видео? 👇"
+    )
+    
+    if has_photo and photo_file_id:
+        await state.update_data(pending_video_photo=photo_file_id)
+    
+    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+@router.callback_query(F.data.startswith("video_start"))
+async def cb_video_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало процесса создания видео"""
+    
+    # Отвечаем на callback СРАЗУ (иначе устареет)
+    try:
+        await callback.answer()
+    except:
+        pass  # Игнорируем если уже устарел
+    
+    # Достаем file_id из callback_data или из state
+    if callback.data.startswith("video_start_"):
+        photo_file_id = callback.data.replace("video_start_", "")
+    else:
+        data = await state.get_data()
+        photo_file_id = data.get("pending_video_photo")
+    
+    if photo_file_id:
+        # Фото уже есть - переходим к проверке баланса
+        await state.update_data(pending_video_photo=None)  # Очищаем
+        await process_video_generation(
+            callback.message, 
+            callback.from_user.id, 
+            photo_file_id, 
+            state, 
+            username=callback.from_user.username
+        )
+    else:
+        # Фото нет - просим прислать
+        await state.set_state(GenState.waiting_for_video_source)
+        
+        builder = InlineKeyboardBuilder()
+        builder.button(text="❌ Отмена", callback_data="video_cancel")
+        
+        await callback.message.answer(
+            "Супер! Чтобы начать магию, пришли мне фотографию, которую нужно оживить 📸",
+            reply_markup=builder.as_markup()
+        )
+    
+    await callback.answer()
+
+@router.callback_query(F.data == "video_cancel")
+async def cb_video_cancel(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена создания видео"""
+    await state.clear()
+    await state.update_data(pending_video_photo=None)
+    
+    await callback.message.answer(
+        "Понял, магию отложим 😊\n\n"
+        "Я готов создавать обычные изображения! Жду твой промт или фото с описанием 👇"
+    )
+    
+    await callback.answer()
+
+@router.message(GenState.waiting_for_video_source, F.photo)
+async def handle_video_source_photo(message: types.Message, state: FSMContext):
+    """Обработка фото для генерации видео"""
+    photo_file_id = message.photo[-1].file_id
+    await state.clear()  # ← ДОБАВЬ! Очищаем состояние
+
+    await process_video_generation(message, message.from_user.id, photo_file_id, state, username=message.from_user.username)
+@router.callback_query(F.data.startswith("animate_"))
+async def cb_animate_result(callback: types.CallbackQuery, state: FSMContext):
+    """Оживление существующего результата"""
+    await callback.answer()
+    
+    try:
+        db_id = int(callback.data.split("_")[1])
+        
+        async with async_session() as session:
+            history_item = await get_history_message_by_id(session, db_id)
+        
+        if not history_item or not history_item.file_id:
+            await callback.answer("❌ Исходник не найден.", show_alert=True)
+            return
+        
+        photo_file_id = history_item.file_id
+        await process_video_generation(callback.message, callback.from_user.id, photo_file_id, state, from_result_button=True, username=callback.from_user.username)        
+    except Exception as e:
+        print(f"❌ Ошибка animate: {e}")
+        await callback.answer("❌ Ошибка запуска генерации видео", show_alert=True)
+
+async def process_video_generation(message: types.Message, user_id: int, photo_file_id: str, state: FSMContext, from_result_button: bool = False, username: str = None):
+    """
+    Основная функция обработки генерации видео
+    """
+    from app.services.video_service import create_video_generation_task
+    from app.services.user_service import check_and_deduct_balance, get_user_balance
+    
+    COST = config.COST_VIDEO
+    
+    # Проверка баланса
+    async with async_session() as session:
+        has_balance = await check_and_deduct_balance(session, user_id, amount=COST)
+        balance_left = await get_user_balance(session, user_id)
+    
+    if not has_balance:
+        alert_text, alert_kb = await get_smart_alert_message(user_id, balance_left, COST)
+        await message.answer(alert_text, reply_markup=alert_kb.as_markup(), parse_mode="HTML")
+        return
+    
+# Списали деньги - запускаем генерацию
+    if from_result_button:
+        wait_text = (
+            "🚀 <b>Запускаю Kling AI!</b> (лучшую нейронку в мире)\n\n"
+            "Делаю для тебя киношное качество. Видео будет готово через 3-10 минут. Жди шедевр! 🔥"
+        )
+    else:
+        wait_text = "⏳ <b>Магия началась!</b> Видео будет готово через 3-10 минут"
+    
+    wait_msg = await message.answer(wait_text, parse_mode="HTML")
+    
+    # Webhook URL
+    webhook_url = "https://aaa123.site/kling_webhook"
+    
+    try:
+        # Создаем задачу
+        async with async_session() as session:
+            result = await create_video_generation_task(
+                session=session,
+                user_id=user_id,
+                image_file_id=photo_file_id,
+                bot=message.bot,
+                webhook_url=webhook_url
+            )
+        
+        if result["success"]:
+            print(f"✅ Video task created: {result['task_id']}")
+            
+            # 📊 Логируем запуск
+            from app.services.admin_logger import log_video_generation_start
+            await log_video_generation_start(
+                message.bot,
+                user_id,
+                username,
+                COST,
+                result['task_id']
+            )
+        else:
+            # Ошибка создания задачи - возвращаем деньги
+            async with async_session() as session:
+                from app.services.user_service import admin_change_balance
+                await admin_change_balance(session, user_id, COST)
+            
+            await wait_msg.edit_text(
+                f"😔 Упс, не удалось запустить генерацию.\n\n"
+                f"Причина: {result.get('error', 'Неизвестная ошибка')}\n\n"
+                f"💰 {COST} 🍌 возвращены на баланс",
+                parse_mode="HTML"
+            )
+    
+    except Exception as e:
+        print(f"❌ Ошибка process_video_generation: {e}")
+        
+        # Возвращаем деньги
+        async with async_session() as session:
+            from app.services.user_service import admin_change_balance
+            await admin_change_balance(session, user_id, COST)
+        
+        await wait_msg.edit_text(
+            f"😔 Произошла ошибка при запуске.\n\n"
+            f"💰 {COST} 🍌 возвращены на баланс",
+            parse_mode="HTML"
+        )
+    
+    finally:
+        await state.clear()
+
+@router.callback_query(F.data.startswith("reanimate_"))
+async def cb_reanimate_video(callback: types.CallbackQuery, state: FSMContext):
+    """Повторная генерация видео (ещё раз)"""
+    await callback.answer("🔄 Запускаю...", show_alert=False)
+    
+    try:
+        task_id = callback.data.split("_", 1)[1]
+        
+        # Получаем исходную задачу из БД
+        async with async_session() as session:
+            from app.services.video_service import get_task_by_id
+            original_task = await get_task_by_id(session, task_id)
+        
+        if not original_task or not original_task.source_image_file_id:
+            await callback.answer("❌ Исходник не найден.", show_alert=True)
+            return
+        
+        # Запускаем новую генерацию с тем же фото
+        await process_video_generation(
+            callback.message,
+            callback.from_user.id,
+            original_task.source_image_file_id,
+            state,
+            username=callback.from_user.username
+        )
+        
+    except Exception as e:
+        print(f"❌ Ошибка reanimate: {e}")
+        await callback.answer("❌ Ошибка запуска", show_alert=True)
+
