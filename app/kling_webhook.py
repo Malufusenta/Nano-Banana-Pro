@@ -113,27 +113,40 @@ async def handle_kling_callback(request):
                     fail_message=fail_msg
                 )
                 
-                # Возвращаем бананы
-                await refund_user_balance(session, user_id, 10)
+                # Возвращаем бананы (используем config!)
+                from app import config
+                await refund_user_balance(session, user_id, config.COST_VIDEO)
                 
                 # Уведомляем пользователя
                 bot_instance = request.app['bot']
                 try:
                     await bot_instance.send_message(
                         user_id,
-                        "😔 Упс, магия дала сбой.\n\n🍌 Бананы вернулись на баланс\n\nПопробуй другую картинку!",
+                        f"😔 <b>К сожалению, генерация видео не удалась</b>\n\n"
+                        f"Причина: сервис Kling временно перегружен\n\n"
+                        f"💰 {config.COST_VIDEO} 🍌 возвращены на баланс\n\n"
+                        f"Попробуйте еще раз через пару минут! 🔄",
                         parse_mode="HTML"
                     )
                 except Exception as e:
                     print(f"⚠️ Failed to notify user: {e}")
                 
                 print(f"✅ Refund processed for user {user_id}")
+                
                 # 📊 Логируем ошибку
                 from app.services.admin_logger import log_video_generation_error
+                from app.models import User
+                from sqlalchemy import select
+                
+                # Получаем username
+                user_result = await session.execute(select(User).where(User.telegram_id == user_id))
+                db_user = user_result.scalar_one_or_none()
+                username = db_user.username if db_user else None
+                
                 await log_video_generation_error(
                     bot_instance,
                     user_id,
-                    None,  # username
+                    username,
                     task_id,
                     fail_msg or fail_code or "Unknown error"
                 )

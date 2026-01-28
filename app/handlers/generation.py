@@ -1092,76 +1092,47 @@ async def cb_reroll(callback: types.CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data.startswith("download_video_"))
 async def cb_download_video(callback: types.CallbackQuery, bot: Bot):
-    print(f"🔥 DOWNLOAD VIDEO TRIGGERED: {callback.data}")  # ← ДОБАВЬ
-
-    """Скачивание видео без сжатия"""
     await callback.answer("📥 Скачиваю оригинал...")
     
-    try:
-# Парсим: download_video_<task_id>
-        parts = callback.data.split("_")
-        task_id = "_".join(parts[2:])  # Всё после "download_video_"
+    task_id = callback.data.replace("download_video_", "")
+    
+    async with async_session() as session:
+        from app.services.video_service import get_task_by_id
+        task = await get_task_by_id(session, task_id)
         
-        # Получаем задачу из БД
-        async with async_session() as session:
-            from app.services.video_service import get_task_by_id
-            task = await get_task_by_id(session, task_id)
-        
-        if not task:
-            await callback.answer("❌ Запись не найдена.", show_alert=True)
+        if not task or not task.result_video_url:
+            await callback.answer("❌ Видео не найдено", show_alert=True)
             return
-
-        if task.result_video_url:
-            try:
-                # 🛡️ ТАЙМАУТ: Если качает дольше 60 сек (видео тяжелее картинок)
-                
-                
-                timeout = aiohttp.ClientTimeout(total=300)  # 5 минут
-                connector = aiohttp.TCPConnector(ssl=False)
+        
+        # Скачиваем и отправляем как document
+        try:
+            timeout = aiohttp.ClientTimeout(total=300)
+            connector = aiohttp.TCPConnector(ssl=False)
+            
+            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
+                async with http_session.get(task.result_video_url) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"HTTP {resp.status}")
                     
-                async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
-                    async with http_session.get(task.result_video_url) as resp:
-                        if resp.status == 200:
-                            # Читаем файл
-                            data = await resp.read()
-                            
-                            # Проверка на пустой файл
-                            if len(data) == 0:
-                                raise Exception("Пустой файл")
-
-                            input_file = types.BufferedInputFile(data, filename=f"video_{task_id}.mp4")
-                            
-                            await bot.send_document(
-                                chat_id=callback.from_user.id, 
-                                document=input_file, 
-                                caption="💎 Видео без сжатия (Оригинал)"
-                            )
-                        else:
-                            await callback.answer(f"Ошибка сервера: {resp.status}", show_alert=True)
-            except Exception as e:
-                print(f"Ошибка скачивания видео: {e}")
-                # Fallback: отправляем ссылку
-                try:
-                    await bot.send_message(
-                        chat_id=callback.from_user.id,
-                        text=f"💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{task.result_video_url}"
-                    )
-                except:
-                    await callback.answer("❌ Не удалось получить файл.", show_alert=True)
-
-        elif task.result_video_file_id:
-            # Fallback: отправляем из Telegram (уже сжатое)
-            await bot.send_video(
-                chat_id=callback.from_user.id, 
-                video=task.result_video_file_id, 
-                caption="📸 Копия из Telegram (Оригинал недоступен)"
+                    video_bytes = await resp.read()
+            
+            # Отправляем как document (без сжатия)
+            video_file = types.BufferedInputFile(video_bytes, filename="video_original.mp4")
+            
+            await bot.send_document(
+                chat_id=callback.from_user.id,
+                document=video_file,
+                caption="📥 Оригинал без сжатия",
+                disable_content_type_detection=True,  # ← Добавь эту строку
+                request_timeout=300
             )
-        else: 
-            await callback.answer("❌ Файл потерян.", show_alert=True)
-
-    except Exception as e:
-        print(f"❌ Ошибка download_video: {e}")
-        await callback.answer("❌ Ошибка загрузки", show_alert=True)
+            
+        except Exception as e:
+            print(f"Ошибка скачивания видео: {e}")
+            await bot.send_message(
+                callback.from_user.id,
+                f"💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{task.result_video_url}"
+            )
 
 
 @router.callback_query(F.data.startswith("edit_"))
@@ -1770,19 +1741,19 @@ async def send_video_offer_message(message: types.Message, state: FSMContext, ha
     Отправляет предложение создать видео
     """
     builder = InlineKeyboardBuilder()
-
+    
     # Добавляем file_id в callback_data если есть
-    if has_photo and photo_file_id:
-        callback_data = f"video_start_{photo_file_id}"
-    else:
-        callback_data = "video_start"
-
-    builder.button(text=f"🎬 Оживить фото (спишем {config.COST_VIDEO}🍌)", callback_data="video_start")
+    # Всегда используем просто "video_start"
+    # file_id сохраним в state
+    callback_data = "video_start"
+    
+    builder.button(text=f"🎬 Оживить фото (спишем {config.COST_VIDEO}🍌)", callback_data=callback_data)
     builder.button(text="❌ Отмена", callback_data="video_cancel")
     builder.adjust(1)
     
     text = (
-        "<b>О, ты хочешь видео! </b>🎬\n\n"
+        "О, ты хочешь видео! 🎬\n\n"
+        f"Этот режим создает только картинки. А магия оживления стоит <b>{config.COST_VIDEO} 🍌</b>\n\n"
         "Я использую лучшую нейросеть мира — <b>Kling AI</b>, поэтому качество будет киношное! 🔥\n\n"
         "Сделаем видео? 👇"
     )
@@ -1801,16 +1772,13 @@ async def cb_video_start(callback: types.CallbackQuery, state: FSMContext):
     except:
         pass  # Игнорируем если уже устарел
     
-    # Достаем file_id из callback_data или из state
-    if callback.data.startswith("video_start_"):
-        photo_file_id = callback.data.replace("video_start_", "")
-    else:
-        data = await state.get_data()
-        photo_file_id = data.get("pending_video_photo")
+    # Достаем file_id из state
+    data = await state.get_data()
+    photo_file_id = data.get("pending_video_photo")
     
     if photo_file_id:
-        # Фото уже есть - переходим к проверке баланса
-        await state.update_data(pending_video_photo=None)  # Очищаем
+        # Фото уже есть - переходим к генерации
+        # НЕ очищаем state здесь! Пусть process_video_generation сам решает
         await process_video_generation(
             callback.message, 
             callback.from_user.id, 
@@ -1829,9 +1797,6 @@ async def cb_video_start(callback: types.CallbackQuery, state: FSMContext):
             "Супер! Чтобы начать магию, пришли мне фотографию, которую нужно оживить 📸",
             reply_markup=builder.as_markup()
         )
-    
-    await callback.answer()
-
 @router.callback_query(F.data == "video_cancel")
 async def cb_video_cancel(callback: types.CallbackQuery, state: FSMContext):
     """Отмена создания видео"""
@@ -1904,7 +1869,7 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
     wait_msg = await message.answer(wait_text, parse_mode="HTML")
     
     # Webhook URL
-    webhook_url = "https://aaa123.site/kling_webhook"
+    webhook_url = "https://aaa123.site/kling_webhook"  # ← Меняй с ngrok на прод
     
     try:
         # Создаем задачу
@@ -1936,8 +1901,8 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
                 await admin_change_balance(session, user_id, COST)
             
             await wait_msg.edit_text(
-                f"😔 Упс, не удалось запустить генерацию.\n\n"
-                f"Причина: {result.get('error', 'Неизвестная ошибка')}\n\n"
+                f"😔 <b>Упс, сервис генерации видео временно недоступен</b>\n\n"
+                f"Попробуйте через пару минут — обычно всё быстро восстанавливается! ⏰\n\n"
                 f"💰 {COST} 🍌 возвращены на баланс",
                 parse_mode="HTML"
             )
@@ -1957,7 +1922,9 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
         )
     
     finally:
-        await state.clear()
+        # Очищаем pending_video_photo только после успешного старта
+        if 'result' in locals() and result.get("success"):
+            await state.update_data(pending_video_photo=None)
 
 @router.callback_query(F.data.startswith("reanimate_"))
 async def cb_reanimate_video(callback: types.CallbackQuery, state: FSMContext):

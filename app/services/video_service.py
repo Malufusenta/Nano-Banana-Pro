@@ -346,8 +346,11 @@ async def download_and_send_video(
         # 3. Добавляем кнопку
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         from app import config
+
         builder = InlineKeyboardBuilder()
         builder.button(text=f"🔄 Ещё раз ({config.COST_VIDEO}🍌)", callback_data=f"reanimate_{task_id}")
+        builder.button(text="📂 Скачать без сжатия", callback_data=f"download_video_{task_id}")
+        builder.adjust(1)  # По одной кнопке в ряд
         
         # 4. Отправляем в Telegram (КАК РАБОТАЛО!)
         video_input = FSInputFile(temp_file)
