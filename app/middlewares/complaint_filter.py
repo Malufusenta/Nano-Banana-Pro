@@ -18,14 +18,14 @@ class ComplaintFilterMiddleware(BaseMiddleware):
         'фигня', 'хуйня',
         'переделывайте', 'переделывай', 'переделай',
         'это вообще не мы', 'это не мы', 'не мы',
-        'это не я', 'совсем не я', 'вообще не я'
+        'это не я', 'совсем не я', 'вообще не я',
     ]
     
     # Глаголы генерации (если есть - это промпт, не жалоба)
     GENERATION_VERBS = [
         'нарисуй', 'сделай', 'создай', 'сгенерируй', 
         'соедини', 'обьедини', 'объедини', 'смешай',
-        'draw', 'create', 'make', 'gen', 'mix', 'blend'
+        'draw', 'create', 'make', 'gen', 'mix', 'blend',
     ]
     
     async def __call__(
@@ -43,37 +43,37 @@ class ComplaintFilterMiddleware(BaseMiddleware):
         text = event.text.strip()
         text_lower = text.lower()
         
-        # ✅ Проверка ВСЕХ 3 условий
+        # ✅ Проверка условий (новая логика)
         
-        # 1. Длина ≤ 35 символов
-        if len(text) > 35:
+        # Проверяем наличие триггера жалобы
+        has_complaint = any(trigger in text_lower for trigger in self.COMPLAINT_TRIGGERS)
+        
+        # 1. Длинное сообщение БЕЗ триггера = это промпт
+        if len(text) > 35 and not has_complaint:
             return await handler(event, data)
         
-        # 2. НЕТ глаголов генерации
+        # 2. Есть глагол генерации = это промпт (даже если есть триггер)
         has_generation_verb = any(verb in text_lower for verb in self.GENERATION_VERBS)
         if has_generation_verb:
-            # Логируем пропуск
             logger.info(
                 f"[FILTER_SKIP] Text: '{text[:50]}' | "
                 f"Reason: Found generation verb | Passed to Generator"
             )
             return await handler(event, data)
         
-        # 3. ЕСТЬ триггер жалобы
-        has_complaint = any(trigger in text_lower for trigger in self.COMPLAINT_TRIGGERS)
-        if not has_complaint:
-            return await handler(event, data)
+        # 3. Есть триггер (независимо от длины) = жалоба
+        if has_complaint:
+            logger.info(
+                f"[COMPLAINT_FILTER] User: {event.from_user.id} | "
+                f"Text: '{text}' | Status: Intercepted (Generations stopped)"
+            )
+            
+            # Отправляем сообщение с инструкцией
+            from app.handlers.generation import send_complaint_instruction
+            await send_complaint_instruction(event)
+            
+            # НЕ вызываем handler - сообщение перехвачено
+            return None
         
-        # 🔥 ВСЕ 3 УСЛОВИЯ СОВПАЛИ - ПЕРЕХВАТЫВАЕМ!
-        
-        logger.info(
-            f"[COMPLAINT_FILTER] User: {event.from_user.id} | "
-            f"Text: '{text}' | Status: Intercepted (Generations stopped)"
-        )
-        
-        # Отправляем сообщение с инструкцией
-        from app.handlers.generation import send_complaint_instruction
-        await send_complaint_instruction(event)
-        
-        # НЕ вызываем handler - сообщение перехвачено
-        return None
+        # Ничего не сработало = пропускаем дальше
+        return await handler(event, data)
