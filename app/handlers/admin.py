@@ -235,6 +235,13 @@ async def process_broadcast_content(message: types.Message, state: FSMContext):
         media_type = "photo"
         media_file_ids.append(message.photo[-1].file_id)
         message_text = message.caption or ""
+
+
+    # 3. Видео (одно) ✅ НОВОЕ
+    elif message.video:
+        media_type = "video"
+        media_file_ids.append(message.video.file_id)
+        message_text = message.caption or ""
     
     # 3. Альбом (несколько фото)
     elif message.media_group_id:
@@ -454,6 +461,16 @@ async def show_broadcast_preview(message: types.Message, state: FSMContext):
             reply_markup=preview_kb.as_markup() if buttons_json else None,
             parse_mode="HTML"
         )
+
+    elif media_type == "video":  # ✅ НОВОЕ
+        file_ids = data.get('media_file_ids', [])
+        await message.answer_video(
+            video=file_ids[0],
+            caption=message_text,
+            reply_markup=preview_kb.as_markup() if buttons_json else None,
+            parse_mode="HTML"
+        )
+
     else:
         await message.answer(
             message_text,

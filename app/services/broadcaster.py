@@ -105,6 +105,25 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
                     reply_markup=keyboard,
                     parse_mode="HTML"
                 )
+
+            elif broadcast.media_type == "video":  # ✅ НОВОЕ
+                try: 
+                    file_ids = json.loads(broadcast.media_file_ids)
+                except json.JSONDecodeError:
+                    import ast
+                    file_ids = ast.literal_eval(broadcast.media_file_ids)
+                except:
+                    print(f"❌ Failed to parse media_file_ids: {broadcast.media_file_ids}")
+                    continue
+
+                await bot.send_video(
+                    chat_id=user_id,
+                    video=file_ids[0],
+                    caption=broadcast.message_text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+
             else:
                 await bot.send_message(
                     chat_id=user_id,
