@@ -408,7 +408,7 @@ async def log_security_ban(
     """
     from app import config
     
-    if not config.ADMIN_LOG_CHANNEL_ID:
+    if not config.ADMIN_CHANNEL_ID:
         return
     
     message_text = (
@@ -421,7 +421,7 @@ async def log_security_ban(
     
     try:
         await bot.send_message(
-            chat_id=config.ADMIN_LOG_CHANNEL_ID,
+            chat_id=config.ADMIN_CHANNEL_ID,
             text=message_text,
             parse_mode="HTML"
         )
@@ -484,5 +484,29 @@ async def log_video_generation_error(bot: Bot, user_id: int, username: str, task
         f"Ошибка: <code>{error_msg[:200]}</code>\n"
         f"💰 Возврат: 12 🍌\n"
         "#video_error"
+    )
+    asyncio.create_task(send_log(bot, text))
+
+    # 💸 ТИП 13: ВОЗВРАТ БАНАНОВ (REFUND)
+async def log_banana_refund(bot: Bot, user_id: int, username: str, amount: int, reason: str):
+    """
+    Логирует возврат бананов при ошибке генерации
+    
+    Args:
+        bot: Экземпляр бота
+        user_id: ID пользователя
+        username: Username пользователя
+        amount: Количество возвращенных бананов
+        reason: Причина возврата (короткое описание)
+    """
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    
+    text = (
+        "💸 <b>ВОЗВРАТ БАНАНОВ</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"Юзер: {u_name} (<code>{user_id}</code>)\n"
+        f"Сумма: <b>+{amount} 🍌</b>\n"
+        f"Причина: <code>{reason}</code>\n"
+        "#refund"
     )
     asyncio.create_task(send_log(bot, text))

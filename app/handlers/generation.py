@@ -1589,6 +1589,9 @@ async def process_generation(
 
             async with async_session() as session: 
                 await admin_change_balance(session, user_id, cost)
+            # Логируем возврат
+            from app.services.admin_logger import log_banana_refund
+            await log_banana_refund(bot, user_id, message.chat.username, cost, "API вернул NULL (Blocked?)")
             
             try: 
                 await wait_msg.edit_text(
@@ -1621,6 +1624,9 @@ async def process_generation(
         # 2. Возвращаем деньги
         async with async_session() as session: 
             await admin_change_balance(session, user_id, cost)
+        # Логируем возврат
+        from app.services.admin_logger import log_banana_refund
+        await log_banana_refund(bot, user_id, message.chat.username, cost, f"Ошибка генерации: {str(e)[:50]}")
         
 # 3. 🛡️ ПЕРЕВОДЧИК ОШИБОК ДЛЯ ПОЛЬЗОВАТЕЛЯ
         err_msg = str(e).lower()
@@ -1899,6 +1905,9 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
             async with async_session() as session:
                 from app.services.user_service import admin_change_balance
                 await admin_change_balance(session, user_id, COST)
+                # Логируем возврат
+            from app.services.admin_logger import log_banana_refund
+            await log_banana_refund(message.bot, user_id, username, COST, "Сервис генерации видео недоступен")
             
             await wait_msg.edit_text(
                 f"😔 <b>Упс, сервис генерации видео временно недоступен</b>\n\n"
@@ -1914,6 +1923,9 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
         async with async_session() as session:
             from app.services.user_service import admin_change_balance
             await admin_change_balance(session, user_id, COST)
+        # Логируем возврат
+        from app.services.admin_logger import log_banana_refund
+        await log_banana_refund(message.bot, user_id, username, COST, f"Ошибка запуска видео: {str(e)[:50]}")
         
         await wait_msg.edit_text(
             f"😔 Произошла ошибка при запуске.\n\n"
