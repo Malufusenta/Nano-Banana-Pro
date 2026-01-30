@@ -1134,6 +1134,68 @@ async def cb_download_video(callback: types.CallbackQuery, bot: Bot):
                 f"💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{task.result_video_url}"
             )
 
+@router.callback_query(F.data.startswith("download_"))
+async def cb_download(callback: types.CallbackQuery, bot: Bot):
+    await callback.answer("📥 Скачиваю оригинал...")
+    
+    try:
+        db_id = int(callback.data.split("_")[1])
+        async with async_session() as session: 
+            history_item = await get_history_message_by_id(session, db_id)
+        
+        if not history_item:
+            await callback.answer("❌ Запись не найдена.", show_alert=True)
+            return
+
+        if history_item.image_url:
+            try:
+                # Таймаут 30 секунд
+                timeout = aiohttp.ClientTimeout(total=30)
+                
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    # ssl=False для совместимости с провайдером
+                    async with session.get(history_item.image_url, ssl=False) as resp:
+                        if resp.status == 200:
+                            # Читаем файл
+                            data = await resp.read()
+                            
+                            # Проверка на пустой файл
+                            if len(data) == 0:
+                                raise Exception("Пустой файл")
+
+                            input_file = types.BufferedInputFile(data, filename=f"image_{db_id}.png")
+                            
+                            await bot.send_document(
+                                chat_id=callback.from_user.id, 
+                                document=input_file, 
+                                caption="💎 Исходное качество (Original)"
+                            )
+                        else:
+                            await callback.answer(f"Ошибка сервера IMG: {resp.status}", show_alert=True)
+            except Exception as e:
+                print(f"Ошибка скачивания: {e}")
+                # Fallback: отправляем ссылку
+                try:
+                    await bot.send_message(
+                        chat_id=callback.from_user.id,
+                        text=f"💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{history_item.image_url}"
+                    )
+                except:
+                    await callback.answer("❌ Не удалось получить файл.", show_alert=True)
+
+        elif history_item.file_id:
+            await bot.send_photo(
+                chat_id=callback.from_user.id, 
+                photo=history_item.file_id, 
+                caption="📸 Копия из Telegram (Оригинал недоступен)"
+            )
+        else: 
+            await callback.answer("❌ Файл потерян.", show_alert=True)
+
+    except Exception as e:
+        print(f"❌ Ошибка download: {e}")
+        await callback.answer("❌ Ошибка загрузки", show_alert=True)
+
 
 @router.callback_query(F.data.startswith("edit_"))
 async def cb_edit_result(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
