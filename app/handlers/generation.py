@@ -959,17 +959,22 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
         if lazy_check:
             await send_lazy_prompt_message(message)
             return
+        
+        # 🔥 ВОТ ЧТО БЫЛО ПОТЕРЯНО - ЗАПУСК ГЕНЕРАЦИИ!
+        await start_preflight_check(message, state, message.caption, [url])
+        return  # ← ВАЖНО: выходим после запуска
     
     else:
         # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ 👇
         if force_pro_mode:
             await state.update_data(force_pro_mode=True)
-        
+
         await state.update_data(
             pending_image_urls=[url],
             pending_photo_file_id=message.photo[-1].file_id  # ← СОХРАНЯЕМ FILE_ID
         )
         await state.set_state(GenState.waiting_for_caption)
+
         await message.reply(
             "📸 **Фото принято!** Напиши, что с ним сделать.", 
             parse_mode="Markdown"
