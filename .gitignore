@@ -5,4 +5,4 @@ __pycache__/
 .DS_Store
 *.db
 *.sqlite
-app/config.py
+app/config.py*.log
