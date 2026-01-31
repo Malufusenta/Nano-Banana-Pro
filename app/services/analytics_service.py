@@ -42,9 +42,30 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     ) or 0
     
     repeat_purchases = total_transactions - first_purchases
+
+        # Выручка от Telegram Stars (отдельно)
+    stars_revenue_query = select(
+        func.sum(Purchase.price).label('stars_revenue'),
+        func.count(Purchase.id).label('stars_count')
+    ).where(
+        Purchase.status == 'succeeded',
+        Purchase.created_at >= date_from,
+        Purchase.created_at <= date_to,
+        Purchase.tariff_name == 'Telegram Stars'
+    )
+    stars_result = await session.execute(stars_revenue_query)
+    stars_data = stars_result.first()
+
+    stars_revenue = stars_data.stars_revenue or 0
+    stars_count = stars_data.stars_count or 0
+
+    # Выручка в рублях (без звёзд)
+    rub_revenue = total_revenue - stars_revenue
     
     # Средний чек
-    avg_check = round(total_revenue / total_transactions, 2) if total_transactions > 0 else 0
+    # Средний чек (ТОЛЬКО по рублям, без учёта звёзд)
+    rub_transactions = total_transactions - stars_count
+    avg_check = round(rub_revenue / rub_transactions, 2) if rub_transactions > 0 else 0
     
     # ========== ВЫРУЧКА ПО ИСТОЧНИКАМ ==========
     
@@ -407,6 +428,9 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     return {
         'revenue': {
             'total': total_revenue,
+            'rub_revenue': rub_revenue,           # 👈 НОВОЕ
+            'stars_revenue': stars_revenue,       # 👈 НОВОЕ
+            'stars_count': stars_count,           # 👈 НОВОЕ
             'transactions': total_transactions,
             'first_purchases': first_purchases,
             'repeat_purchases': repeat_purchases,
@@ -460,7 +484,12 @@ def format_report_message(data: dict, date_str: str) -> str:
     
     # ДЕНЬГИ
     text += "💰 ДЕНЬГИ\n"
-    text += f"Выручка: {rev['total']:.0f} ₽\n"
+    text += f"Выручка (рубли): {rev['rub_revenue']:.0f} ₽\n"
+
+    # Показываем звёзды только если они есть
+    if rev['stars_count'] > 0:
+        text += f"Выручка (звёзды): {rev['stars_revenue']:.0f} ⭐️ ({rev['stars_count']} транз.)\n"
+
     text += f"Транзакций всего: {rev['transactions']}\n"
     text += f"— Первых: {rev['first_purchases']}\n"
     text += f"— Повторных: {rev['repeat_purchases']}\n"
