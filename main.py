@@ -17,7 +17,9 @@ from app.database import async_session
 
 # 👇 ИМПОРТИРУЕМ НАШ НОВЫЙ СЕРВЕР
 from app.webhook_server import start_webhook_server 
+import logging
 
+logger = logging.getLogger(__name__)
 from app import config
 
 # Настройка логирования
@@ -27,8 +29,31 @@ logging.basicConfig(
     handlers=[
         logging.FileHandler(f'bot_{datetime.now().strftime("%Y%m%d")}.log'),
         logging.StreamHandler()  # Вывод в консоль (screen)
-    ]
+    ],
+    force=True  # 👈 ВАЖНО! Переопределяет предыдущий basicConfig
 )
+
+import sys
+
+# Перенаправляем print в логгер
+class PrintLogger:
+    def __init__(self, logger):
+        self.logger = logger
+        self.terminal = sys.stdout
+        
+    def write(self, message):
+        if message.strip():  # Игнорируем пустые строки
+            self.logger.info(message.strip())
+        self.terminal.write(message)
+        
+    def flush(self):
+        self.terminal.flush()
+
+sys.stdout = PrintLogger(logger)
+
+# Включаем подробные логи aiogram
+logging.getLogger('aiogram').setLevel(logging.INFO)
+logging.getLogger('aiogram.event').setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +85,6 @@ async def send_daily_report(bot):
             logger.error(f"❌ Ошибка отправки отчёта админу {admin_id}: {e}", exc_info=True)
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

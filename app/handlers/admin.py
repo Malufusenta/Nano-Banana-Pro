@@ -21,6 +21,8 @@ from app.services.analytics_service import (
 )
 from datetime import datetime, timedelta, timezone
 from aiogram.fsm.state import State, StatesGroup
+import logging
+logger = logging.getLogger(__name__)
 
 class StatsState(StatesGroup):
     waiting_for_custom_dates = State()
@@ -90,7 +92,7 @@ async def send_admin_menu(target: types.Message):
 
 async def log_admin_action(admin_id: int, action: str, target_id: int = None):
     """Логирует действия админа для аудита"""
-    print(f"👑 ADMIN LOG: Admin {admin_id} | Action: {action} | Target: {target_id}")
+    logger.info(f"👑 ADMIN LOG: Admin {admin_id} | Action: {action} | Target: {target_id}")
     # Можно также сохранять в БД или отправлять в канал логов
 
 
