@@ -147,12 +147,12 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
         "➖➖➖➖➖➖➖\n"
         f"Клиент: {username} (<a href='tg://user?id={user.id}'>ID</a>)\n"
-        f"Сумма: <b>{amount}₽</b>\n"
+        f"Сумма: <b>{amount} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
         f"Товар: {item_name}\n"
         f"----------------\n"
         f"{status_line}\n"
         f"Источник: <code>{source}</code>\n"
-        f"Всего принес денег: <b>{total}₽</b>\n"
+        f"Всего принес денег: <b>{total} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
         "#payment"
     )
     asyncio.create_task(send_log(bot, text))
