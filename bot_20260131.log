@@ -1,0 +1,43 @@
+2026-01-31 12:36:29,955 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-01-31 12:36:29,955 - __main__ - INFO - ✅ Бот запущен!
+2026-01-31 12:36:29,955 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-01-31 12:36:29,956 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-01-31 12:36:29,956 - apscheduler.scheduler - INFO - Scheduler started
+2026-01-31 12:36:29,956 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-01-31 12:36:29,956 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-01-31 12:36:29,956 - aiogram.dispatcher - INFO - Start polling
+2026-01-31 12:36:30,659 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 12:36:56,717 - aiogram.event - INFO - Update id=171763395 is handled. Duration 718 ms by bot id=8311431448
+2026-01-31 12:36:58,588 - aiogram.event - INFO - Update id=171763396 is handled. Duration 497 ms by bot id=8311431448
+2026-01-31 12:37:23,688 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-31 12:37:23,690 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 12:37:23,690 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-31 12:37:34,375 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-01-31 12:37:34,375 - __main__ - INFO - ✅ Бот запущен!
+2026-01-31 12:37:34,375 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-01-31 12:37:34,376 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-01-31 12:37:34,376 - apscheduler.scheduler - INFO - Scheduler started
+2026-01-31 12:37:34,376 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-01-31 12:37:34,376 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-01-31 12:37:34,376 - aiogram.dispatcher - INFO - Start polling
+2026-01-31 12:37:35,059 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 12:37:50,959 - aiogram.event - INFO - Update id=171763397 is handled. Duration 710 ms by bot id=8311431448
+2026-01-31 12:37:53,306 - aiogram.event - INFO - Update id=171763398 is handled. Duration 537 ms by bot id=8311431448
+2026-01-31 12:38:18,789 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-31 12:38:18,790 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 12:38:18,790 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-31 12:38:24,617 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-01-31 12:38:24,617 - __main__ - INFO - ✅ Бот запущен!
+2026-01-31 12:38:24,618 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-01-31 12:38:24,618 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-01-31 12:38:24,618 - apscheduler.scheduler - INFO - Scheduler started
+2026-01-31 12:38:24,618 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-01-31 12:38:24,618 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-01-31 12:38:24,618 - aiogram.dispatcher - INFO - Start polling
+2026-01-31 12:38:25,327 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 12:38:34,696 - aiogram.event - INFO - Update id=171763399 is handled. Duration 688 ms by bot id=8311431448
+2026-01-31 12:38:36,101 - aiogram.event - INFO - Update id=171763400 is handled. Duration 277 ms by bot id=8311431448
+2026-01-31 12:38:53,248 - aiogram.event - INFO - Update id=171763401 is handled. Duration 624 ms by bot id=8311431448
+2026-01-31 12:39:38,961 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-31 12:39:38,963 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 12:39:38,963 - aiogram.dispatcher - INFO - Polling stopped

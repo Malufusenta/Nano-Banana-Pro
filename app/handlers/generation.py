@@ -11,7 +11,7 @@ from aiogram import html
 import aiohttp
 from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban,log_content_filter
 from app.models import User, Broadcast, PostConfig  # ← добавь PostConfig
-from app.middlewares.content_filter import ContentFilter, FilterMode, get_filter_message
+from app.middlewares.content_filter import ContentFilter, FilterMode, get_filter_message, log_nsfw_to_chat
 
 from app.database import async_session
 from app.services.user_service import (
@@ -836,26 +836,25 @@ async def check_content_filter(message: types.Message, text: str) -> bool:
         True - если сообщение заблокировано (нужно остановить обработку)
         False - если всё ок (продолжаем генерацию)
     """
-    should_block, trigger_type, matched_word = content_filter.check(text)
+    should_block, matched_word = content_filter.check(text)
     
-    # Если триггер НЕ сработал - пропускаем
-    if trigger_type is None:
+    # Если NSFW НЕ найдено - пропускаем
+    if matched_word is None:
         return False
     
-    # Логируем в админский канал
-    await log_content_filter(
-        message.bot,
-        message.from_user.id,
-        message.from_user.username,
-        text,
-        trigger_type.value,
-        matched_word,
-        was_blocked=should_block
+    # Логируем NSFW в админ-чат (FILTER_LOG_CHANNEL_ID)
+    await log_nsfw_to_chat(
+        bot=message.bot,
+        text=text,
+        matched_word=matched_word,
+        user_id=message.from_user.id,
+        username=message.from_user.username or "нет",
+        first_name=message.from_user.first_name or "Unknown"
     )
     
     # Если режим активный - блокируем и отправляем сообщение
     if should_block:
-        filter_msg = get_filter_message(trigger_type)
+        filter_msg = get_filter_message()
         
         # Создаем кнопку поддержки
         from aiogram.utils.keyboard import InlineKeyboardBuilder
