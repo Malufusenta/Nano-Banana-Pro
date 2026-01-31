@@ -70,3 +70,25 @@
 2026-01-31 13:01:34,444 - aiogram.dispatcher - WARNING - Received SIGINT signal
 2026-01-31 13:01:34,447 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
 2026-01-31 13:01:34,447 - aiogram.dispatcher - INFO - Polling stopped
+2026-01-31 14:39:38,724 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-01-31 14:39:38,724 - __main__ - INFO - ✅ Бот запущен!
+2026-01-31 14:39:38,725 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-01-31 14:39:38,725 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-01-31 14:39:38,725 - apscheduler.scheduler - INFO - Scheduler started
+2026-01-31 14:39:38,725 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-01-31 14:39:38,726 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-01-31 14:39:38,726 - aiogram.dispatcher - INFO - Start polling
+2026-01-31 14:39:39,488 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 14:39:39,713 - aiogram.event - INFO - Update id=171763407 is not handled. Duration 6 ms by bot id=8311431448
+2026-01-31 14:39:39,713 - aiogram.event - INFO - Update id=171763408 is not handled. Duration 5 ms by bot id=8311431448
+2026-01-31 14:39:47,687 - aiogram.event - INFO - Update id=171763409 is handled. Duration 691 ms by bot id=8311431448
+2026-01-31 14:39:50,888 - app.middlewares.complaint_filter - INFO - [FILTER_SKIP] Text: 'СДелай кота' | Reason: Found generation verb | Passed to Generator
+2026-01-31 14:39:51,175 - aiogram.event - INFO - Update id=171763410 is handled. Duration 293 ms by bot id=8311431448
+2026-01-31 14:39:54,394 - aiogram.event - INFO - Update id=171763411 is handled. Duration 543 ms by bot id=8311431448
+2026-01-31 14:39:57,708 - aiogram.event - INFO - Update id=171763412 is handled. Duration 452 ms by bot id=8311431448
+2026-01-31 14:40:00,156 - aiogram.event - INFO - Update id=171763413 is handled. Duration 473 ms by bot id=8311431448
+2026-01-31 14:40:02,000 - aiogram.event - INFO - Update id=171763414 is handled. Duration 445 ms by bot id=8311431448
+2026-01-31 14:40:03,487 - aiogram.event - INFO - Update id=171763415 is handled. Duration 431 ms by bot id=8311431448
+2026-01-31 14:40:25,060 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-01-31 14:40:25,062 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-01-31 14:40:25,062 - aiogram.dispatcher - INFO - Polling stopped

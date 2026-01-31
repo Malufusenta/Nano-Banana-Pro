@@ -253,11 +253,11 @@ def get_preflight_kb(model_type: str, ratio: str, quality: str):
     if model_type == "pro":
         # Логика подписи кнопки
         if quality == "4k":
-            qual_btn = "👑 Качество: 4K"
+            qual_btn = "👑 Качество: 4K (до 10 мин)"
         elif quality == "2k":
-            qual_btn = "🌟 Качество: 2K"
+            qual_btn = "🌟 Качество: 2K (1-5 мин)"
         else:
-            qual_btn = "⚡️ Качество: HD"
+            qual_btn = "⚡️ Качество: HD (быстро)"
             
         builder.button(text=qual_btn, callback_data="pf_toggle_quality")
     
