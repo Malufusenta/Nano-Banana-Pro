@@ -6,3 +6,4 @@ __pycache__/
 *.db
 *.sqlite
 app/config.py*.log
+app/config.py
