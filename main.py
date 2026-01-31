@@ -20,6 +20,18 @@ from app.webhook_server import start_webhook_server
 
 from app import config
 
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(f'bot_{datetime.now().strftime("%Y%m%d")}.log'),
+        logging.StreamHandler()  # Вывод в консоль (screen)
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
 async def send_daily_report(bot):
     """
     Отправляет ежедневный отчёт администратору в 08:30
@@ -45,7 +57,7 @@ async def send_daily_report(bot):
         try:
             await bot.send_message(admin_id, message, parse_mode="HTML")
         except Exception as e:
-            print(f"❌ Ошибка отправки отчёта админу {admin_id}: {e}")
+            logger.error(f"❌ Ошибка отправки отчёта админу {admin_id}: {e}", exc_info=True)
 
 async def main():
     logging.basicConfig(level=logging.INFO)
@@ -82,7 +94,7 @@ async def main():
         enabled=config.YANDEX_METRICA_ENABLED  # False для теста
     )
 
-    print("✅ Бот запущен!")
+    logger.info("✅ Бот запущен!")
 
     # Создаём планировщик для автоматических отчётов
     scheduler = AsyncIOScheduler()
@@ -98,7 +110,7 @@ async def main():
     
     # Запускаем планировщик
     scheduler.start()
-    print("📅 Планировщик запущен: отчёты будут отправляться в 08:30")
+    logger.info("📅 Планировщик запущен: отчёты будут отправляться в 04:30")
 
     # Запускаем сервер оплат параллельно с ботом
     await start_webhook_server(bot)
