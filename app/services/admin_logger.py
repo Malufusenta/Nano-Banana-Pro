@@ -2,6 +2,8 @@ import asyncio
 from datetime import datetime
 from aiogram import Bot, html
 from app import config
+import re
+import html 
 
 # Если config.py нет, раскомментируй и вставь
 # ADMIN_CHANNEL_ID = -100xxxxxxxxxx
@@ -76,32 +78,39 @@ def translate_callback(code: str) -> str:
     # Если перевода нет, возвращаем код как есть
     return code
 
-import re
+ # 👈 Обязательно добавь импорт в начале файла
+
 
 async def send_log(bot: Bot, text: str, disable_notification: bool = False):
-    """Базовая функция отправки текста в канал с автоформатированием ID"""
     if not hasattr(config, "ADMIN_CHANNEL_ID") or not config.ADMIN_CHANNEL_ID:
         return
 
     try:
-        # ✅ Автоматически оборачиваем все ID в <code> для быстрого копирования
-        # Находим "ID:" или "ID :" + цифры (минимум 6 цифр, чтобы не трогать случайные числа)
-        text = re.sub(
-            r'(ID:?\s*)(\d{6,})',  # ID с/без пробела + минимум 6 цифр (telegram ID)
-            r'\1<code>\2</code>',
-            text,
-            flags=re.IGNORECASE  # Работает с "id:", "ID:", "Id:"
+        # 1. Сначала экранируем HTML, чтобы никнеймы типа "<Ivan>" не ломали лог
+        # (Если ты передаешь уже готовый HTML в text, этот шаг нужно пропустить, 
+        # но тогда ты должен экранировать переменные ВНУТРИ f-строк)
+        
+        # Раз у тебя text уже с тегами <b> и т.д., мы не делаем html.escape всего текста.
+        # Но тогда следи, чтобы username и item_name были безопасными!
+        
+        # 2. Авто-форматирование ID (исправленная регулярка)
+        # Она ищет "ID: 12345" и делает "ID: <code>12345</code>"
+        formatted_text = re.sub(
+            r'(ID:?\s*)(\d{6,})', 
+            r'\1<code>\2</code>', 
+            text, 
+            flags=re.IGNORECASE
         )
         
         await bot.send_message(
             chat_id=config.ADMIN_CHANNEL_ID,
-            text=text,
+            text=formatted_text,
             parse_mode="HTML",
             disable_notification=disable_notification,
-            disable_web_page_preview=True  # Чтобы ссылки не разворачивались
+            disable_web_page_preview=True  # 👈 Оставили одну строку и запятую (если бы были еще аргументы)
         )
     except Exception as e:
-        print(f"⚠️ Ошибка логгера (текст): {e}")
+        print(f"⚠️ Ошибка логгера: {e}")
 
 async def send_photo_log(bot: Bot, photo, caption: str):
     """Отправка фото-отчета с ПЛАНОМ Б (если фото битое)"""
@@ -154,18 +163,20 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
     else:
         status_line = f"Покупка №: {count} (Постоянник! 🔥)"
 
+# Было: f"Клиент: {username} (ID: <code>{user.id}</code>)\n"
+# Стало (просто ID, логгер сам покрасит):
+
     text = (
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
         "➖➖➖➖➖➖➖\n"
-        f"Клиент: {username} (ID: <code>{user.id}</code>)\n"  # ✅ Моноширинный, кликабельный
+        f"Клиент: {username} (ID: {user.id})\n" 
         f"Сумма: <b>{amount} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
         f"Товар: {item_name}\n"
         f"----------------\n"
-        f"{status_line}\n"
-        f"Источник: <code>{source}</code>\n"
         f"Всего принес денег: <b>{total} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
         "#payment"
     )
+    asyncio.create_task(send_log(bot, text))
 
 # 🎨 ТИП 3: ГЕНЕРАЦИЯ
 async def log_generation(bot: Bot, user, prompt: str, model: str, photo_file_id: str):
@@ -235,7 +246,7 @@ async def log_referral(bot: Bot, referrer_id: int, new_user):
     text = (
         "🤝 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>\n"
         "➖➖➖➖➖➖➖\n"
-        f"📢 Кто пригласил: <a href='tg://user?id={referrer_id}'>{referrer_id}</a> (ID: <code>{referrer_id}</code>)\n"
+        f"📢 Кто пригласил: <a href='tg://user?id={referrer_id}'>{referrer_id}</a> (ID: {referrer_id})\n"
         f"👤 Кто пришел: {new_user_name}\n"
         f"🎉 Друг сделал <b>первую генерацию</b>!\n"
         "🎁 Бонус: <b>+2 банана</b>\n"
