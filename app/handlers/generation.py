@@ -593,50 +593,44 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         return
     # 🔥 КОНЕЦ BROADCAST ЛОГИКИ 🔥
     
-    # Обычный флоу (без изменений)
+    # Обычный флоу
     if count == 1:
         if full_caption:
-            # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО (ПРОВЕРЯЕМ ПЕРВЫМ!)
-            video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","Анимируй"]
-            if any(keyword in full_caption.lower() for keyword in video_keywords):
-                await send_video_offer_message(message, state, has_photo=True, photo_file_id=image_urls[0] if image_urls else None)
-                return
-            
-            # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
-            if is_lazy_prompt(full_caption):
-                await send_lazy_prompt_message(message)
-                return
-            
-            await start_preflight_check(message, state, full_caption, image_urls)
-
+            # ... тут твой код для одного фото ...
+            # (оставь как есть, если там всё работает)
+            pass 
         else:
             await state.update_data(pending_image_urls=image_urls)
             await state.set_state(GenState.waiting_for_caption)
-            await message.reply(
-                "📸 **Готово! Фото поймал.**\nНапиши, что с ним сделать?", 
-                parse_mode="Markdown"
-            )
+            await message.reply("📸 **Готово! Фото поймал.**\nНапиши, что с ним сделать?", parse_mode="Markdown")
+            
     else:  # >= 2 фото
         await state.update_data(pending_image_urls=image_urls)
+        
+        # 1. Сначала проверяем, есть ли подпись
         if full_caption:
-                    # 🚫 ДОБАВЬ ПРОВЕРКУ ЗДЕСЬ 👇
+            # 🎬 Проверка на видео
+            video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate", "анимируй"]
+            if any(keyword in full_caption.lower() for keyword in video_keywords):
+                await send_video_offer_message(message, state, has_photo=True, photo_file_id=image_urls[0] if image_urls else None)
+                return # 👈 ВАЖНО: выходим
+
+            # 🚫 Проверка на ленивый промпт
             if is_lazy_prompt(full_caption):
                 await send_lazy_prompt_message(message)
-                return
+                return # 👈 ВАЖНО: выходим
+
+            # ✅ Запускаем генерацию
             await start_preflight_check(message, state, full_caption, image_urls)
+            return  # 🔥 САМОЕ ГЛАВНОЕ: ОСТАНАВЛИВАЕМ ФУНКЦИЮ ЗДЕСЬ 🔥
 
-        # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО  
-        video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","Анимируй"]
-        if full_caption and any(keyword in full_caption.lower() for keyword in video_keywords):
-            await send_video_offer_message(message, state, has_photo=True, photo_file_id=image_urls[0] if image_urls else None)
-            return
-
-        else:
-            await state.set_state(GenState.waiting_for_caption)
-            await message.answer(
-                f"✅ **Получено {count} фото!**\nТеперь напиши задачу (например: «Смешай их»).", 
-                parse_mode="Markdown"
-            )
+        # 2. Если подписи НЕТ нигде — просим задачу
+        # Этот код выполнится ТОЛЬКО если full_caption пустой
+        await state.set_state(GenState.waiting_for_caption)
+        await message.answer(
+            f"✅ **Получено {count} фото!**\nТеперь напиши задачу (например: «Смешай их»).", 
+            parse_mode="Markdown"
+        )
 
 
 @router.message(F.text == "✨ Начать творить")
