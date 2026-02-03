@@ -7,3 +7,4 @@ __pycache__/
 *.sqlite
 app/config.py*.log
 app/config.py
+*.log
