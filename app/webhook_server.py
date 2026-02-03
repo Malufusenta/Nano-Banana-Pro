@@ -6,9 +6,11 @@ from app.services.user_service import add_paid_balance, get_user_balance, get_us
 from app.services.admin_logger import log_payment
 from app.kling_webhook import handle_kling_callback  # ← Добавь в начало
 from app.models import User
+from app.packages import PACKAGES
 from sqlalchemy import select
 from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
 from app.services.yandex_metrica import metrica_service
+
 
 
 # Настройки
@@ -34,12 +36,10 @@ async def handle_yookassa(request):
             if user_id:
                 async with async_session() as session:
                     # Определяем тариф
+                   
                     tariff_map = {
-                        79.0: (8, "8 бананов"),
-                        299.0: (44, "44 банана"),
-                        699.0: (140, "140 бананов"),
-                        1499.0: (340, "340 бананов"),
-                        3499.0: (832, "832 банана")
+                        float(pkg['price']): (pkg['gens'], f"{pkg['gens']} {pkg['suffix']}")
+                        for pkg in PACKAGES.values()
                     }
                     
                     tariff_data = tariff_map.get(amount)
