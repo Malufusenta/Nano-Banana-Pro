@@ -163,21 +163,22 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
     else:
         status_line = f"Покупка №: {count} (Постоянник! 🔥)"
 
-# Было: f"Клиент: {username} (ID: <code>{user.id}</code>)\n"
-# Стало (просто ID, логгер сам покрасит):
-
     text = (
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
         "➖➖➖➖➖➖➖\n"
+        # 👇 УБРАЛ <code>, так как твой send_log теперь делает это сам!
         f"Клиент: {username} (ID: {user.id})\n" 
         f"Сумма: <b>{amount} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
         f"Товар: {item_name}\n"
         f"----------------\n"
+        f"{status_line}\n"
+        # 👇 ТУТ ОСТАВИЛ <code>, потому что это не ID, логгер это не тронет
+        f"Источник: <code>{source}</code>\n"
         f"Всего принес денег: <b>{total} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
         "#payment"
     )
+    
     asyncio.create_task(send_log(bot, text))
-
 # 🎨 ТИП 3: ГЕНЕРАЦИЯ
 async def log_generation(bot: Bot, user, prompt: str, model: str, photo_file_id: str):
     username = f"@{user.username}" if user.username else "Нет"
