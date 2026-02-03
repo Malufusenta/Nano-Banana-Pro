@@ -1,0 +1,14 @@
+2026-02-03 11:02:58,108 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-02-03 11:02:58,108 - __main__ - INFO - ✅ Бот запущен!
+2026-02-03 11:02:58,109 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-03 11:02:58,109 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-02-03 11:02:58,109 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-03 11:02:58,109 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-02-03 11:02:58,109 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-02-03 11:02:58,109 - aiogram.dispatcher - INFO - Start polling
+2026-02-03 11:02:58,738 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 11:03:09,461 - aiogram.event - INFO - Update id=171763433 is handled. Duration 906 ms by bot id=8311431448
+2026-02-03 11:03:18,964 - aiogram.event - INFO - Update id=171763434 is not handled. Duration 4 ms by bot id=8311431448
+2026-02-03 11:09:28,606 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-02-03 11:09:28,607 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 11:09:28,607 - aiogram.dispatcher - INFO - Polling stopped
