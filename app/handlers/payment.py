@@ -108,7 +108,7 @@ async def cmd_shop(message: types.Message):
     
     builder.adjust(1)
     await message.answer(
-        "🍌 *Магазин Бананов*\n\nПополни баланс и твори без ограничений!\n\n*Стоимость:*\n🍌 Standard: 1 банан\n💎 PRO: 4 банана\n\nВыбери пакет👇",
+        "🍌 *Магазин Бананов*\n\nПополни баланс и твори без ограничений!\n\n*Стоимость:*\n🍌 Standard: 1 банан\n💎 PRO: 4 банана\n📷 Оживи фото: 12 бананов\n\nВыбери пакет👇",
         reply_markup=builder.as_markup(), parse_mode="Markdown"
     )
 

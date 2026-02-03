@@ -295,3 +295,70 @@ aiogram.exceptions.TelegramNetworkError: HTTP Client says - ClientOSError: [Errn
 2026-02-03 12:46:16,630 - aiogram.dispatcher - WARNING - Received SIGINT signal
 2026-02-03 12:46:16,632 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
 2026-02-03 12:46:16,632 - aiogram.dispatcher - INFO - Polling stopped
+2026-02-03 13:46:49,235 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-02-03 13:46:49,235 - __main__ - INFO - ✅ Бот запущен!
+2026-02-03 13:46:49,236 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-03 13:46:49,236 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-02-03 13:46:49,236 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-03 13:46:49,236 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-02-03 13:46:49,236 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-02-03 13:46:49,236 - aiogram.dispatcher - INFO - Start polling
+2026-02-03 13:46:50,290 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:46:54,701 - aiogram.event - INFO - Update id=171763514 is handled. Duration 856 ms by bot id=8311431448
+2026-02-03 13:47:51,075 - aiogram.event - INFO - Update id=171763515 is handled. Duration 290 ms by bot id=8311431448
+2026-02-03 13:48:01,393 - aiogram.dispatcher - ERROR - Failed to fetch updates - TelegramNetworkError: HTTP Client says - ClientOSError: [Errno 54] Connection reset by peer
+2026-02-03 13:48:01,394 - aiogram.dispatcher - WARNING - Sleep for 1.000000 seconds and try again... (tryings = 0, bot id = 8311431448)
+2026-02-03 13:48:13,082 - aiogram.dispatcher - INFO - Connection established (tryings = 1, bot id = 8311431448)
+2026-02-03 13:48:36,010 - __main__ - INFO - ⚠️ СБП не создан (возможно отключен в настройках): {'type': 'error', 'id': '019c2242-996d-798c-a7cf-702ffc9aa98e', 'description': 'Payment method is not available', 'code': 'invalid_request'}
+2026-02-03 13:48:37,774 - aiogram.event - INFO - Update id=171763516 is handled. Duration 3697 ms by bot id=8311431448
+2026-02-03 13:48:51,133 - aiogram.event - INFO - Update id=171763517 is handled. Duration 633 ms by bot id=8311431448
+2026-02-03 13:49:18,976 - aiogram.event - INFO - Update id=171763518 is handled. Duration 266 ms by bot id=8311431448
+2026-02-03 13:50:18,963 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-02-03 13:50:18,964 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:50:18,965 - aiogram.dispatcher - INFO - Polling stopped
+2026-02-03 13:50:24,911 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-02-03 13:50:24,911 - __main__ - INFO - ✅ Бот запущен!
+2026-02-03 13:50:24,912 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-03 13:50:24,912 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-02-03 13:50:24,912 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-03 13:50:24,912 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-02-03 13:50:24,912 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-02-03 13:50:24,912 - aiogram.dispatcher - INFO - Start polling
+2026-02-03 13:50:25,560 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:50:31,778 - aiogram.event - INFO - Update id=171763519 is handled. Duration 821 ms by bot id=8311431448
+2026-02-03 13:50:57,961 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-02-03 13:50:57,963 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:50:57,963 - aiogram.dispatcher - INFO - Polling stopped
+2026-02-03 13:51:04,023 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-02-03 13:51:04,023 - __main__ - INFO - ✅ Бот запущен!
+2026-02-03 13:51:04,024 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-03 13:51:04,024 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-02-03 13:51:04,024 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-03 13:51:04,024 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-02-03 13:51:04,024 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-02-03 13:51:04,024 - aiogram.dispatcher - INFO - Start polling
+2026-02-03 13:51:04,829 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:51:10,093 - aiogram.event - INFO - Update id=171763520 is handled. Duration 699 ms by bot id=8311431448
+2026-02-03 13:51:29,164 - aiogram.event - INFO - Update id=171763521 is handled. Duration 357 ms by bot id=8311431448
+2026-02-03 13:52:07,877 - __main__ - INFO - ⚠️ СБП не создан (возможно отключен в настройках): {'type': 'error', 'id': '019c2245-d507-7deb-87dc-480e24a875e0', 'description': 'Payment method is not available', 'code': 'invalid_request'}
+2026-02-03 13:52:09,123 - aiogram.event - INFO - Update id=171763522 is handled. Duration 2166 ms by bot id=8311431448
+2026-02-03 13:52:14,713 - aiogram.event - INFO - Update id=171763523 is handled. Duration 529 ms by bot id=8311431448
+2026-02-03 13:52:19,828 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-02-03 13:52:19,830 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:52:19,830 - aiogram.dispatcher - INFO - Polling stopped
+2026-02-03 13:52:25,419 - app.services.yandex_metrica - INFO - 📊 Yandex Metrica инициализирован (enabled=True)
+2026-02-03 13:52:25,419 - __main__ - INFO - ✅ Бот запущен!
+2026-02-03 13:52:25,420 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-03 13:52:25,420 - apscheduler.scheduler - INFO - Added job "send_daily_report" to job store "default"
+2026-02-03 13:52:25,420 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-03 13:52:25,420 - __main__ - INFO - 📅 Планировщик запущен: отчёты будут отправляться в 04:30
+2026-02-03 13:52:25,421 - __main__ - INFO - 🚀 Сервер оплат запущен на порту 5001
+2026-02-03 13:52:25,421 - aiogram.dispatcher - INFO - Start polling
+2026-02-03 13:52:26,100 - aiogram.dispatcher - INFO - Run polling for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:52:30,352 - aiogram.event - INFO - Update id=171763524 is handled. Duration 704 ms by bot id=8311431448
+2026-02-03 13:52:56,607 - aiogram.event - INFO - Update id=171763525 is handled. Duration 244 ms by bot id=8311431448
+2026-02-03 13:54:19,873 - __main__ - INFO - ⚠️ СБП не создан (возможно отключен в настройках): {'type': 'error', 'id': '019c2247-d89d-7c15-89b1-5207158ec3ef', 'description': 'Payment method is not available', 'code': 'invalid_request'}
+2026-02-03 13:54:21,140 - aiogram.event - INFO - Update id=171763526 is handled. Duration 2238 ms by bot id=8311431448
+2026-02-03 13:55:08,251 - aiogram.dispatcher - WARNING - Received SIGINT signal
+2026-02-03 13:55:08,253 - aiogram.dispatcher - INFO - Polling stopped for bot @testfor_test_bot id=8311431448 - 'Test Banan'
+2026-02-03 13:55:08,253 - aiogram.dispatcher - INFO - Polling stopped
