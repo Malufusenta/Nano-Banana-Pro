@@ -12,6 +12,8 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     full_name: Mapped[str | None] = mapped_column(String, nullable=True)
     yandex_client_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    active_scenario_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
 
     
     # Баланс
@@ -139,6 +141,26 @@ class PostConfig(Base):
     
     # Статистика использования (опционально)
     clicks_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+# После класса PostConfig добавь:
+
+class AdScenario(Base):
+    """Рекламные сценарии для Deep Linking с Яндекс.Метрикой"""
+    __tablename__ = "ad_scenarios"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    scenario_key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    welcome_text: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    model_type: Mapped[str] = mapped_column(String(20), default="standard")
+    aspect_ratio: Mapped[str] = mapped_column(String(10), default="1:1")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    
+    # Статистика
+    total_starts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_purchases: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # 7. Таблица транзакций бананов (детальный трекинг)
 class BananaTransaction(Base):

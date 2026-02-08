@@ -106,6 +106,17 @@ async def handle_yookassa(request):
                                 revenue=amount,
                                 tariff_name=tariff_name
                             )
+                        
+                        # ✨ ОБНОВЛЯЕМ СТАТИСТИКУ РЕКЛАМНОГО СЦЕНАРИЯ
+                        if db_user.active_scenario_id:
+                            from app.models import AdScenario
+                            scenario_result = await session.execute(
+                                select(AdScenario).where(AdScenario.id == db_user.active_scenario_id)
+                            )
+                            scenario = scenario_result.scalar_one_or_none()
+                            if scenario:
+                                scenario.total_purchases += 1
+                                await session.commit()
                     
                     # Уведомление юзеру
                     try:

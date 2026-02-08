@@ -8,6 +8,7 @@ from app.middlewares.admin_spy import AdminSpyMiddleware
 from app.middlewares.antifraud import AntiFraudMiddleware
 from app.middlewares.block_middleware import BlockCheckMiddleware  # 👈 ДОБАВЬ
 from app.services.yandex_metrica import init_metrica_service
+from app.handlers import admin_scenarios
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -21,7 +22,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 from app import config
-
+print(f"🔥 РОУТЕР admin_scenarios загружен: {admin_scenarios.router}")
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
@@ -106,10 +107,12 @@ async def main():
     dp.message.middleware(AlbumMiddleware()) 
 
     dp.include_router(admin.router)
+    dp.include_router(admin_scenarios.router)
     dp.include_router(start.router)
     dp.include_router(payment.router)
     dp.include_router(menu_actions.router)
     dp.include_router(generation.router)
+    
 
     # Инициализация Яндекс.Метрики
     init_metrica_service(

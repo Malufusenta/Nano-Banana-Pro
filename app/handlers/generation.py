@@ -39,7 +39,7 @@ IGNORED_TEXTS = [
     "✨ Начать творить", "🎨 Создать изображение", "Заработать🍌", "📚 Гайд",
     "📸 Примеры работ", "👤 Профиль", "👤 Мой профиль", "💬 Поддержка",
     "🍌 Купить бананы", "Фарминг🍌", "ℹ️ О нас", "ℹ️ Что умеет бот?",
-    "/start", "/help", "/admin", "/stats", "/clear"
+    "/start", "/help", "/admin", "/stats", "/clear", "/admin_scenarios",
     # 👇 КОМАНДЫ БОКОВОГО МЕНЮ
     "/start", "/help", "/admin", "/stats", "/clear",
     "/profile", "/free", "/about", "/support", "/guide"
@@ -309,21 +309,62 @@ def get_categories_kb():
 async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None, is_edit_mode=False):
     user_id = message.from_user.id
 
-    # 🔥 FORCE PRO LOGIC - Проверяем флаг перед загрузкой настроек
+    # 🔥 ПРОВЕРЯЕМ РЕКЛАМНЫЙ СЦЕНАРИЙ
     data = await state.get_data()
+    from_ad_scenario = data.get("from_ad_scenario", False)
+    
+    # Если пришли из рекламного сценария - используем его настройки
+    if from_ad_scenario:
+        scenario_prompt = data.get("ad_scenario_prompt")
+        scenario_model = data.get("ad_scenario_model", "standard")
+        scenario_ratio = data.get("ad_scenario_ratio", "1:1")
+        
+        # Объединяем промт пользователя с промтом сценария
+        combined_prompt = f"{scenario_prompt}, {prompt}" if prompt else scenario_prompt
+        
+        # Очищаем флаг
+        await state.update_data(from_ad_scenario=False)
+        
+        # Нормализуем URL
+        normalized_urls = normalize_image_urls(image_urls)
+        
+        # Сохраняем настройки
+        await state.update_data(
+            pf_prompt=combined_prompt,
+            pf_image_urls=normalized_urls,
+            pf_model=scenario_model,
+            pf_ratio=scenario_ratio,
+            pf_quality="2k"
+        )
+        await state.set_state(GenState.preflight_check)
+        
+        cost = config.COST_PRO if scenario_model == "pro" else config.COST_STANDARD
+        
+        text = (
+            f"🎨 <b>Параметры генерации</b>\n\n"
+            f"✨ <b>Настройки из рекламы применены!</b>\n\n"
+            f"💰 <b>Стоимость: {cost} банан(а)</b>\n\n"
+            f"<b>Жми \"🚀 Запуск\" для генерации</b> 👇"
+        )
+        
+        await message.answer(
+            text, 
+            reply_markup=get_preflight_kb(scenario_model, scenario_ratio, "2k"), 
+            parse_mode="HTML"
+        )
+        return
+    
+    # 🔥 ОБЫЧНАЯ ЛОГИКА
     force_pro = data.get("force_pro_mode", False)
     
     async with async_session() as session:
-        pref_model = await get_user_model_preference(session, user_id)
-    async with async_session() as session:
         pref_model = "pro" if force_pro else await get_user_model_preference(session, user_id)
     
-    # ✅ Нормализуем URL
     normalized_urls = normalize_image_urls(image_urls)
     
     await state.update_data(
         pf_prompt=prompt, 
-        pf_image_urls=normalized_urls,  # ✅ Всегда список
+        pf_image_urls=normalized_urls,
         pf_model=pref_model, 
         pf_ratio="1:1", 
         pf_quality="2k"
@@ -334,22 +375,21 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     has_photo = normalized_urls is not None and len(normalized_urls) > 0
 
     if not has_photo or is_edit_mode:
-        # Предупреждение, если фото нет ИЛИ режим редактирования
         text = (
-            f"⚙️ *Настройки генерации*\n\n"
-            f"📝 **Запрос:** {prompt[:50]}...\n\n"
-            f"⚠️ *Внимание:* Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
-            f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+            f"⚙️ <b>Настройки генерации</b>\n\n"
+            f"📝 <b>Запрос:</b> {prompt[:50]}...\n\n"
+            f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
+            f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     else:
-        # Обычный текст, если есть фото и НЕ редактирование
         text = (
-            f"🎨 *Параметры генерации*\n\n"
-            f"📝 **Запрос:** {prompt[:35]}...\n\n"
-            f"💰 Стоимость:* {cost} банан(а)*\n\n"
-            f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+            f"🎨 <b>Параметры генерации</b>\n\n"
+            f"📝 <b>Запрос:</b> {prompt[:35]}...\n\n"
+            f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+            f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
-    await message.answer(text, reply_markup=get_preflight_kb(pref_model, "1:1", "hd"), parse_mode="Markdown")
+    
+    await message.answer(text, reply_markup=get_preflight_kb(pref_model, "1:1", "hd"), parse_mode="HTML")
 
 @router.callback_query(GenState.preflight_check, F.data == "pf_toggle_model")
 async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
@@ -902,6 +942,17 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
     
     if not url:
         await message.answer("❌ Не удалось получить фото.")
+        return
+    
+        # 🔥 ПРОВЕРКА РЕКЛАМНОГО СЦЕНАРИЯ (ПРИОРИТЕТ!)
+    data = await state.get_data()
+    if data.get('from_ad_scenario') and data.get('ad_scenario_prompt'):
+        prompt = data.get('ad_scenario_prompt')
+        ratio = data.get('ad_scenario_ratio', '1:1')
+        model = data.get('ad_scenario_model', 'standard')
+        
+        # Сразу запускаем preflight с настройками сценария
+        await start_preflight_check(message, state, prompt, [url])
         return
     
     # 🔥 ПРОВЕРКА BROADCAST ПРОМПТА 🔥

@@ -1,25 +1,20 @@
 import asyncio
-from app.database import engine
-from sqlalchemy import text
+from app.database import async_session
+from app.models import User, AdScenario
+from sqlalchemy import delete
 
-async def reset_database():
-    """Полностью очищает тестовую БД"""
-    
-    confirm = input("⚠️ ТЫ УВЕРЕН? Это удалит ВСЕ данные! (напиши 'да'): ")
-    if confirm.lower() != 'да':
-        print("❌ Отменено")
-        return
-    
-    async with engine.begin() as conn:
-        print("🗑️ Удаляю все данные...")
+async def reset():
+    async with async_session() as session:
+        # Удаляем всех пользователей
+        await session.execute(delete(User))
+        print("✅ Все пользователи удалены")
         
-        # Очищаем все таблицы
-        await conn.execute(text("TRUNCATE TABLE users, message_history, purchases, generation_tasks, broadcasts, post_configs, banana_transactions RESTART IDENTITY CASCADE;"))
+        # Удаляем все сценарии
+        await session.execute(delete(AdScenario))
+        print("✅ Все сценарии удалены")
         
-        print("✅ Все таблицы очищены!")
-        print("✅ Sequences сброшены на 1!")
-    
-    print("🎉 База данных обнулена!")
+        await session.commit()
+        print("✅ База очищена!")
 
 if __name__ == "__main__":
-    asyncio.run(reset_database())
+    asyncio.run(reset())

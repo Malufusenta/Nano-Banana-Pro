@@ -66,11 +66,12 @@ def get_admin_menu_kb():
     builder.button(text="🐳 Глубокая аналитика", callback_data="admin_payment_depth")
     builder.button(text="🔍 Найти пользователя", callback_data="admin_find_user")
     builder.button(text="📢 Рассылка", callback_data="admin_broadcast") 
+    builder.button(text="📋 Рекламные сценарии", callback_data="admin_scenarios_menu")  # 👈 НОВАЯ КНОПКА
     builder.button(text="🔗 Создать ссылку", callback_data="admin_create_postlink")  # 👈 НОВАЯ КНОПКА
     builder.button(text="📈 Отчёты", callback_data="admin_stats_new")  # Новая
     builder.button(text="🎨 Промпты", callback_data="admin_prompts")  # ← НОВАЯ КНОПКА
     builder.button(text="❌ Выйти", callback_data="close_admin")
-    builder.adjust(1)  # 2-1-2-1-1 для красоты
+    builder.adjust(2, 2, 1, 2, 1, 1)  # По 2 в ряд для красоты
     return builder.as_markup()
 
 
