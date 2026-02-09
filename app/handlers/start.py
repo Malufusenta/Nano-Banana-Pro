@@ -342,18 +342,17 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             bal = user.generations_balance
             word = get_banana_word(bal)
             text = (
-            f"👋 *С возвращением!*\n"
-            f"🍌 Твой баланс: *{bal} {word}*\n\n"
-            f"*Я готов творить! 🎨*\n"
-            f"Пришли *от 1 до 4 фото* с описанием или напиши, что сделать.\n\n"
-            f"*Не знаешь, что создать? 👇*"
-)
+                f"👋 *С возвращением!*\n"
+                f"🍌 Твой баланс: *{bal} {word}*\n\n"
+                f"*Я готов творить! 🎨*\n"
+                f"Пришли *от 1 до 4 фото* с описанием или напиши, что сделать.\n\n"
+                f"*Не знаешь, что создать? 👇*"
+            )
+
             # Создаем inline-кнопку для старого юзера
             keyboard_old = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+3ovTRpUPci85ODYy")]
             ])
-            
+
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
-            await message.answer(
-                reply_markup=get_main_kb()
-)
+            # 👆 ВСЁ! Больше ничего не нужно
