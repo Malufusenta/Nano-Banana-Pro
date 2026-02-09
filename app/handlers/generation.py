@@ -572,9 +572,14 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     broadcast_prompt = data.get('broadcast_prompt')
     broadcast_ratio = data.get('broadcast_ratio', '1:1')
     broadcast_model = data.get('broadcast_model', 'standard')  # 👈 СОХРАНЯЕМ МОДЕЛЬ
-
     is_from_broadcast = data.get('from_broadcast', False)
     force_pro_mode = data.get('force_pro_mode', False)  # 👈 СОХРАНЯЕМ ФЛАГ
+
+        # 🔥 ДОБАВЬ ЭТИ СТРОКИ ДЛЯ РЕКЛАМНЫХ СЦЕНАРИЕВ:
+    ad_scenario_prompt = data.get('ad_scenario_prompt')
+    ad_scenario_ratio = data.get('ad_scenario_ratio', '1:1')
+    ad_scenario_model = data.get('ad_scenario_model', 'standard')
+    is_from_ad_scenario = data.get('from_ad_scenario', False)
 
     
     await state.clear()  # Очищаем state
@@ -605,6 +610,30 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         await message.answer("❌ Не удалось получить фото.")
         return
     
+    # ЕСЛИ ЭТО РЕКЛАМНЫЙ СЦЕНАРИЙ
+    if is_from_ad_scenario and ad_scenario_prompt:
+        await state.update_data(
+            pf_prompt=ad_scenario_prompt,
+            pf_image_urls=image_urls,
+            pf_ratio=ad_scenario_ratio,
+            pf_model=ad_scenario_model,
+            pf_quality="2k",
+            is_ad_scenario_gen=True
+        )
+        await state.set_state(GenState.preflight_check)
+        
+        text = (
+            f"🎨 *Параметры генерации*\n\n"
+            f"✨ *Настройки из рекламы применены!*\n\n"
+            f"Выбери модель и жми \"🚀 Запуск\"👇"
+        )
+        await message.answer(
+            text,
+            reply_markup=get_preflight_kb(ad_scenario_model, ad_scenario_ratio, "2k"),
+            parse_mode="Markdown"
+        )
+        return
+
     # 🔥 ЕСЛИ ЭТО BROADCAST - ИСПОЛЬЗУЕМ СОХРАНЁННЫЙ ПРОМПТ 🔥
     if is_from_broadcast and broadcast_prompt:
         await state.update_data(
