@@ -118,3 +118,36 @@ def init_metrica_service(counter_id: str, token: str, enabled: bool = True):
     global metrica_service
     metrica_service = YandexMetricaService(counter_id, token, enabled)
     logger.info(f"📊 Yandex Metrica инициализирован (enabled={enabled})")
+
+async def send_bot_start_event(self, client_id: str):
+    """
+    Отправка цели BOT_START при переходе в бота
+    """
+    if not self.enabled:
+        print(f"⏭️ BOT_START: Метрика отключена (test mode)")
+        return
+    
+    if not client_id:
+        print(f"⚠️ BOT_START: ClientID отсутствует")
+        return
+    
+    try:
+        # Формируем параметры запроса
+        params = {
+            'wmode': 7,
+            'page-url': 'https://t.me/nan0banana_bot/start',  # Замени на свой username!
+            'client-id': client_id,
+            'goal-id': 'BOT_START'
+        }
+        
+        url = f"https://mc.yandex.ru/watch/{self.counter_id}"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=3)) as response:
+                if response.status == 200:
+                    print(f"✅ BOT_START отправлен для ClientID: {client_id}")
+                else:
+                    print(f"⚠️ BOT_START: HTTP {response.status}")
+    
+    except Exception as e:
+        print(f"❌ Ошибка отправки BOT_START: {e}")

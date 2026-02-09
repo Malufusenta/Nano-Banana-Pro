@@ -168,6 +168,16 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             # Сохраняем ClientID если есть
             if yandex_client_id and user:
                 user.yandex_client_id = yandex_client_id
+                
+                # 🔥 ОТПРАВЛЯЕМ ЦЕЛЬ BOT_START В МЕТРИКУ
+                try:
+                    from app.services.yandex_metrica import metrica_service
+                    if metrica_service:
+                        await metrica_service.send_bot_start_event(
+                            client_id=yandex_client_id
+                        )
+                except Exception as e:
+                    print(f"⚠️ Ошибка отправки BOT_START: {e}")
             
             # Сохраняем сценарий к пользователю
             if ad_scenario and user:
