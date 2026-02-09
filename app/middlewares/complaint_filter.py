@@ -42,12 +42,16 @@ class ComplaintFilterMiddleware(BaseMiddleware):
         
         text = event.text.strip()
         text_lower = text.lower()
+        # Считаем количество слов
+        word_count = len(text.split())
         
         # ✅ Проверка условий (новая логика)
         
         # Проверяем наличие триггера жалобы
         has_complaint = any(trigger in text_lower for trigger in self.COMPLAINT_TRIGGERS)
-        
+        # 1. Больше 10 слов = это промпт (независимо от триггеров)
+        if word_count > 10:
+            return await handler(event, data)
         # 1. Длинное сообщение БЕЗ триггера = это промпт
         if len(text) > 35 and not has_complaint:
             return await handler(event, data)
@@ -64,8 +68,8 @@ class ComplaintFilterMiddleware(BaseMiddleware):
         # 3. Есть триггер (независимо от длины) = жалоба
         if has_complaint:
             logger.info(
-                f"[COMPLAINT_FILTER] User: {event.from_user.id} | "
-                f"Text: '{text}' | Status: Intercepted (Generations stopped)"
+                    f"[COMPLAINT_FILTER] User: {event.from_user.id} | "
+                    f"Text: '{text}' (words: {word_count}) | Status: Intercepted"
             )
             
             # Отправляем сообщение с инструкцией
