@@ -583,8 +583,8 @@ async def show_user_card(message: types.Message, user_data: dict):
     """Показывает расширенную карточку пользователя"""
     user = user_data['user']
     
-    safe_name = html.quote(str(user.full_name))
-    safe_username = html.quote(str(user.username)) if user.username else "Нет"
+    safe_name = html.escape(str(user.full_name))
+    safe_username = html.escape(str(user.username)) if user.username else "Нет"
     
     # Формируем источник трафика
     source_text = user_data['source']

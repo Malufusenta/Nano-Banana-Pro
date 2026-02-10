@@ -396,9 +396,9 @@ async def log_content_filter(
     message_text = (
         f"{status_emoji} <b>СРАБОТАЛ ФИЛЬТР</b> ({status_text})\n\n"
         f"👤 Юзер: <code>{user_id}</code> (@{username or 'нет'})\n"
-        f"📝 Текст: <code>{html.quote(display_text)}</code>\n\n"
+        f"📝 Текст: <code>{html.escape(display_text)}</code>\n\n"
         f"🎯 Триггер: <b>{trigger_name}</b>\n"
-        f"🔍 Найдено: <code>{html.quote(matched_word)}</code>\n"
+        f"🔍 Найдено: <code>{html.escape(matched_word)}</code>\n"
         f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
     )
     
@@ -437,7 +437,7 @@ async def log_security_ban(
         f"🔞 <b>ЦЕНЗУРА СРАБОТАЛА</b>\n\n"
         f"👤 Юзер: <code>{user_id}</code> (@{username or 'нет'})\n"
         f"🛡️ Источник: <b>{source}</b>\n"
-        f"📝 Промпт: <code>{html.quote(prompt[:200])}</code>\n"
+        f"📝 Промпт: <code>{html.escape(prompt[:200])}</code>\n"
         f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
     )
     
