@@ -439,6 +439,8 @@ async def process_successful_payment(message: types.Message, bot: Bot):
     async with async_session() as session:
         await create_purchase_record(session, user_id, total_amount, bananas_count)
         await mark_purchase_as_succeeded(session, user_id, total_amount)
+        await session.commit()  # ← ДОБАВЬ ЭТУ СТРОКУ!
+
         # Обновляем аналитику для Stars
         await update_purchase_analytics(
             session, 
@@ -448,6 +450,8 @@ async def process_successful_payment(message: types.Message, bot: Bot):
             payment_id=None
         )
         await admin_change_balance(session, user_id, bananas_count)
+        await session.commit()  # ← И ЕЩЁ ОДИН COMMIT В КОНЦЕ
+
         
         # Логируем платеж
         try:
