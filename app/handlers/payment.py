@@ -5,7 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.database import async_session
 from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance, get_user_admin_card_data, add_paid_balance
 from app.services.user_service import get_user_profile_data, admin_change_balance, get_user_balance, get_user_financial_stats
-from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded
+from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded, update_purchase_analytics
 from app import config
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
 from app.services.admin_logger import log_payment
@@ -439,6 +439,14 @@ async def process_successful_payment(message: types.Message, bot: Bot):
     async with async_session() as session:
         await create_purchase_record(session, user_id, total_amount, bananas_count)
         await mark_purchase_as_succeeded(session, user_id, total_amount)
+        # Обновляем аналитику для Stars
+        await update_purchase_analytics(
+            session, 
+            user_id, 
+            total_amount,
+            "Telegram Stars",  # ← Чтобы отличить от рублей
+            payment_id=None
+        )
         await admin_change_balance(session, user_id, bananas_count)
         
         # Логируем платеж

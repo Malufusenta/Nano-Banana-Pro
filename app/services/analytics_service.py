@@ -25,7 +25,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     ).where(
         Purchase.status == 'succeeded',
         Purchase.created_at >= date_from,
-        Purchase.created_at <= date_to
+        Purchase.created_at <= date_to,
+        or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))  # ← Исключаем Stars
     )
     revenue_result = await session.execute(revenue_query)
     revenue_data = revenue_result.first()
@@ -33,11 +34,16 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     total_revenue = revenue_data.total_revenue or 0
     total_transactions = revenue_data.total_transactions or 0
     
-    # Первые и повторные покупки
+    # Первые покупки (ТОЛЬКО рубли, без Stars)
     first_purchases = await session.scalar(
-        select(func.count(User.id)).where(
-            User.first_purchase_at >= date_from,
-            User.first_purchase_at <= date_to
+        select(func.count(func.distinct(Purchase.user_id))).where(
+            Purchase.status == 'succeeded',
+            Purchase.completed_at >= date_from,
+            Purchase.completed_at <= date_to,
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),
+            Purchase.user_id.in_(
+                select(User.telegram_id).where(User.first_purchase_at >= date_from, User.first_purchase_at <= date_to)
+            )
         )
     ) or 0
     
@@ -68,7 +74,6 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     avg_check = round(rub_revenue / rub_transactions, 2) if rub_transactions > 0 else 0
     
     # ========== ВЫРУЧКА ПО ИСТОЧНИКАМ ==========
-    
     source_revenue_query = select(
         Purchase.user_source,
         func.sum(Purchase.price).label('revenue'),
@@ -76,7 +81,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     ).where(
         Purchase.status == 'succeeded',
         Purchase.completed_at >= date_from,
-        Purchase.completed_at <= date_to
+        Purchase.completed_at <= date_to,
+        or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))  # ← Исключаем Stars
     ).group_by(Purchase.user_source).order_by(func.sum(Purchase.price).desc())
     
     source_revenue_result = await session.execute(source_revenue_query)
@@ -117,7 +123,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     ).where(
         Purchase.status == 'succeeded',
         Purchase.completed_at >= date_from,
-        Purchase.completed_at <= date_to
+        Purchase.completed_at <= date_to,
+        or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))  # ← Исключаем Stars
     ).group_by(Purchase.user_source).order_by(func.sum(Purchase.price).desc())
     
     unified_result = await session.execute(unified_revenue_query)
@@ -317,7 +324,9 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         select(func.count(func.distinct(Purchase.user_id))).where(
             Purchase.status == 'succeeded',
             Purchase.completed_at >= date_from,
-            Purchase.completed_at <= date_to
+            Purchase.completed_at <= date_to,
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))  # ← ДОБАВЬ
+
         )
     ) or 0
     
@@ -343,6 +352,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         Purchase.status == 'succeeded',
         Purchase.completed_at >= date_from,
         Purchase.completed_at <= date_to,
+        or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),  # ← ДОБАВЬ
         Purchase.user_id.in_(
             select(User.telegram_id).where(User.first_purchase_at < date_from)
         )

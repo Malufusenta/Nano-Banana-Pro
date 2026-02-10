@@ -6,6 +6,7 @@ from app.services.admin_logger import log_new_user, log_referral
 from app.database import async_session
 from app.services.user_service import get_user, create_user, admin_change_balance, track_banana_transaction
 from app import config
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import re
 from sqlalchemy import select
 from app.models import PostConfig, AdScenario
@@ -202,12 +203,19 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 
                 from app.handlers.generation import GenState
                 await state.set_state(GenState.free_mode)
+                            
+            # 🔥 КНОПКИ ДЛЯ РЕКЛАМНОГО СЦЕНАРИЯ
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+qcYoFpW4yXRlZjVi")],  # 👈 Первая строка
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_scenario")]  # 👈 Вторая строка
+                ])
                 
                 await message.answer(
                     ad_scenario.welcome_text, 
                     parse_mode="HTML", 
-                    reply_markup=get_main_kb()
+                    reply_markup=keyboard
                 )
+                
                 return
 
             # 🔥 ЕСЛИ ЭТО POST LINK - СПЕЦИАЛЬНОЕ ПРИВЕТСТВИЕ
@@ -272,12 +280,6 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     reply_markup=keyboard,
                     link_preview_options=types.LinkPreviewOptions(is_disabled=True)
                 )
-            
-            # 🔥 ДОБАВЬ ЭТИ СТРОКИ:
-            await message.answer(
-                reply_markup=get_main_kb()
-                )
-
             return
         
         # ЕСЛИ СТАРЫЙ ЮЗЕР
@@ -356,3 +358,16 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
             # 👆 ВСЁ! Больше ничего не нужно
+
+@router.callback_query(F.data == "cancel_scenario")
+async def callback_cancel_scenario(callback: CallbackQuery, state: FSMContext):
+    """Отмена рекламного сценария"""
+    await state.clear()
+    
+    await callback.message.edit_text(
+        "❌ <b>Отменено</b>\n\n"
+        "Возвращайся когда захочешь! 😊\n\n"
+        "Используй кнопки ниже 👇",
+        parse_mode="HTML"
+    )
+    await callback.answer()

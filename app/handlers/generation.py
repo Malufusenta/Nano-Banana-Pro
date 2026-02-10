@@ -12,7 +12,7 @@ import aiohttp
 from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban,log_content_filter
 from app.models import User, Broadcast, PostConfig  # ← добавь PostConfig
 from app.middlewares.content_filter import ContentFilter, FilterMode, get_filter_message, log_nsfw_to_chat
-
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from app.database import async_session
 from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
@@ -341,10 +341,9 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         cost = config.COST_PRO if scenario_model == "pro" else config.COST_STANDARD
         
         text = (
-            f"🎨 <b>Параметры генерации</b>\n\n"
-            f"✨ <b>Настройки из рекламы применены!</b>\n\n"
-            f"💰 <b>Стоимость: {cost} банан(а)</b>\n\n"
-            f"<b>Жми \"🚀 Запуск\" для генерации</b> 👇"
+            f"🎨 <b>Параметры генерации</b>\n\n"  # 👈 <b> вместо **
+            f"✨ Все готово!\n\n"
+            f"<b>Жми \"🚀 Запуск\"</b>👇"  # 👈 <b> вместо **
         )
         
         await message.answer(
@@ -377,14 +376,14 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     if not has_photo or is_edit_mode:
         text = (
             f"⚙️ <b>Настройки генерации</b>\n\n"
-            f"📝 <b>Запрос:</b> {prompt[:50]}...\n\n"
+            f"📝 <b>Запрос:</b> {prompt[:30]}...\n\n"
             f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     else:
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"
-            f"📝 <b>Запрос:</b> {prompt[:35]}...\n\n"
+            f"📝 <b>Запрос:</b> {prompt[:30]}...\n\n"
             f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
@@ -623,9 +622,9 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         await state.set_state(GenState.preflight_check)
         
         text = (
-            f"🎨 *Параметры генерации*\n\n"
-            f"✨ *Настройки из рекламы применены!*\n\n"
-            f"Выбери модель и жми \"🚀 Запуск\"👇"
+            f"🎨 <b>Параметры генерации</b>\n\n"  # 👈 <b> вместо **
+            f"✨ Все готово!\n\n"
+            f"<b>Жми \"🚀 Запуск\"</b>👇"  # 👈 <b> вместо **
         )
         await message.answer(
             text,
@@ -2108,3 +2107,36 @@ async def cb_reanimate_video(callback: types.CallbackQuery, state: FSMContext):
         print(f"❌ Ошибка reanimate: {e}")
         await callback.answer("❌ Ошибка запуска", show_alert=True)
 
+@router.message(F.text, StateFilter(GenState.free_mode))
+async def handle_text_in_free_mode(message: types.Message, state: FSMContext):
+    """Обработка текста когда ожидаем фото"""
+    
+    data = await state.get_data()
+    
+    # 🔥 ЕСЛИ ЭТО ПОЛЬЗОВАТЕЛЬ ИЗ РЕКЛАМЫ
+    if data.get('from_ad_scenario'):
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отменить", callback_data="cancel_generation")]
+        ])
+        
+        await message.answer(
+            "📸 <b>Пришлите ваше фото для обработки</b>\n\n"
+            "Настройки уже применены, осталось только прислать фото! 👇\n\n"
+            "Или нажмите «Отменить», чтобы вернуться в главное меню.",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+        return
+
+@router.callback_query(F.data == "cancel_generation")
+async def callback_cancel_generation(callback: CallbackQuery, state: FSMContext):
+    """Отмена генерации и возврат в главное меню"""
+    await state.clear()
+    
+    await callback.message.edit_text(
+        "❌ <b>Отменено</b>\n\n"
+        "Используйте кнопки ниже для продолжения 👇",
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
