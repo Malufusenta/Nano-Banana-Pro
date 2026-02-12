@@ -10,6 +10,8 @@ from app.packages import PACKAGES
 from sqlalchemy import select
 from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
 from app.services.yandex_metrica import metrica_service
+from app.models import User, Purchase  # ← В начале файла
+from sqlalchemy import select          # ← В начале файла
 
 
 
@@ -36,6 +38,7 @@ async def handle_yookassa(request):
             if user_id:
                 async with async_session() as session:
                     # Проверяем дубль ПЕРЕД обработкой
+                    # Проверяем дубль
                     existing = await session.execute(
                         select(Purchase).where(
                             Purchase.payment_id == payment_id,
@@ -98,7 +101,6 @@ async def handle_yookassa(request):
                     # ✨ ОТПРАВКА КОНВЕРСИИ В ЯНДЕКС.МЕТРИКУ
                     if db_user and db_user.yandex_client_id:
                         from app.services.yandex_metrica import metrica_service
-                        from app.models import Purchase
                         from sqlalchemy import desc
                         
                         # Получаем ID последней покупки
