@@ -24,8 +24,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         func.count(Purchase.id).label('total_transactions')
     ).where(
         Purchase.status == 'succeeded',
-        Purchase.created_at >= date_from,
-        Purchase.created_at <= date_to,
+        Purchase.completed_at >= date_from,
+        Purchase.completed_at <= date_to,
         or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))  # ← Исключаем Stars
     )
     revenue_result = await session.execute(revenue_query)
