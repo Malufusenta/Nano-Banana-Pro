@@ -20,6 +20,7 @@ from app.services.analytics_service import (
     format_payment_depth_message   # 👈 Новое
 )
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo  # ← ДОБАВЬ
 from aiogram.fsm.state import State, StatesGroup
 import logging
 logger = logging.getLogger(__name__)
@@ -1206,12 +1207,17 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
         if " - " in text:
             # Диапазон дат
             date_from_str, date_to_str = text.split(" - ")
-            date_from = datetime.strptime(date_from_str.strip(), "%d.%m.%Y").replace(hour=0, minute=0, second=0)  # ← Явно ставим начало дня
-            date_to = datetime.strptime(date_to_str.strip(), "%d.%m.%Y").replace(hour=23, minute=59, second=59)
+            date_from = datetime.strptime(date_from_str.strip(), "%d.%m.%Y").replace(
+                hour=0, minute=0, second=0, tzinfo=ZoneInfo("Europe/Moscow")  # ← ДОБАВЬ timezone
+            )
+            date_to = datetime.strptime(date_to_str.strip(), "%d.%m.%Y").replace(
+        hour=23, minute=59, second=59, tzinfo=ZoneInfo("Europe/Moscow")  # ← И тут
+    )
             date_str = f"{date_from_str.strip()} — {date_to_str.strip()}"
         else:
-            # Одна дата
-            date_from = datetime.strptime(text, "%d.%m.%Y").replace(hour=0, minute=0, second=0)  # ← И тут тоже
+            date_from = datetime.strptime(text, "%d.%m.%Y").replace(
+                hour=0, minute=0, second=0, tzinfo=ZoneInfo("Europe/Moscow")  # ← И тут
+            )
             date_to = date_from.replace(hour=23, minute=59, second=59)
             date_str = text
         
