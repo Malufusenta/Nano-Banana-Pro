@@ -35,6 +35,17 @@ async def handle_yookassa(request):
 
             if user_id:
                 async with async_session() as session:
+                    # Проверяем дубль ПЕРЕД обработкой
+                    existing = await session.execute(
+                        select(Purchase).where(
+                            Purchase.payment_id == payment_id,
+                            Purchase.status == 'succeeded'
+                        )
+                    )
+                    if existing.scalar_one_or_none():
+                        print(f"⚠️ WEBHOOK: Дубль {payment_id}, пропускаем")
+                        return web.Response(status=200)
+        
                     # Определяем тариф
                    
                     tariff_map = {
