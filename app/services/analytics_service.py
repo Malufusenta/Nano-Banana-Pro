@@ -65,8 +65,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     stars_revenue = stars_data.stars_revenue or 0
     stars_count = stars_data.stars_count or 0
 
-    # Выручка в рублях (без звёзд)
-    rub_revenue = total_revenue - stars_revenue
+    # Рублевая выручка (revenue_query уже исключил Stars)
+    rub_revenue = total_revenue
     
     # Средний чек
     # Средний чек (ТОЛЬКО по рублям, без учёта звёзд)
