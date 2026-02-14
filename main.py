@@ -9,7 +9,7 @@ from app.middlewares.antifraud import AntiFraudMiddleware
 from app.middlewares.block_middleware import BlockCheckMiddleware  # 👈 ДОБАВЬ
 from app.services.yandex_metrica import init_metrica_service
 from app.handlers import admin_scenarios
-
+import sys
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
@@ -71,7 +71,6 @@ class PrintLogger:
 
 sys.stdout = PrintLogger(logger)
 
-import sys
 
 # Перенаправляем print в логгер
 class PrintLogger:
