@@ -23,16 +23,53 @@ import logging
 logger = logging.getLogger(__name__)
 from app import config
 print(f"🔥 РОУТЕР admin_scenarios загружен: {admin_scenarios.router}")
-# Настройка логирования
+from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
+
+# Настройка логирования с ротацией по дням
+current_date = datetime.now().strftime("%Y%m%d")
+file_handler = TimedRotatingFileHandler(
+    filename=f'bot_{current_date}.log',
+    when='midnight',  # Новый файл каждую полночь
+    interval=1,
+    backupCount=7,  # Хранить логи за последние 7 дней
+    encoding='utf-8'
+)
+file_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(f'bot_{datetime.now().strftime("%Y%m%d")}.log'),
-        logging.StreamHandler()  # Вывод в консоль (screen)
-    ],
-    force=True  # 👈 ВАЖНО! Переопределяет предыдущий basicConfig
+    handlers=[file_handler, console_handler],
+    force=True
 )
+
+logging.getLogger('aiogram').setLevel(logging.INFO)
+logging.getLogger('aiogram.event').setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
+
+# Перенаправляем print в логгер
+class PrintLogger:
+    def __init__(self, logger):
+        self.logger = logger
+        self.terminal = sys.stdout
+        
+    def write(self, message):
+        if message.strip():
+            self.logger.info(message.strip())
+        self.terminal.write(message)
+        
+    def flush(self):
+        self.terminal.flush()
+
+sys.stdout = PrintLogger(logger)
 
 import sys
 
