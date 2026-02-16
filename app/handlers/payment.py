@@ -9,7 +9,8 @@ from app.services.payment_service import create_purchase_record, mark_purchase_a
 from app import config
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
 from app.services.admin_logger import log_payment
-# 👇 ДОБАВИТЬ ЭТУ СТРОКУ
+from app.models import Purchase  # ← Добавь в начало
+from sqlalchemy import select     # ← Добавь в начало
 from app.packages import PACKAGES, STARS_PACKAGES
 
 
@@ -258,6 +259,21 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
         
         if status == "succeeded":
             async with async_session() as session:
+                # Проверяем - может уже обработано?
+                existing = await session.execute(
+                    select(Purchase).where(
+                        Purchase.payment_id == payment_id,
+                        Purchase.status == 'succeeded'
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    await callback.answer("✅ Оплата уже зачислена!")
+                    await callback.message.edit_text(
+                        "✅ Оплата успешна! Бананы уже на балансе 🍌", 
+                        reply_markup=None
+                    )
+                    return
+        
                 await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'])
                 # Начисляем бананы
                 await add_paid_balance(session, callback.from_user.id, package['gens'])                
