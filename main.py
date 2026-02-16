@@ -27,14 +27,14 @@ from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 
 # Настройка логирования с ротацией по дням
-current_date = datetime.now().strftime("%Y%m%d")
 file_handler = TimedRotatingFileHandler(
-    filename=f'bot_{current_date}.log',
-    when='midnight',  # Новый файл каждую полночь
+    filename='bot.log',  # БЕЗ даты в имени!
+    when='midnight',
     interval=1,
-    backupCount=7,  # Хранить логи за последние 7 дней
+    backupCount=7,
     encoding='utf-8'
 )
+file_handler.suffix = "%Y%m%d"  # Суффикс добавится автоматически
 file_handler.setFormatter(
     logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 )
