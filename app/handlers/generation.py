@@ -943,7 +943,7 @@ async def handle_free_text(message: types.Message, state: FSMContext):
         return
     
     # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО
-    video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","Анимируй"]
+    video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","анимируй"]
     if any(keyword in message.text.lower() for keyword in video_keywords):
         await send_video_offer_message(message, state, has_photo=False)
         return
@@ -1021,7 +1021,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
     
     if message.caption:
         # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО (ПРОВЕРЯЕМ ПЕРВЫМ!)
-        video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","Анимируй"]
+        video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","анимируй"]
         if any(keyword in message.caption.lower() for keyword in video_keywords):
             await send_video_offer_message(message, state, has_photo=True, photo_file_id=message.photo[-1].file_id)
             return
@@ -1104,7 +1104,7 @@ async def handle_delayed_caption(message: types.Message, state: FSMContext):
         return
     
     # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО
-    video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","Анимируй"]
+    video_keywords = ["оживи", "оживить", "анимация", "видео", "video", "animate","анимируй"]
     if any(keyword in user_prompt.lower() for keyword in video_keywords):
         data = await state.get_data()
         file_id = data.get("pending_photo_file_id")
