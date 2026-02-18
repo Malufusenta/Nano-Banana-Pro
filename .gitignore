@@ -9,3 +9,5 @@ app/config.py
 app/config.py
 *.log
 my_backups/
+old_garbage/
+*.log.*
