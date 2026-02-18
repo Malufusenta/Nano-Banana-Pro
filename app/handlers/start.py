@@ -280,6 +280,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     reply_markup=keyboard,
                     link_preview_options=types.LinkPreviewOptions(is_disabled=True)
                 )
+                await message.answer("☝️", reply_markup=get_main_kb())
             return
         
         # ЕСЛИ СТАРЫЙ ЮЗЕР
