@@ -34,13 +34,104 @@ async def handle_kling_callback(request):
         print(json.dumps(data, indent=2, ensure_ascii=False))
         
         # Парсим данные
+        
         code = data.get("code")
         msg = data.get("msg")
         task_data = data.get("data", {})
-        
+
+        # 🔥 ОБРАБОТКА ОШИБОК (code != 200)
         if code != 200:
             print(f"⚠️ Kling webhook returned non-200 code: {code} - {msg}")
-            return web.Response(status=200)  # Всё равно возвращаем 200 чтобы Kling не ретраил
+            
+            # Пытаемся достать task_id
+            task_id = task_data.get("taskId") if task_data else None
+            
+            if not task_id:
+                print("⚠️ No taskId in error response")
+                return web.Response(status=200)
+            
+            # Обрабатываем как fail
+            async with async_session() as session:
+                task = await get_task_by_id(session, task_id)
+                
+                if not task:
+                    print(f"⚠️ Task not found in DB: {task_id}")
+                    return web.Response(status=200)
+                
+                user_id = task.user_id
+                
+                # Обновляем статус
+                await update_task_status(
+                    session,
+                    task_id,
+                    status="fail",
+                    fail_code=str(code),
+                    fail_message=msg
+                )
+                
+                # Возвращаем бананы
+                from app import config
+                await refund_user_balance(session, user_id, config.COST_VIDEO)
+                
+                # Уведомляем пользователя (с учетом типа ошибки)
+                bot_instance = request.app['bot']
+                
+                # Получаем fail данные из data
+                fail_code = task_data.get("failCode")
+                fail_msg = task_data.get("failMsg")
+
+                # 🔥 УМНОЕ СООБЩЕНИЕ В ЗАВИСИМОСТИ ОТ КОДА
+                if fail_code == "422" and fail_msg and "nsfw" in fail_msg.lower():
+                    user_message = (
+                        "🔞 <b>Генерация отклонена фильтром безопасности</b>\n\n"
+                        "Kling AI посчитал изображение недопустимым (18+ контент).\n"
+                        "Пожалуйста, попробуйте с другим фото.\n\n"
+                        f"💰 {config.COST_VIDEO} 🍌 возвращены на баланс"
+                    )
+                elif code == 501:
+                    user_message = (
+                        "😔 <b>К сожалению, генерация не удалась</b>\n\n"
+                        "Сервис Kling временно перегружен или не смог обработать это изображение.\n\n"
+                        f"💰 {config.COST_VIDEO} 🍌 возвращены на баланс\n\n"
+                        "Попробуйте ещё раз через пару минут! 🔄"
+                    )
+                else:
+                    user_message = (
+                        f"😔 <b>К сожалению, генерация не удалась</b>\n\n"
+                        f"Причина: {fail_msg or msg}\n\n"
+                        f"💰 {config.COST_VIDEO} 🍌 возвращены на баланс"
+                    )
+                
+                try:
+                    await bot_instance.send_message(
+                        user_id,
+                        user_message,
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    print(f"⚠️ Failed to notify user: {e}")
+                
+                # Логируем ошибку
+                from app.services.admin_logger import log_video_generation_error
+                from app.models import User
+                from sqlalchemy import select
+                
+                user_result = await session.execute(select(User).where(User.telegram_id == user_id))
+                db_user = user_result.scalar_one_or_none()
+                username = db_user.username if db_user else None
+                
+                await log_video_generation_error(
+                    bot_instance,
+                    user_id,
+                    username,
+                    task_id,
+                    f"Code {code}: {msg}"
+                )
+                
+                print(f"✅ Error handled, refund processed for user {user_id}")
+            
+            return web.Response(status=200)
+
         
         # Извлекаем данные
         task_id = task_data.get("taskId")
