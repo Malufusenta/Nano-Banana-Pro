@@ -4,12 +4,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton  # 👈 ДОБАВЬ
 from app.services.admin_logger import log_new_user, log_referral
 from app.database import async_session
-from app.services.user_service import get_user, create_user, admin_change_balance, track_banana_transaction
+from app.services.user_service import get_user, admin_change_balance, track_banana_transaction
 from app import config
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 import re
 from sqlalchemy import select
-from app.models import PostConfig, AdScenario
+from app.models import PostConfig, AdScenario, User
 
 router = Router()
 
@@ -141,7 +142,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         user = await get_user(session, user_id)
     
         
-        # ЕСЛИ НОВЫЙ ЮЗЕР
+# ЕСЛИ НОВЫЙ ЮЗЕР
         if not user:
             
             # Определяем source
@@ -152,14 +153,19 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             else:
                 user_source = source
             
-            await create_user(
-                session, 
-                telegram_id=user_id, 
-                username=message.from_user.username, 
-                full_name=message.from_user.full_name, 
+            stmt = pg_insert(User).values(
+                telegram_id=user_id,
+                username=message.from_user.username,
+                full_name=message.from_user.full_name,
                 referrer_id=referrer_id,
-                source=user_source
-            )
+                source=user_source,
+                generations_balance=0,
+                balance_free=0,
+                balance_paid=0
+            ).on_conflict_do_nothing(index_elements=['telegram_id'])
+            
+            await session.execute(stmt)
+            await session.commit()
             
             user = await get_user(session, user_id)
             

@@ -9,22 +9,23 @@ from app.models import User, Purchase, MessageHistory, GenerationTask, BananaTra
 # --- ТВОЯ СТАРАЯ ЛОГИКА ---
 
 async def get_or_create_user(session: AsyncSession, telegram_id: int, username: str | None, full_name: str | None):
-    query = select(User).where(User.telegram_id == telegram_id)
-    result = await session.execute(query)
-    user = result.scalar_one_or_none()
-
-    if user:
-        return user, False
-
-    new_user = User(
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    
+    stmt = pg_insert(User).values(
         telegram_id=telegram_id,
         username=username,
         full_name=full_name,
         generations_balance=START_BALANCE
-    )
-    session.add(new_user)
+    ).on_conflict_do_nothing(index_elements=['telegram_id'])
+    
+    await session.execute(stmt)
     await session.commit()
-    return new_user, True
+    
+    query = select(User).where(User.telegram_id == telegram_id)
+    result = await session.execute(query)
+    user = result.scalar_one_or_none()
+    
+    return user, False
 
 async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1) -> bool:
     """
@@ -284,21 +285,6 @@ async def get_user(session, telegram_id: int):
     result = await session.execute(query)
     return result.scalars().first()
 
-# ✅ ПРАВКА: Заменил функцию создания (добавил аргументы referrer_id и source)
-async def create_user(session, telegram_id: int, username: str, full_name: str, referrer_id: int = None, source: str = None):
-    new_user = User(
-        telegram_id=telegram_id, 
-        username=username, 
-        full_name=full_name,
-        referrer_id=referrer_id,
-        source=source, # ✅ Пишем источник
-        generations_balance=0,
-        balance_free=0, # Добавил дефолт
-        balance_paid=0  # Добавил дефолт
-    )
-    session.add(new_user)
-    await session.commit()
-    return new_user
 
 async def get_user_financial_stats(session, user_id: int):
     """Для логов оплаты"""
