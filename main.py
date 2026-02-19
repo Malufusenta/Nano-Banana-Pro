@@ -1,40 +1,20 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher
-from app.database import engine, Base
-from app.handlers import start, generation, payment, menu_actions, admin
-from app.middlewares.album import AlbumMiddleware 
-from app.middlewares.admin_spy import AdminSpyMiddleware
-from app.middlewares.antifraud import AntiFraudMiddleware
-from app.middlewares.block_middleware import BlockCheckMiddleware  # 👈 ДОБАВЬ
-from app.services.yandex_metrica import init_metrica_service
-from app.handlers import admin_scenarios
 import sys
+from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime, timedelta
-from app.services.analytics_service import get_analytics_report, format_report_message
-from app.database import async_session
 
-# 👇 ИМПОРТИРУЕМ НАШ НОВЫЙ СЕРВЕР
-from app.webhook_server import start_webhook_server 
-import logging
-
-logger = logging.getLogger(__name__)
-from app import config
-print(f"🔥 РОУТЕР admin_scenarios загружен: {admin_scenarios.router}")
-from datetime import datetime
-from logging.handlers import TimedRotatingFileHandler
-
-# Настройка логирования с ротацией по дням
+# Настройка логирования ПЕРВЫМ ДЕЛОМ
 file_handler = TimedRotatingFileHandler(
-    filename='bot.log',  # БЕЗ даты в имени!
+    filename='bot.log',
     when='midnight',
     interval=1,
     backupCount=7,
     encoding='utf-8'
 )
-file_handler.suffix = "%Y%m%d"  # Суффикс добавится автоматически
+file_handler.suffix = "%Y%m%d"
 file_handler.setFormatter(
     logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 )
@@ -55,11 +35,10 @@ logging.getLogger('aiogram.event').setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-# Перенаправляем print в логгер
 class PrintLogger:
     def __init__(self, logger):
         self.logger = logger
-        self.terminal = sys.stdout
+        self.terminal = sys.__stdout__
         
     def write(self, message):
         if message.strip():
@@ -71,28 +50,20 @@ class PrintLogger:
 
 sys.stdout = PrintLogger(logger)
 
+# Импорты после настройки логирования
+from aiogram import Bot, Dispatcher
+from app.database import engine, Base, async_session
+from app.handlers import start, generation, payment, menu_actions, admin, admin_scenarios
+from app.middlewares.album import AlbumMiddleware
+from app.middlewares.admin_spy import AdminSpyMiddleware
+from app.middlewares.antifraud import AntiFraudMiddleware
+from app.middlewares.block_middleware import BlockCheckMiddleware
+from app.services.yandex_metrica import init_metrica_service
+from app.services.analytics_service import get_analytics_report, format_report_message
+from app.webhook_server import start_webhook_server
+from app import config
 
-# Перенаправляем print в логгер
-class PrintLogger:
-    def __init__(self, logger):
-        self.logger = logger
-        self.terminal = sys.stdout
-        
-    def write(self, message):
-        if message.strip():  # Игнорируем пустые строки
-            self.logger.info(message.strip())
-        self.terminal.write(message)
-        
-    def flush(self):
-        self.terminal.flush()
-
-sys.stdout = PrintLogger(logger)
-
-# Включаем подробные логи aiogram
-logging.getLogger('aiogram').setLevel(logging.INFO)
-logging.getLogger('aiogram.event').setLevel(logging.INFO)
-
-logger = logging.getLogger(__name__)
+print(f"🔥 РОУТЕР admin_scenarios загружен: {admin_scenarios.router}")
 
 async def send_daily_report(bot):
     """
