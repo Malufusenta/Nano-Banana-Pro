@@ -343,10 +343,10 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 return
 
             # Если перешел по рекламе - обновляем источник
-            if source and source != "ref_friend":
-                if user and user.source != source:
-                    user.source = source
-                    await session.commit()
+            # if source and source != "ref_friend":
+            #     if user and user.source != source:
+            #         user.source = source
+            #         await session.commit()
 
             bal = user.generations_balance
             word = get_banana_word(bal)
