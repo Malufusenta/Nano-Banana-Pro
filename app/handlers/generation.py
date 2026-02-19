@@ -25,6 +25,11 @@ from app.utils import prompts
 from sqlalchemy import func
 from app.utils.prompt_validator import is_lazy_prompt
 from app import config
+import asyncio
+import logging
+from aiogram.exceptions import TelegramRetryAfter
+
+logger = logging.getLogger(__name__)
 content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
 )
@@ -1586,20 +1591,33 @@ async def process_generation(
             compressed_bytes = smart_compress_image(file_bytes)
             preview_file = types.BufferedInputFile(compressed_bytes, filename="result.png")
             
-            # 8. Отправка
-            try:
-                sent_msg = await message.answer_photo(
-                    preview_file, 
-                    caption=caption, 
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                print(f"⚠️ Ошибка отправки фото: {e}")
-                sent_msg = await message.answer_document(
-                    result_file, 
-                    caption=caption, 
-                    parse_mode="HTML"
-                )
+        # 8. Отправка
+            sent_msg = None
+            for attempt in range(3):
+                try:
+                    sent_msg = await message.answer_photo(
+                        preview_file, 
+                        caption=caption, 
+                        parse_mode="HTML"
+                    )
+                    break
+                except TelegramRetryAfter as e:
+                    logger.warning(f"⏳ FloodWait при отправке фото: ждём {e.retry_after} сек")
+                    await asyncio.sleep(e.retry_after)
+                except Exception as e:
+                    logger.warning(f"⚠️ Ошибка отправки фото: {e}")
+                    try:
+                        sent_msg = await message.answer_document(
+                            result_file, 
+                            caption=caption, 
+                            parse_mode="HTML"
+                        )
+                    except TelegramRetryAfter as e:
+                        logger.warning(f"⏳ FloodWait при отправке документа: ждём {e.retry_after} сек")
+                        await asyncio.sleep(e.retry_after)
+                    except Exception as e:
+                        logger.error(f"❌ Критическая ошибка отправки: {e}")
+                    break
 
             # 9. Сохранение в БД
             sent_file_id = (
