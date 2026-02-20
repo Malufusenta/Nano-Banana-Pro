@@ -1620,6 +1620,8 @@ async def process_generation(
                     break
 
             # 9. Сохранение в БД
+            if not sent_msg:
+                return
             sent_file_id = (
                 sent_msg.photo[-1].file_id if sent_msg.photo 
                 else sent_msg.document.file_id
