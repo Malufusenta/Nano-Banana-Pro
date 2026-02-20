@@ -4,7 +4,7 @@ from aiogram import Bot, html
 from app import config
 import re
 import html 
-
+from aiogram.exceptions import TelegramRetryAfter
 # Если config.py нет, раскомментируй и вставь
 # ADMIN_CHANNEL_ID = -100xxxxxxxxxx
 
@@ -86,47 +86,46 @@ async def send_log(bot: Bot, text: str, disable_notification: bool = False):
         return
 
     try:
-        # 1. Сначала экранируем HTML, чтобы никнеймы типа "<Ivan>" не ломали лог
-        # (Если ты передаешь уже готовый HTML в text, этот шаг нужно пропустить, 
-        # но тогда ты должен экранировать переменные ВНУТРИ f-строк)
-        
-        # Раз у тебя text уже с тегами <b> и т.д., мы не делаем html.escape всего текста.
-        # Но тогда следи, чтобы username и item_name были безопасными!
-        
-        # 2. Авто-форматирование ID (исправленная регулярка)
-        # Она ищет "ID: 12345" и делает "ID: <code>12345</code>"
         formatted_text = re.sub(
             r'(ID:?\s*)(\d{6,})', 
             r'\1<code>\2</code>', 
             text, 
             flags=re.IGNORECASE
         )
-        
-        await bot.send_message(
-            chat_id=config.ADMIN_CHANNEL_ID,
-            text=formatted_text,
-            parse_mode="HTML",
-            disable_notification=disable_notification,
-            disable_web_page_preview=True  # 👈 Оставили одну строку и запятую (если бы были еще аргументы)
-        )
+        for attempt in range(3):
+            try:
+                await bot.send_message(
+                    chat_id=config.ADMIN_CHANNEL_ID,
+                    text=formatted_text,
+                    parse_mode="HTML",
+                    disable_notification=disable_notification,
+                    disable_web_page_preview=True
+                )
+                break
+            except TelegramRetryAfter as e:
+                await asyncio.sleep(e.retry_after)
     except Exception as e:
         print(f"⚠️ Ошибка логгера: {e}")
 
+
 async def send_photo_log(bot: Bot, photo, caption: str):
-    """Отправка фото-отчета с ПЛАНОМ Б (если фото битое)"""
     if not hasattr(config, "ADMIN_CHANNEL_ID") or not config.ADMIN_CHANNEL_ID:
         return
 
     try:
-        await bot.send_photo(
-            chat_id=config.ADMIN_CHANNEL_ID,
-            photo=photo,
-            caption=caption,
-            parse_mode="HTML"
-        )
+        for attempt in range(3):
+            try:
+                await bot.send_photo(
+                    chat_id=config.ADMIN_CHANNEL_ID,
+                    photo=photo,
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+                break
+            except TelegramRetryAfter as e:
+                await asyncio.sleep(e.retry_after)
     except Exception as e:
         print(f"⚠️ Ошибка логгера (фото): {e}")
-        # 🔥 ПЛАН Б: Если фото не ушло, шлем ТЕКСТ, чтобы админ знал о генерации
         fallback_text = f"{caption}\n\n⚠️ <i>(Сам файл фото недоступен или удален сервером)</i>"
         await send_log(bot, fallback_text)
 

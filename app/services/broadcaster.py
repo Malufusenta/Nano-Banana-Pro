@@ -12,7 +12,7 @@ import asyncio
 from datetime import datetime
 from sqlalchemy import select, update
 from aiogram import Bot
-from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.database import async_session
@@ -150,6 +150,21 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
             except Exception as db_error:
                 print(f"⚠️ Failed to mark user {user_id} as blocked: {db_error}")
             
+        except TelegramRetryAfter as e:
+            print(f"⏳ Broadcast FloodWait: ждём {e.retry_after} сек")
+            await asyncio.sleep(e.retry_after)
+            try:
+                if broadcast.media_type == "photo":
+                    await bot.send_photo(chat_id=user_id, photo=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML")
+                elif broadcast.media_type == "video":
+                    await bot.send_video(chat_id=user_id, video=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML")
+                else:
+                    await bot.send_message(chat_id=user_id, text=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML")
+                delivered += 1
+            except Exception:
+                pass
+            sent += 1
+
         except Exception as e:
             # Другие ошибки (чат не найден, etc)
             print(f"⚠️ Broadcast error for user {user_id}: {e}")
