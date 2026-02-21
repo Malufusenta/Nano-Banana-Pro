@@ -37,8 +37,10 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
         result = await session.execute(
             select(Broadcast).where(Broadcast.id == broadcast_id)
         )
-        broadcast = result.scalar_one()
-        
+        broadcast = result.scalar_one_or_none()
+        if not broadcast:
+            return
+                
         # 2. Получаем активных пользователей (исключаем новичков и заблокировавших)
         cutoff_time = datetime.now() - timedelta(hours=24)
         
