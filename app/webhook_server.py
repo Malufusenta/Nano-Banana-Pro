@@ -11,7 +11,8 @@ from sqlalchemy import select
 from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
 from app.services.yandex_metrica import metrica_service
 from app.models import User, Purchase  # ← В начале файла
-from sqlalchemy import select          # ← В начале файла
+from sqlalchemy import select     
+from sqlalchemy.exc import IntegrityError     # ← В начале файла
 
 
 
@@ -65,14 +66,28 @@ async def handle_yookassa(request):
                     gens_to_add, tariff_name = tariff_data
                     
                     # 1. Записываем покупку
-                    await mark_purchase_as_succeeded(session, user_id, amount)
-                    
-                    # 2. Обновляем аналитику
-                    await update_purchase_analytics(session, user_id, amount, tariff_name, payment_id)
-                    
-                    # 3. Начисляем бананы
-                    await add_paid_balance(session, user_id, gens_to_add)
-                    await session.commit()
+                    try:
+                        await mark_purchase_as_succeeded(session, user_id, amount)
+                        
+                        # 2. Обновляем аналитику
+                        await update_purchase_analytics(session, user_id, amount, tariff_name, payment_id)
+                        
+                        # 3. Начисляем бананы
+                        await add_paid_balance(session, user_id, gens_to_add)
+                        await session.commit()
+                    except IntegrityError as e:
+                        await session.rollback()
+                        if "payment_id" in str(e).lower():
+                            print(f"⚠️ WEBHOOK: Дубль payment_id={payment_id}, пропускаем")
+                            return web.Response(status=200)
+                        print(f"🔴 WEBHOOK ERROR (Integrity): {e}")
+                        raise
+                    except Exception as e:
+                        await session.rollback()
+                        print(f"🔴 WEBHOOK ERROR: {e}")
+                        raise
+
+# Дальше код без изменений (получение stats, отправка логов)
 
                     # ======================================================
                     # 📊 ВОТ ЭТОГО НЕ ХВАТАЛО В СТАРОЙ ВЕРСИИ
