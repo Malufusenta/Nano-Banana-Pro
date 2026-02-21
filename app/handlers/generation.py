@@ -27,8 +27,7 @@ from app.utils.prompt_validator import is_lazy_prompt
 from app import config
 import asyncio
 import logging
-from aiogram.exceptions import TelegramRetryAfter
-
+from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 logger = logging.getLogger(__name__)
 content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
@@ -722,7 +721,10 @@ async def cmd_start_creating(message: types.Message, state: FSMContext):
         [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+3ovTRpUPci85ODYy")]
     ])
     
-    await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+    try:
+        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+    except TelegramForbiddenError:
+        return
 
     # 👇 ВСТАВИТЬ ЭТО ПОСЛЕ cmd_start_creating 👇
 
