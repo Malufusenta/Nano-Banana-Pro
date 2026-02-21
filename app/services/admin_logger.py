@@ -204,6 +204,7 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
         "#payment"
     )
     
+    asyncio.create_task(send_log(bot, text))
     asyncio.create_task(send_sales_log(bot, text))  # 👈 вот это
 
 # 🎨 ТИП 3: ГЕНЕРАЦИЯ
