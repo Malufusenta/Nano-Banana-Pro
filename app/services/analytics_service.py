@@ -441,7 +441,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'rub_revenue': rub_revenue,           # 👈 НОВОЕ
             'stars_revenue': stars_revenue,       # 👈 НОВОЕ
             'stars_count': stars_count,           # 👈 НОВОЕ
-            'transactions': total_transactions + stars_count,  # Рубли + Stars'first_purchases': first_purchases,
+            'transactions': total_transactions + stars_count,  # Рубли + Stars
+            'first_purchases': first_purchases,
             'repeat_purchases': repeat_purchases,
             'avg_check': avg_check
         },
