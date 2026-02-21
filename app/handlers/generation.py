@@ -786,8 +786,12 @@ async def cb_complaint_not_now(callback: types.CallbackQuery, state: FSMContext)
     await state.clear()
     
     # Отправляем главное меню
-    from app.handlers.start import send_main_menu
-    await send_main_menu(callback.message, callback.from_user.id)
+    from app.handlers.start import get_main_kb
+    await callback.message.delete()
+    await callback.message.answer(
+        "🏠 Главное меню",
+        reply_markup=get_main_kb()
+    )
 
 @router.message(StateFilter(GenState.preflight_check, GenState.selecting_ratio), F.text)
 async def handle_new_prompt_during_settings(message: types.Message, state: FSMContext):
