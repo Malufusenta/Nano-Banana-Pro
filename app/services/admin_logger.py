@@ -129,6 +129,33 @@ async def send_photo_log(bot: Bot, photo, caption: str):
         fallback_text = f"{caption}\n\n⚠️ <i>(Сам файл фото недоступен или удален сервером)</i>"
         await send_log(bot, fallback_text)
 
+async def send_sales_log(bot: Bot, text: str):
+    if not hasattr(config, "SALES_CHANNEL_ID") or not config.SALES_CHANNEL_ID:
+        return
+
+    try:
+        formatted_text = re.sub(
+            r'(ID:?\s*)(\d{6,})', 
+            r'\1<code>\2</code>', 
+            text, 
+            flags=re.IGNORECASE
+        )
+        for attempt in range(3):
+            try:
+                await bot.send_message(
+                    chat_id=config.SALES_CHANNEL_ID,
+                    text=formatted_text,
+                    parse_mode="HTML",
+                    disable_notification=False,
+                    disable_web_page_preview=True
+                )
+                break
+            except TelegramRetryAfter as e:
+                await asyncio.sleep(e.retry_after)
+    except Exception as e:
+        print(f"⚠️ Ошибка sales-логгера: {e}")
+
+
 # 🟢 ТИП 1: НОВЫЙ ПОЛЬЗОВАТЕЛЬ
 async def log_new_user(bot: Bot, user, deep_link: str = None):
     link_info = deep_link if deep_link else "Органика"
@@ -177,7 +204,8 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
         "#payment"
     )
     
-    asyncio.create_task(send_log(bot, text))
+    asyncio.create_task(send_sales_log(bot, text))  # 👈 вот это
+
 # 🎨 ТИП 3: ГЕНЕРАЦИЯ
 async def log_generation(bot: Bot, user, prompt: str, model: str, photo_file_id: str):
     username = f"@{user.username}" if user.username else "Нет"
