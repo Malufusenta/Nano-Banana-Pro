@@ -373,7 +373,6 @@ async def add_paid_balance(session: AsyncSession, user_id: int, amount: int):
         user.generations_balance = user.balance_paid + user.balance_free
         await track_banana_transaction(session, user_id, amount, "purchased", f"Purchased {amount} bananas")
 
-        await session.commit()
         return user.generations_balance
     return None
 
