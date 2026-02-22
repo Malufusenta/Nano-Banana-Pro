@@ -30,18 +30,23 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int, username: 
 async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1) -> bool:
     """
     Списывает указанное количество генераций (amount).
+    SELECT FOR UPDATE гарантирует атомарность — второй запрос ждёт снятия блокировки.
     """
-    query = select(User).where(User.telegram_id == telegram_id)
+    query = (
+        select(User)
+        .where(User.telegram_id == telegram_id)
+        .with_for_update()  # 🔒 блокируем строку до commit/rollback
+    )
     result = await session.execute(query)
     user = result.scalar_one_or_none()
 
     if not user:
         return False
-    
+
     total_balance = user.balance_paid + user.balance_free
     if total_balance < amount:
         return False  # Недостаточно бананов
-    
+
     remaining = amount
 
     # СПИСЫВАЕМ ПО ТЗ: Сначала бесплатные, потом платные
@@ -52,16 +57,16 @@ async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amou
 
     if remaining > 0:
         user.balance_paid -= remaining
-    
+
     user.generations_balance = user.balance_paid + user.balance_free
     user.total_generations_used += 1
     user.last_generation_at = datetime.now()
 
-    # Трекинг расхода
     await track_banana_transaction(session, telegram_id, -amount, "spent", "Generation")
 
     await session.commit()
     return True
+
 
 async def get_user_balance(session: AsyncSession, telegram_id: int) -> int:
     query = select(User).where(User.telegram_id == telegram_id)
