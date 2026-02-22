@@ -2,6 +2,8 @@ import asyncio
 from datetime import datetime
 from aiogram import Bot, html
 from app import config
+import logging
+logger = logging.getLogger(__name__)
 import re
 import html 
 from aiogram.exceptions import TelegramRetryAfter
@@ -251,7 +253,8 @@ async def log_action(bot: Bot, user_id: int, username: str, action: str, is_mess
                 text = f"{prefix_label}: {readable_text}\n👤 {u_name}\n#action"
             else:
                 text = f"👣 Действие: {action}\n👤 {u_name}\n#action"
-        except:
+        except Exception as e:
+            logger.warning(f"log_action parse error: {e}")
             text = f"👣 Действие: {action}\n👤 {u_name}\n#action"
 
     asyncio.create_task(send_log(bot, text, disable_notification=True))
