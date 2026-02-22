@@ -3,9 +3,10 @@ import asyncio
 import re
 import io
 import base64
-import requests
+import aiohttp
 import json
-import time
+import ssl
+import certifi
 from PIL import Image
 from dotenv import load_dotenv
 from google import genai
@@ -27,15 +28,6 @@ KIE_MODEL_EDIT = "google/nano-banana-edit"
 KIE_MODEL_GEN = "google/nano-banana"
 KIE_MODEL_PRO = "nano-banana-pro"
 
-# ==============================================================================
-# 1. ДВИЖОК GOOGLE (ЗАГЛУШКА)
-# ==============================================================================
-async def _run_google_async(bot: Bot, prompt: str, image_urls=None, aspect_ratio: str = "1:1", history: list = None):
-    print("⚠️ Запрос в Google пропущен (режим Kie Only).")
-    return None
-
-
-# 👇 ВСТАВИТЬ ПЕРЕД def _run_kie(...)
 
 def sanitize_prompt(text: str) -> str:
     """Убирает переносы строк и мусор, чтобы API не ломался"""
@@ -50,7 +42,7 @@ def sanitize_prompt(text: str) -> str:
 # 2. ДВИЖОК KIE.AI (ОСНОВНОЙ)
 # ==============================================================================
 # 👇 ДОБАВИЛ АРГУМЕНТ resolution
-def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: bool = False, history: list = None, resolution: str = "1K"):
+async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: bool = False, history: list = None, resolution: str = "1K"):
     if not config.KIE_API_KEY:
         print("❌ KIE ключ не настроен")
         return None
@@ -109,67 +101,62 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
     headers = {"Authorization": f"Bearer {config.KIE_API_KEY}", "Content-Type": "application/json"}
     
     try:
-        resp = requests.post(f"{config.KIE_URL}/createTask", headers=headers, json={"model": model, "input": input_data})
-        if resp.status_code != 200:
-            # Мы принудительно вызываем ошибку с кодом и текстом
-            # Это перебросит нас прямиком в except в файле бота
-            raise Exception(f"{resp.status_code} {resp.text}")
-        
-        resp_json = resp.json()
-        if resp_json.get("code") != 200:
-             # 👇 ВЫЗЫВАЕМ ОШИБКУ, ЧТОБЫ ОНА ПОПАЛА В ЛОГИ
-             error_msg = resp_json.get('msg')
-             raise Exception(f"API Error: {error_msg}")
-
-        task_id = resp_json["data"]["taskId"]
-        
-        # ✅ ОБНОВЛЕННЫЙ ЦИКЛ ОЖИДАНИЯ
-        # 300 раз * 5 сек = 25 минут
-        for _ in range(300): 
-            try:
-                r = requests.get(f"{config.KIE_URL}/recordInfo", headers=headers, params={"taskId": task_id})
-                data = r.json().get("data")
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.post(f"{config.KIE_URL}/createTask", headers=headers, json={"model": model, "input": input_data}) as resp:
+                if resp.status != 200:
+                    raise Exception(f"{resp.status} {await resp.text()}")
                 
-                if not data:
-                    time.sleep(5)
-                    continue
+                resp_json = await resp.json()
 
-                state = data.get("state")
+            if resp_json.get("code") != 200:
+                error_msg = resp_json.get('msg')
+                raise Exception(f"API Error: {error_msg}")
 
-                if state == "success":
-                    # Защита от смены формата JSON (строка или словарь)
-                    result_json = data.get("resultJson")
-                    if isinstance(result_json, str):
-                        result_obj = json.loads(result_json)
-                    else:
-                        result_obj = result_json
+            task_id = resp_json["data"]["taskId"]
+        
+            for _ in range(300): 
+                try:
+                    async with session.get(f"{config.KIE_URL}/recordInfo", headers=headers, params={"taskId": task_id}) as r:
+                        data = (await r.json()).get("data")
                     
-                    # Проверка на пустой список (Soft Filter)
-                    urls = result_obj.get("resultUrls", [])
-                    if not urls:
-                        raise Exception("No images found in AI response (Possible Soft Filter)")
+                    if not data:
+                        await asyncio.sleep(5)
+                        continue
+
+                    state = data.get("state")
+
+                    if state == "success":
+                        result_json = data.get("resultJson")
+                        if isinstance(result_json, str):
+                            result_obj = json.loads(result_json)
+                        else:
+                            result_obj = result_json
+                        
+                        urls = result_obj.get("resultUrls", [])
+                        if not urls:
+                            raise Exception("No images found in AI response (Possible Soft Filter)")
+                        
+                        url = urls[0]
+                        print(f"✨ Kie: Успех! (Task {task_id})")
+                        
+                        async with session.get(url) as img_resp:
+                            img_bytes = await img_resp.read()
+                        return BufferedInputFile(img_bytes, filename=f"kie_{model}.png"), url
                     
-                    url = urls[0]
-                    print(f"✨ Kie: Успех! (Task {task_id})")
-                    
-                    img_resp = requests.get(url)
-                    return BufferedInputFile(img_resp.content, filename=f"kie_{model}.png"), url
+                    elif state == "fail":
+                        fail_msg = data.get("failMsg", "Unknown error")
+                        raise Exception(f"Kie REJECT: {fail_msg}")
                 
-                elif state == "fail":
-                    fail_msg = data.get("failMsg", "Unknown error")
-                    # ✅ Пробрасываем реальную причину (NSFW, Timeout) наверх
-                    raise Exception(f"Kie REJECT: {fail_msg}")
-            
-            except Exception as loop_e:
-                # Если поймали нашу ошибку - кидаем её дальше, чтобы остановить всё
-                if "Kie REJECT" in str(loop_e) or "No images" in str(loop_e):
-                    raise loop_e
-                print(f"⚠️ Loop Warning: {loop_e}")
-            
-            time.sleep(5)
+                except Exception as loop_e:
+                    if "Kie REJECT" in str(loop_e) or "No images" in str(loop_e):
+                        raise loop_e
+                    print(f"⚠️ Loop Warning: {loop_e}")
+                
+                await asyncio.sleep(5)
             
     except Exception as e:
-        # ✅ Пробрасываем ошибку в generation.py, чтобы показать красивое сообщение
         raise e
 
 # ==============================================================================
@@ -177,4 +164,4 @@ def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: b
 # ==============================================================================
 # 👇 ДОБАВИЛ resolution В АРГУМЕНТЫ
 async def generate_image(bot: Bot, prompt: str, image_urls: list = None, is_premium: bool = False, aspect_ratio: str = "1:1", use_pro_model: bool = False, history: list = None, resolution: str = "1K"):
-    return await asyncio.to_thread(_run_kie, prompt, image_urls, aspect_ratio, use_pro_model, history, resolution)
+    return await _run_kie(prompt, image_urls, aspect_ratio, use_pro_model, history, resolution)

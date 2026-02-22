@@ -11,3 +11,4 @@ app/config.py
 my_backups/
 old_garbage/
 *.log.*
+.claude/
