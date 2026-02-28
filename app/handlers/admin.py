@@ -960,8 +960,8 @@ async def process_postlink_prompt(message: types.Message, state: FSMContext):
 # Кнопки выбора модели
     builder = InlineKeyboardBuilder()
     builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="postlink_model_standard")
-    builder.button(text=f"🍌 Банана 2 ({config.COST_NB2} банана)", callback_data="postlink_model_nb2")
-    builder.button(text=f"💎 PRO ({config.COST_PRO} банана)", callback_data="postlink_model_pro")
+    builder.button(text=f"🍌 Банана 2 ({config.COST_NB2_1K} банана)", callback_data="postlink_model_nb2")
+    builder.button(text=f"💎 PRO ({config.COST_PRO_1K} банана)", callback_data="postlink_model_pro")
     builder.button(text="❌ Отмена", callback_data="admin_menu")
     builder.adjust(1)
     
@@ -983,11 +983,22 @@ async def process_postlink_model(callback: types.CallbackQuery, state: FSMContex
     
     # Кнопки выбора формата
     builder = InlineKeyboardBuilder()
-    ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    data = await state.get_data()
+    postlink_model = data.get("postlink_model", "standard")
+    
+    if postlink_model == "nb2":
+        ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
+    else:
+        ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    
     for r in ratios:
         builder.button(text=r, callback_data=f"postlink_ratio_{r}")
     builder.button(text="❌ Отмена", callback_data="admin_menu")
-    builder.adjust(3, 3, 2, 2, 1)
+    
+    if postlink_model == "nb2":
+        builder.adjust(3, 3, 2, 2, 4, 1)
+    else:
+        builder.adjust(3, 3, 2, 2, 1)
     
     await callback.message.edit_text(
         "✅ Модель сохранена!\n\n"

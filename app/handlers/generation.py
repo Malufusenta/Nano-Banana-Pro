@@ -379,7 +379,9 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         )
         await state.set_state(GenState.preflight_check)
         
-        cost = config.COST_PRO if scenario_model == "pro" else config.COST_STANDARD
+        if scenario_model == "pro": cost = config.COST_PRO_1K
+        elif scenario_model == "nb2": cost = config.COST_NB2_1K
+        else: cost = config.COST_STANDARD
         
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"  # 👈 <b> вместо **
@@ -1410,10 +1412,14 @@ async def cb_edit_result(callback: types.CallbackQuery, state: FSMContext, bot: 
         try: 
             params = json.loads(history_item.content)
             use_pro = params.get("pro", False)
+            use_nb2 = params.get("nb2", False)
         except: 
             use_pro = False
+            use_nb2 = False
         
-        cost = config.COST_PRO if use_pro else config.COST_STANDARD
+        if use_pro: cost = config.COST_PRO_1K
+        elif use_nb2: cost = config.COST_NB2_1K
+        else: cost = config.COST_STANDARD
         
         await state.update_data(
             editing_file_id=history_item.file_id,
@@ -1753,6 +1759,7 @@ async def process_generation(
                 "ratio": aspect_ratio,
                 "cost": cost,
                 "pro": use_pro_model,
+                "nb2": use_nb2_model,
                 "resolution": resolution,
                 "is_blend_mode": is_blend_mode
 
