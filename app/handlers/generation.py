@@ -18,7 +18,7 @@ from app.services.user_service import (
     check_and_deduct_balance, get_user_balance, is_user_premium, 
     add_history, clear_history, get_history_message_by_id, get_dialog_context,
     start_generation_task, finish_generation_task, admin_change_balance,
-    get_user_model_preference, set_user_model_preference, has_user_purchased, get_user, track_banana_transaction
+    get_user_model_preference, set_user_model_preference, has_user_purchased, get_user, track_banana_transaction, increment_generations_count
 )
 from app.services.ai_engine import generate_image
 from app.utils import prompts
@@ -246,38 +246,75 @@ async def get_photo_url(bot: Bot, file_id: str) -> str:
 # 🎛 КЛАВИАТУРЫ
 # =====================================================================
 
-
 def get_preflight_kb(model_type: str, ratio: str, quality: str):
     builder = InlineKeyboardBuilder()
     
-    model_btn = "💎 Модель: PRO" if model_type == "pro" else "🍌 Модель: Standard"
-    builder.button(text=model_btn, callback_data="pf_toggle_model")
-    builder.button(text=f"📐 Формат: {ratio}", callback_data="pf_select_ratio")
-    
     if model_type == "pro":
-        # Логика подписи кнопки
+        model_btn = "💎 Модель: PRO"
+    elif model_type == "nb2":
+        model_btn = "🍌 Модель: Банана 2"
+    else:
+        model_btn = "🍌 Модель: Standard"
+
+    if model_type == "pro":
         if quality == "4k":
             qual_btn = "👑 Качество: 4K (до 10 мин)"
         elif quality == "2k":
             qual_btn = "🌟 Качество: 2K (1-5 мин)"
         else:
             qual_btn = "⚡️ Качество: HD (быстро)"
-            
+    elif model_type == "nb2":
+        if quality == "4k":
+            qual_btn = "👑 Качество: 4K"
+        elif quality == "2k":
+            qual_btn = "🌟 Качество: 2K"
+        else:
+            qual_btn = "⚡️ Качество: HD"
+    else:
+        qual_btn = None
+
+    # Расчёт стоимости
+    if model_type == "pro":
+        if quality == "4k": cost = config.COST_PRO_4K
+        elif quality == "2k": cost = config.COST_PRO_2K
+        else: cost = config.COST_PRO_1K
+    elif model_type == "nb2":
+        if quality == "4k": cost = config.COST_NB2_4K
+        elif quality == "2k": cost = config.COST_NB2_2K
+        else: cost = config.COST_NB2_1K
+    else:
+        cost = config.COST_STANDARD
+
+    builder.button(text=model_btn, callback_data="pf_toggle_model")
+    if qual_btn:
         builder.button(text=qual_btn, callback_data="pf_toggle_quality")
-    
-    cost = config.COST_PRO if model_type == "pro" else config.COST_STANDARD
+    builder.button(text=f"📐 Формат: {ratio}", callback_data="pf_select_ratio")
     builder.button(text=f"🚀 Запуск (спишем {cost} 🍌)", callback_data="pf_start")
     
-    builder.adjust(2, 1, 1) if model_type == "pro" else builder.adjust(2, 1)
+    if model_type in ("pro", "nb2"):
+        builder.adjust(1, 2, 1)
+    else:
+        builder.adjust(1, 1, 1)
+        
     return builder.as_markup()
 
-def get_ratio_kb():
+def get_ratio_kb(model_type: str = "standard"):
     builder = InlineKeyboardBuilder()
-    ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    
+    if model_type == "nb2":
+        ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
+    else:
+        ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    
     for r in ratios: 
         builder.button(text=r, callback_data=f"set_ratio_{r}")
     builder.button(text="🔙 Назад", callback_data="pf_back")
-    builder.adjust(3, 3, 2, 2, 1)
+    
+    if model_type == "nb2":
+        builder.adjust(3, 3, 2, 2, 4, 1)
+    else:
+        builder.adjust(3, 3, 2, 2, 1)
+    
     return builder.as_markup()
 
 def get_cancel_kb():
@@ -285,14 +322,14 @@ def get_cancel_kb():
     builder.button(text="❌ Отмена", callback_data="cancel_wizard")
     return builder.as_markup()
 
-def get_result_kb(db_message_id: int, is_pro: bool, cost: int):
+def get_result_kb(db_message_id: int, is_pro: bool, cost: int, is_nb2: bool = False):
     builder = InlineKeyboardBuilder()
     builder.button(text=f"🔄 Ещё раз ({cost}🍌)", callback_data=f"reroll_{db_message_id}")
     builder.button(text=f"🎨 Изменить ({cost}🍌)", callback_data=f"edit_{db_message_id}")
     builder.button(text=f"🎬 Оживить фото (спишем {config.COST_VIDEO}🍌)", callback_data=f"animate_{db_message_id}")
-    if is_pro:
+    if is_pro or is_nb2:
         builder.button(text="📂 Скачать без сжатия", callback_data=f"download_{db_message_id}")
-    builder.adjust(2, 1, 1) if is_pro else builder.adjust(2, 1)  # ← ИЗМЕНИЛИ adjust
+    builder.adjust(2, 1, 1) if (is_pro or is_nb2) else builder.adjust(2, 1)
     return builder.as_markup()
 
 def get_categories_kb():
@@ -374,7 +411,17 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     )
     await state.set_state(GenState.preflight_check)
     
-    cost = config.COST_PRO if pref_model == "pro" else config.COST_STANDARD
+    quality = "2k"  # дефолтное качество при инициализации
+    if pref_model == "pro":
+        if quality == "4k": cost = config.COST_PRO_4K
+        elif quality == "2k": cost = config.COST_PRO_2K
+        else: cost = config.COST_PRO_1K
+    elif pref_model == "nb2":
+        if quality == "4k": cost = config.COST_NB2_4K
+        elif quality == "2k": cost = config.COST_NB2_2K
+        else: cost = config.COST_NB2_1K
+    else:
+        cost = config.COST_STANDARD
     has_photo = normalized_urls is not None and len(normalized_urls) > 0
 
     if not has_photo or is_edit_mode:
@@ -398,34 +445,53 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
 async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     current_model = data.get("pf_model", "standard")
-    new_model = "pro" if current_model == "standard" else "standard"
+    
+    # Переключение по кругу: standard → nb2 → pro → standard
+    if current_model == "standard":
+        new_model = "nb2"
+    elif current_model == "nb2":
+        new_model = "pro"
+    else:
+        new_model = "standard"
     
     await state.update_data(pf_model=new_model)
     
     async with async_session() as session: 
-        await set_user_model_preference(session, callback.from_user.id, new_model)
+        await set_user_model_preference(session, callback.from_user.id, new_model, manual=True)
     
     ratio = data.get("pf_ratio", "1:1")
     quality = data.get("pf_quality", "hd")
-    cost = config.COST_PRO if new_model == "pro" else config.COST_STANDARD
+    
+    # При переключении на nb2 сбрасываем качество на HD
+    if new_model == "nb2":
+        quality = "hd"
+        await state.update_data(pf_quality="hd")
+    
+    if new_model == "pro":
+        if quality == "4k": cost = config.COST_PRO_4K
+        elif quality == "2k": cost = config.COST_PRO_2K
+        else: cost = config.COST_PRO_1K
+    elif new_model == "nb2":
+        if quality == "4k": cost = config.COST_NB2_4K
+        elif quality == "2k": cost = config.COST_NB2_2K
+        else: cost = config.COST_NB2_1K
+    else:
+        cost = config.COST_STANDARD
 
-    # 🔥 ПРОВЕРЯЕМ ФЛАГ BROADCAST 🔥
     is_broadcast = data.get("is_broadcast_gen", False)
     
     if is_broadcast:
-        # Упрощённый текст для broadcast
         text = (
             f"🎨 *Параметры генерации*\n\n"
             f"Выбери модель и жми *\"🚀 Запуск\"*👇"
         )
     else:
-    
         text = (
-        f"🎨 *Параметры генерации*\n\n"
-        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
-        f"💰 Стоимость:* {cost} банан(а)*\n\n"
-        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
-    )
+            f"🎨 *Параметры генерации*\n\n"
+            f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
+            f"💰 Стоимость:* {cost} банан(а)*\n\n"
+            f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+        )
     
     await callback.message.edit_text(
         text, 
@@ -452,15 +518,39 @@ async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext)
     model = data.get("pf_model", "standard")
     ratio = data.get("pf_ratio", "1:1")
     
-    await callback.message.edit_reply_markup(reply_markup=get_preflight_kb(model, ratio, new_q))
+    if model == "pro":
+        if new_q == "4k": cost = config.COST_PRO_4K
+        elif new_q == "2k": cost = config.COST_PRO_2K
+        else: cost = config.COST_PRO_1K
+    elif model == "nb2":
+        if new_q == "4k": cost = config.COST_NB2_4K
+        elif new_q == "2k": cost = config.COST_NB2_2K
+        else: cost = config.COST_NB2_1K
+    else:
+        cost = config.COST_STANDARD
+
+    text = (
+        f"🎨 *Параметры генерации*\n\n"
+        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
+        f"💰 Стоимость:* {cost} банан(а)*\n\n"
+        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+    )
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_preflight_kb(model, ratio, new_q),
+        parse_mode="Markdown"
+    )
     await callback.answer()
 
 @router.callback_query(GenState.preflight_check, F.data == "pf_select_ratio")
 async def cb_pf_select_ratio(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(GenState.selecting_ratio)
+    data = await state.get_data()
+    model_type = data.get("pf_model", "standard")
     await callback.message.edit_text(
         "📐 **Выберите формат изображения:**", 
-        reply_markup=get_ratio_kb(), 
+        reply_markup=get_ratio_kb(model_type), 
         parse_mode="Markdown"
     )
     await callback.answer()
@@ -469,7 +559,18 @@ async def cb_pf_select_ratio(callback: types.CallbackQuery, state: FSMContext):
 async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(GenState.preflight_check)
     data = await state.get_data()
-    cost = config.COST_PRO if data.get("pf_model") == "pro" else config.COST_STANDARD
+    model = data.get("pf_model")
+    quality = data.get("pf_quality", "hd")
+    if model == "pro":
+        if quality == "4k": cost = config.COST_PRO_4K
+        elif quality == "2k": cost = config.COST_PRO_2K
+        else: cost = config.COST_PRO_1K
+    elif model == "nb2":
+        if quality == "4k": cost = config.COST_NB2_4K
+        elif quality == "2k": cost = config.COST_NB2_2K
+        else: cost = config.COST_NB2_1K
+    else:
+        cost = config.COST_STANDARD
 
     # 🔥 ПРОВЕРЯЕМ ФЛАГ BROADCAST 🔥
     is_broadcast = data.get("is_broadcast_gen", False)
@@ -512,27 +613,34 @@ async def cb_pf_set_ratio(callback: types.CallbackQuery, state: FSMContext):
 async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     
-    # 1. Считываем АКТУАЛЬНЫЕ данные из состояния (меню)
     prompt = data.get("pf_prompt")
     image_urls = data.get("pf_image_urls")
     model_type = data.get("pf_model")
     ratio = data.get("pf_ratio")
     quality = data.get("pf_quality")
     
-    cost = config.COST_PRO if model_type == "pro" else config.COST_STANDARD
+    if model_type == "pro":
+        if quality == "4k": cost = config.COST_PRO_4K
+        elif quality == "2k": cost = config.COST_PRO_2K
+        else: cost = config.COST_PRO_1K
+    elif model_type == "nb2":
+        if quality == "4k": cost = config.COST_NB2_4K
+        elif quality == "2k": cost = config.COST_NB2_2K
+        else: cost = config.COST_NB2_1K
+    else:
+        cost = config.COST_STANDARD
+    
     use_pro = (model_type == "pro")
+    use_nb2 = (model_type == "nb2")
     
     # Логика разрешения
     resolution = "1K"
-    if use_pro:
+    if use_pro or use_nb2:
         if quality == "4k": resolution = "4K"
         elif quality == "2k": resolution = "2K"
     
-    # 2. Просто уведомляем пользователя (Toast), НЕ трогая сообщение с меню
     await callback.answer(f"🚀 Запускаю...", show_alert=False)
     
-    # 3. Запускаем генерацию
-    # Меню останется висеть в чате, и юзер сможет поменять настройки и нажать снова
     await process_generation(
         callback.message, 
         callback.from_user.id, 
@@ -540,24 +648,22 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
         image_urls, 
         aspect_ratio=ratio, 
         cost=cost, 
-        use_pro_model=use_pro, 
+        use_pro_model=use_pro,
+        use_nb2_model=use_nb2,
         resolution=resolution,
         is_blend_mode=data.get("is_blend_mode", False)
-
     )
 
-    # 🔥 Сбрасываем флаг после успешной генерации
-    from_retry_flow = data.get("force_pro_mode", False)  # 👈 ПОЛУЧАЕМ ЗДЕСЬ
+    from_retry_flow = data.get("force_pro_mode", False)
     if from_retry_flow:
         await state.update_data(force_pro_mode=False)
         
-        # Логируем заказ из Retry Flow с РЕАЛЬНОЙ моделью
         from app.services.admin_logger import log_order_from_retry
         await log_order_from_retry(
             callback.bot,
             callback.from_user.id,
             cost,
-            model_type  # 👈 ПЕРЕДАЁМ РЕАЛЬНУЮ МОДЕЛЬ
+            model_type
         )
     
     # ⚠️ ВАЖНО: Мы НЕ делаем await state.clear()
@@ -1435,6 +1541,7 @@ async def process_generation(
     aspect_ratio: str = "1:1", 
     cost: int = 1, 
     use_pro_model: bool = False, 
+    use_nb2_model: bool = False,
     resolution: str = "1K",
     is_blend_mode: bool = False
 
@@ -1462,8 +1569,7 @@ async def process_generation(
     final_urls = normalize_image_urls(image_urls)
     
     # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: Простой vs Сложный
-    is_complex_standard = (not use_pro_model and len(final_urls) >= 2)
-
+    is_complex_standard = (not use_pro_model and not use_nb2_model and len(final_urls) >= 2)
     # 🔥 ДЕТЕКТОР ЗАДАЧ ТИПА "ЗАМЕНА/ВСТАВКА"
     swap_keywords = [
         'поменя', 'замен', 'положи', 'помести', 'вставь', 'перенес', 
@@ -1506,7 +1612,7 @@ async def process_generation(
             collage.save(collage_bytes, format='PNG')
             collage_bytes.seek(0)
             
-# 4. Загружаем коллаж в Telegram (БЕЗ уведомления)
+            # 4. Загружаем коллаж в Telegram (БЕЗ уведомления)
             temp_msg = await bot.send_photo(
                 chat_id=user_id,
                 photo=types.BufferedInputFile(collage_bytes.read(), "collage.png"),
@@ -1522,7 +1628,7 @@ async def process_generation(
             except:
                 pass
             
-# 7. ВАЖНО: Заменяем final_urls на коллаж
+            # 7. ВАЖНО: Заменяем final_urls на коллаж
             final_urls = [collage_url]
             
             # 🔥 МОДИФИЦИРУЕМ ПРОМПТ ДЛЯ КОЛЛАЖА
@@ -1541,7 +1647,7 @@ async def process_generation(
             traceback.print_exc()
             # Продолжаем с оригинальными URL (fallback)
     
-# 2. Сообщение о старте (РАЗНОЕ для простого/сложного)
+    # 2. Сообщение о старте (РАЗНОЕ для простого/сложного)
     if is_complex_standard:
         # 📌 СЦЕНАРИЙ Б: Сложный (Standard + много фото) - С ПРЕДУПРЕЖДЕНИЕМ
         wait_msg = await message.answer(
@@ -1560,10 +1666,10 @@ async def process_generation(
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_PHOTO)
         
-# 4. Генерация
+        # 4. Генерация
         result_data = await generate_image(
             bot, prompt, final_urls, False, 
-            aspect_ratio, use_pro_model, None, resolution
+            aspect_ratio, use_pro_model, use_nb2_model, None, resolution
         )
         
         # 5. Обработка результата
@@ -1635,9 +1741,9 @@ async def process_generation(
 
             await log_generation(
                 bot, 
-                message.chat, # ✅ Берем данные из ЧАТА (это всегда юзер)
+                message.chat,
                 prompt=prompt, 
-                model="PRO" if use_pro_model else "Standard", 
+                model="PRO" if use_pro_model else "NB2" if use_nb2_model else "Standard",
                 photo_file_id=sent_file_id
             )
             
@@ -1657,6 +1763,8 @@ async def process_generation(
                     session, user_id, "user", prompt, 
                     has_image=bool(final_urls)
                 )
+                await increment_generations_count(session, user_id)
+
                 model_msg = await add_history(
                     session, user_id, "model", meta_data, 
                     has_image=True, 
@@ -1668,7 +1776,7 @@ async def process_generation(
             # 10. Добавление кнопок
             if db_id:
                 await sent_msg.edit_reply_markup(
-                    reply_markup=get_result_kb(db_id, use_pro_model, cost)
+                    reply_markup=get_result_kb(db_id, use_pro_model, cost, is_nb2=use_nb2_model)
                 )
             
             async with async_session() as session:

@@ -27,7 +27,7 @@ KIE_URL = "https://api.kie.ai/api/v1/jobs"
 KIE_MODEL_EDIT = "google/nano-banana-edit"
 KIE_MODEL_GEN = "google/nano-banana"
 KIE_MODEL_PRO = "nano-banana-pro"
-
+KIE_MODEL_2 = "nano-banana-2"
 
 def sanitize_prompt(text: str) -> str:
     """Убирает переносы строк и мусор, чтобы API не ломался"""
@@ -42,7 +42,7 @@ def sanitize_prompt(text: str) -> str:
 # 2. ДВИЖОК KIE.AI (ОСНОВНОЙ)
 # ==============================================================================
 # 👇 ДОБАВИЛ АРГУМЕНТ resolution
-async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: bool = False, history: list = None, resolution: str = "1K"):
+async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: bool = False, use_nb2: bool = False, history: list = None, resolution: str = "1K"):
     if not config.KIE_API_KEY:
         print("❌ KIE ключ не настроен")
         return None
@@ -64,6 +64,9 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
     if use_pro:
         model = config.KIE_MODEL_PRO
         mode_name = "PRO"
+    elif use_nb2:
+        model = config.KIE_MODEL_2
+        mode_name = "NB2"
     elif image_urls and len(image_urls) > 0:
         model = config.KIE_MODEL_EDIT
         mode_name = "EDIT (Multi-Image)"
@@ -73,13 +76,20 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
 
     print(f"💎 [KIE CORE] Mode: {mode_name} | Res: {resolution} | Imgs: {len(image_urls) if image_urls else 0}")
 
-    # --- СБОРКА PARAMETERS ---
+# --- СБОРКА PARAMETERS ---
     input_data = {
         "prompt": final_prompt,
         "output_format": "png"
     }
 
-    if image_urls and not use_pro: 
+    if use_nb2:
+        input_data["aspect_ratio"] = aspect_ratio
+        input_data["resolution"] = resolution
+        if image_urls:
+            if isinstance(image_urls, str): image_urls = [image_urls]
+            input_data["image_input"] = image_urls
+
+    elif image_urls and not use_pro: 
         if isinstance(image_urls, str): image_urls = [image_urls]
         input_data["image_urls"] = image_urls
         input_data["strength"] = 0.85 
@@ -141,7 +151,8 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
                         url = urls[0]
                         print(f"✨ Kie: Успех! (Task {task_id})")
                         
-                        async with session.get(url) as img_resp:
+                        download_timeout = aiohttp.ClientTimeout(total=120)
+                        async with session.get(url, timeout=download_timeout) as img_resp:
                             img_bytes = await img_resp.read()
                         return BufferedInputFile(img_bytes, filename=f"kie_{model}.png"), url
                     
@@ -163,5 +174,5 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
 # 3. ГЛАВНЫЙ РОУТЕР
 # ==============================================================================
 # 👇 ДОБАВИЛ resolution В АРГУМЕНТЫ
-async def generate_image(bot: Bot, prompt: str, image_urls: list = None, is_premium: bool = False, aspect_ratio: str = "1:1", use_pro_model: bool = False, history: list = None, resolution: str = "1K"):
-    return await _run_kie(prompt, image_urls, aspect_ratio, use_pro_model, history, resolution)
+async def generate_image(bot: Bot, prompt: str, image_urls: list = None, is_premium: bool = False, aspect_ratio: str = "1:1", use_pro_model: bool = False, use_nb2_model: bool = False, history: list = None, resolution: str = "1K"):
+    return await _run_kie(prompt, image_urls, aspect_ratio, use_pro_model, use_nb2_model, history, resolution)

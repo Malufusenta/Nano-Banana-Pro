@@ -960,6 +960,7 @@ async def process_postlink_prompt(message: types.Message, state: FSMContext):
 # Кнопки выбора модели
     builder = InlineKeyboardBuilder()
     builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="postlink_model_standard")
+    builder.button(text=f"🍌 Банана 2 ({config.COST_NB2} банана)", callback_data="postlink_model_nb2")
     builder.button(text=f"💎 PRO ({config.COST_PRO} банана)", callback_data="postlink_model_pro")
     builder.button(text="❌ Отмена", callback_data="admin_menu")
     builder.adjust(1)

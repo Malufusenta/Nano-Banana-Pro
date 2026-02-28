@@ -269,17 +269,41 @@ async def refund_stuck_tasks(session: AsyncSession):
 # --- МОДЕЛИ ---
 
 async def get_user_model_preference(session: AsyncSession, user_id: int) -> str:
-    query = select(User.preferred_model).where(User.telegram_id == user_id)
+    query = select(User).where(User.telegram_id == user_id)
     result = await session.execute(query)
-    model = result.scalar_one_or_none()
-    return model if model else "standard"
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return "standard"
+    
+    # Если пользователь сам выбрал модель — уважаем его выбор
+    if user.is_model_manually_selected:
+        return user.preferred_model
+    
+    # Сегментация: опытный = 2+ генерации ИЛИ 1+ покупка
+    is_experienced = (user.generations_count >= 2) or (user.orders_count > 0)
+    
+    if is_experienced:
+        return "nb2"
+    else:
+        return "standard"
 
-async def set_user_model_preference(session: AsyncSession, user_id: int, model: str):
+async def set_user_model_preference(session: AsyncSession, user_id: int, model: str, manual: bool = False):
     query = select(User).where(User.telegram_id == user_id)
     result = await session.execute(query)
     user = result.scalar_one_or_none()
     if user:
         user.preferred_model = model
+        if manual:
+            user.is_model_manually_selected = True
+        await session.commit()
+
+async def increment_generations_count(session: AsyncSession, user_id: int):
+    query = select(User).where(User.telegram_id == user_id)
+    result = await session.execute(query)
+    user = result.scalar_one_or_none()
+    if user:
+        user.generations_count += 1
         await session.commit()
 
 # --- ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ (КОТОРЫЕ БЫЛИ У ТЕБЯ В КОНЦЕ) ---
