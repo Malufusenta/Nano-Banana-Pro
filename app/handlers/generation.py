@@ -252,7 +252,7 @@ def get_preflight_kb(model_type: str, ratio: str, quality: str):
     if model_type == "pro":
         model_btn = "💎 Модель: PRO"
     elif model_type == "nb2":
-        model_btn = "🍌 Модель: Банана 2"
+        model_btn = "🍌 Модель: Nano Banana 2"
     else:
         model_btn = "🍌 Модель: Standard"
 
