@@ -407,7 +407,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         pf_image_urls=normalized_urls,
         pf_model=pref_model, 
         pf_ratio="1:1", 
-        pf_quality="2k"
+        pf_quality="hd" if pref_model == "nb2" else "2k"
     )
     await state.set_state(GenState.preflight_check)
     
@@ -727,7 +727,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
             pf_image_urls=image_urls,
             pf_ratio=ad_scenario_ratio,
             pf_model=ad_scenario_model,
-            pf_quality="2k",
+            pf_quality="hd" if ad_scenario_model == "nb2" else "2k",
             is_ad_scenario_gen=True
         )
         await state.set_state(GenState.preflight_check)
@@ -751,7 +751,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         pf_image_urls=image_urls,
         pf_ratio=broadcast_ratio,
         pf_model=broadcast_model,  # 👈 ИСПОЛЬЗУЕМ МОДЕЛЬ ИЗ ПОСТА
-        pf_quality="2k",
+        pf_quality="hd" if broadcast_model == "nb2" else "2k",
         is_broadcast_gen=True  # 👈 ДОБАВЬ ФЛАГ
     )
         await state.set_state(GenState.preflight_check)
