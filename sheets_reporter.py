@@ -123,8 +123,8 @@ async def main():
 
     # Вчерашний день
     yesterday = now_vn.date() - timedelta(days=1)
-    date_from = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, 0, tzinfo=vn_tz)
-    date_to = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59, tzinfo=vn_tz)
+    date_from = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, 0)
+    date_to = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59)
     date_str = yesterday.strftime("%d.%m.%Y")
 
     print(f"📊 Собираем статистику за {date_str}...")
