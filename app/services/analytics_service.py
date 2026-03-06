@@ -347,15 +347,14 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     
     farmed_first = newbie_buyers - bought_immediately
     
-    # Старички (повторная покупка в периоде, но не первая покупка в жизни)
-    veteran_buyers_query = select(func.count(func.distinct(Purchase.user_id))).where(
-        Purchase.status == 'succeeded',
-        Purchase.completed_at >= date_from,
-        Purchase.completed_at <= date_to,
-        or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),  # ← ДОБАВЬ
-        Purchase.user_id.in_(
-            select(User.telegram_id).where(User.first_purchase_at < date_from)
-        )
+    # Старички (юзеры с повторными покупками — более 1 покупки всего)
+    veteran_buyers_query = select(func.count()).select_from(
+        select(Purchase.user_id).where(
+            Purchase.status == 'succeeded',
+            Purchase.completed_at >= date_from,
+            Purchase.completed_at <= date_to,
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),
+        ).group_by(Purchase.user_id).having(func.count(Purchase.id) > 1).subquery()
     )
     veteran_buyers = await session.scalar(veteran_buyers_query) or 0
     
