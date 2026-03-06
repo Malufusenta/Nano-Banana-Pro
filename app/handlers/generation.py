@@ -369,15 +369,13 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         # Нормализуем URL
         normalized_urls = normalize_image_urls(image_urls)
         
-        # Сохраняем настройки
         await state.update_data(
             pf_prompt=combined_prompt,
             pf_image_urls=normalized_urls,
             pf_model=scenario_model,
             pf_ratio=scenario_ratio,
-            pf_quality="2k"
+            pf_quality="hd" if scenario_model == "nb2" else "2k"
         )
-        await state.set_state(GenState.preflight_check)
         
         if scenario_model == "pro": cost = config.COST_PRO_1K
         elif scenario_model == "nb2": cost = config.COST_NB2_1K
