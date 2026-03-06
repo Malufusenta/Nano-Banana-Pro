@@ -434,18 +434,24 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     prompt_campaigns.sort(key=lambda x: x['clicks'], reverse=True)
     
     # ========== ФОРМИРУЕМ РЕЗУЛЬТАТ ==========
-    
+    # Retention и LTV (для отчёта "За всё время")
+    retention = round(total_transactions / total_buyers, 2) if total_buyers > 0 else 0.00
+    ltv = round(avg_check * retention, 2)
+
     return {
-        'revenue': {
-            'total': total_revenue,
-            'rub_revenue': rub_revenue,           # 👈 НОВОЕ
-            'stars_revenue': stars_revenue,       # 👈 НОВОЕ
-            'stars_count': stars_count,           # 👈 НОВОЕ
-            'transactions': total_transactions + stars_count,  # Рубли + Stars
-            'first_purchases': first_purchases,
-            'repeat_purchases': repeat_purchases,
-            'avg_check': avg_check
-        },
+    'revenue': {
+        'total': total_revenue,
+        'rub_revenue': rub_revenue,
+        'stars_revenue': stars_revenue,
+        'stars_count': stars_count,
+        'transactions': total_transactions + stars_count,
+        'first_purchases': first_purchases,
+        'repeat_purchases': repeat_purchases,
+        'avg_check': avg_check,
+        'retention': retention,   # 👈 НОВОЕ
+        'ltv': ltv                # 👈 НОВОЕ
+    },
+    # ... остальное без изменений
         'revenue_by_source': revenue_by_source,
         'source_stats': source_stats,  # НОВОЕ!
         'prompt_campaigns': prompt_campaigns,  # ← ДОБАВЬ ЭТУ СТРОКУ
@@ -470,7 +476,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         }
     }
 
-def format_report_message(data: dict, date_str: str) -> str:
+def format_report_message(data: dict, date_str: str, is_all_time: bool = False) -> str:
     """
     Форматирует данные аналитики в красивое сообщение по ТЗ
     
@@ -504,8 +510,14 @@ def format_report_message(data: dict, date_str: str) -> str:
     text += f"— Первых: {rev['first_purchases']}\n"
     text += f"— Повторных: {rev['repeat_purchases']}\n"
     text += f"Средний чек: {rev['avg_check']:.2f} ₽\n\n"
+
+        # 👇 НОВЫЙ БЛОК — только для "За всё время"
+    if is_all_time:
+        text += "📈 ЦЕННОСТЬ КЛИЕНТА (LTV)\n"
+        text += f"Retention (покупок на юзера): {rev['retention']:.2f}\n"
+        text += f"Выручка с одного клиента: {rev['ltv']:.2f} ₽\n\n"
     
-# ИСТОЧНИКИ ТРАФИКА
+    # ИСТОЧНИКИ ТРАФИКА
     if source_stats:
         text += "📊 <b>ИСТОЧНИКИ ТРАФИКА</b>\n"
         text += "━━━━━━━━━━━━━━━━━━━━\n"

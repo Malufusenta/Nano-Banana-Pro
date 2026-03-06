@@ -1151,8 +1151,9 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     async with async_session() as session:
         data = await get_analytics_report(session, date_from, date_to)
     
-# Форматируем сообщение
-    message = format_report_message(data, date_str)
+    # Форматируем сообщение
+    message = format_report_message(data, date_str, is_all_time=(period == "alltime"))
+
     
     # 🔥 УМНАЯ ОТПРАВКА (разбиваем, если длиннее 4096 символов)
     if len(message) <= 4096:
