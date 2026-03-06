@@ -12,3 +12,4 @@ my_backups/
 old_garbage/
 *.log.*
 .claude/
+google_credentials.json
