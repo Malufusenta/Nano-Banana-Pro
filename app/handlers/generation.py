@@ -484,21 +484,22 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
     
     if is_broadcast:
         text = (
-            f"🎨 *Параметры генерации*\n\n"
-            f"Выбери модель и жми *\"🚀 Запуск\"*👇"
+            f"🎨 <b>Параметры генерации</b>\n\n"
+            f"Выбери модель и жми <b>\"🚀 Запуск\"</b> 👇"
         )
     else:
+        safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         text = (
-            f"🎨 *Параметры генерации*\n\n"
-            f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
-            f"💰 Стоимость:* {cost} банан(а)*\n\n"
-            f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+            f"🎨 <b>Параметры генерации</b>\n\n"
+            f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
+            f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+            f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     
     await callback.message.edit_text(
         text, 
         reply_markup=get_preflight_kb(new_model, ratio, quality), 
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -531,17 +532,18 @@ async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext)
     else:
         cost = config.COST_STANDARD
 
+    safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     text = (
-        f"🎨 *Параметры генерации*\n\n"
-        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
-        f"💰 Стоимость:* {cost} банан(а)*\n\n"
-        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"
+        f"🎨 <b>Параметры генерации</b>\n\n"
+        f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
+        f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+        f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
     )
 
     await callback.message.edit_text(
         text,
         reply_markup=get_preflight_kb(model, ratio, new_q),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -578,19 +580,18 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
     is_broadcast = data.get("is_broadcast_gen", False)
     
     if is_broadcast:
-        # Упрощённый текст для broadcast
         text = (
-            f"🎨 *Параметры генерации*\n\n"
-            f"Выбери модель и жми \"🚀 Запуск\"👇"
+            f"🎨 <b>Параметры генерации</b>\n\n"
+            f"Выбери модель и жми \"🚀 Запуск\" 👇"
         )
     else:
-    
+        safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         text = (
-        f"🎨 *Параметры генерации*\n\n"
-        f"📝 **Запрос:** {data.get('pf_prompt', '')[:100]}...\n\n"
-        f"💰 Стоимость:* {cost} банан(а)*\n\n"
-        f"*Настрой параметры и жми \"🚀 Запуск\"*👇"  # ✅ ЖИРНЫЙ + КАВЫЧКИ
-    )
+            f"🎨 <b>Параметры генерации</b>\n\n"
+            f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
+            f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+            f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
+        )
     
     await callback.message.edit_text(
         text, 
@@ -599,7 +600,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
             data.get("pf_ratio"), 
             data.get("pf_quality")
         ), 
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await callback.answer()
 
