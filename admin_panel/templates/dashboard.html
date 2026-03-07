@@ -1,27 +1,47 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nano Banana — Дашборд</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #0a0a0f;
-    --surface: #13131a;
-    --surface2: #1a1a24;
-    --border: #1e1e2e;
     --accent: #f5c542;
     --accent2: #ff6b35;
-    --green: #4ade80;
-    --blue: #60a5fa;
-    --purple: #a78bfa;
-    --text: #e8e8f0;
-    --muted: #5a5a7a;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
     --sidebar-w: 240px;
+    --radius: 12px;
+    --transition: 0.2s ease;
+  }
+
+  [data-theme="dark"] {
+    --bg: #0f0f14;
+    --surface: #17171f;
+    --surface2: #1e1e28;
+    --surface3: #25252f;
+    --border: #2a2a38;
+    --text: #f0f0f8;
+    --text2: #a0a0b8;
+    --text3: #606078;
+    --shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+
+  [data-theme="light"] {
+    --bg: #f4f4f8;
+    --surface: #ffffff;
+    --surface2: #f8f8fc;
+    --surface3: #efeff5;
+    --border: #e2e2ec;
+    --text: #1a1a2e;
+    --text2: #5a5a78;
+    --text3: #9898b0;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
   }
 
   html, body { height: 100%; }
@@ -29,12 +49,14 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Syne', sans-serif;
+    font-family: 'Inter', sans-serif;
     display: flex;
     overflow: hidden;
+    transition: background var(--transition), color var(--transition);
+    font-size: 14px;
+    line-height: 1.5;
   }
 
-  /* ===== САЙДБАР ===== */
   .sidebar {
     width: var(--sidebar-w);
     min-height: 100vh;
@@ -45,71 +67,59 @@
     flex-shrink: 0;
     position: fixed;
     top: 0; left: 0; bottom: 0;
-    z-index: 100;
+    z-index: 200;
+    transition: transform var(--transition), background var(--transition);
   }
 
   .sidebar-logo {
-    padding: 28px 24px 20px;
+    padding: 20px 16px;
     border-bottom: 1px solid var(--border);
   }
 
-  .sidebar-logo-inner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .sidebar-logo-emoji { font-size: 28px; }
+  .sidebar-logo-inner { display: flex; align-items: center; gap: 10px; }
+  .sidebar-logo-emoji { font-size: 26px; }
 
   .sidebar-logo-text {
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 15px;
+    font-weight: 700;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    line-height: 1.1;
   }
 
   .sidebar-logo-sub {
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px;
-    color: var(--muted);
+    color: var(--text3);
     letter-spacing: 2px;
     text-transform: uppercase;
   }
 
-  .sidebar-nav {
-    flex: 1;
-    padding: 16px 12px;
-    overflow-y: auto;
-  }
-
-  .nav-section {
-    margin-bottom: 24px;
-  }
+  .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+  .nav-section { margin-bottom: 20px; }
 
   .nav-section-label {
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px;
-    color: var(--muted);
+    color: var(--text3);
     letter-spacing: 2px;
     text-transform: uppercase;
-    padding: 0 12px;
-    margin-bottom: 6px;
+    padding: 0 10px;
+    margin-bottom: 4px;
   }
 
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    color: var(--muted);
+    gap: 9px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: var(--text2);
     text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
-    transition: all 0.15s;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all var(--transition);
     cursor: pointer;
     border: none;
     background: none;
@@ -117,64 +127,41 @@
     text-align: left;
   }
 
-  .nav-item:hover {
-    background: var(--surface2);
-    color: var(--text);
-  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(245,197,66,0.12); color: var(--accent); font-weight: 600; }
+  .nav-item .icon { font-size: 15px; width: 18px; text-align: center; }
 
-  .nav-item.active {
-    background: rgba(245, 197, 66, 0.1);
-    color: var(--accent);
-  }
-
-  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
-
-  .nav-item .badge {
-    margin-left: auto;
-    background: var(--accent2);
-    color: #fff;
-    font-size: 10px;
-    font-family: 'JetBrains Mono', monospace;
-    padding: 2px 6px;
-    border-radius: 20px;
-    font-weight: 500;
-  }
-
-  .sidebar-footer {
-    padding: 16px 12px;
-    border-top: 1px solid var(--border);
-  }
+  .sidebar-footer { padding: 12px 8px; border-top: 1px solid var(--border); }
 
   .sidebar-user {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 10px;
+    gap: 9px;
+    padding: 10px;
+    border-radius: 8px;
     background: var(--surface2);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
   .sidebar-user-avatar {
-    width: 32px; height: 32px;
+    width: 30px; height: 30px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
+    font-size: 13px; flex-shrink: 0;
   }
 
-  .sidebar-user-name {
-    font-size: 13px;
-    font-weight: 600;
+  .sidebar-user-name { font-size: 13px; font-weight: 600; }
+  .sidebar-user-role { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 150;
   }
 
-  .sidebar-user-role {
-    font-size: 11px;
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  /* ===== ОСНОВНОЙ КОНТЕНТ ===== */
   .main {
     margin-left: var(--sidebar-w);
     flex: 1;
@@ -184,311 +171,190 @@
     flex-direction: column;
   }
 
-  /* ===== ТОПБАР ===== */
   .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: rgba(10, 10, 15, 0.8);
-    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 50;
+    background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 16px 32px;
+    padding: 12px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-  }
-
-  .topbar-title {
-    font-size: 20px;
-    font-weight: 800;
-  }
-
-  .topbar-right {
-    display: flex;
-    align-items: center;
     gap: 12px;
+    transition: background var(--transition);
   }
 
-  /* Переключатель периодов */
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-title { font-size: 16px; font-weight: 700; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .burger-btn {
+    display: none;
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px; flex-shrink: 0;
+  }
+
   .period-tabs {
     display: flex;
-    background: var(--surface);
+    background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 4px;
-    gap: 2px;
+    border-radius: 8px;
+    padding: 3px; gap: 2px;
   }
 
   .period-tab {
-    padding: 6px 14px;
-    border-radius: 7px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px; font-weight: 500;
+    color: var(--text2);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all var(--transition);
     font-family: 'JetBrains Mono', monospace;
-    border: none;
-    background: none;
+    border: none; background: none; white-space: nowrap;
   }
 
   .period-tab:hover { color: var(--text); }
+  .period-tab.active { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--shadow); }
 
-  .period-tab.active {
-    background: var(--surface2);
-    color: var(--accent);
-  }
-
-  .refresh-btn {
-    width: 36px; height: 36px;
+  .icon-btn {
+    width: 34px; height: 34px;
     border-radius: 8px;
     border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--muted);
+    background: var(--surface2);
+    color: var(--text2);
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.15s;
+    cursor: pointer; font-size: 15px;
+    transition: all var(--transition); flex-shrink: 0;
   }
 
-  .refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+  .icon-btn:hover { color: var(--text); border-color: var(--accent); }
 
-  /* ===== КОНТЕНТ ===== */
-  .content {
-    padding: 32px;
-    flex: 1;
-  }
+  .content { padding: 20px 24px; flex: 1; }
 
-  /* ===== КАРТОЧКИ МЕТРИК ===== */
   .metrics-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: 12px; margin-bottom: 16px;
   }
 
   .metric-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    position: relative;
-    overflow: hidden;
-    transition: border-color 0.2s;
+    border-radius: var(--radius);
+    padding: 18px;
+    position: relative; overflow: hidden;
+    transition: all var(--transition);
+    box-shadow: var(--shadow);
   }
 
-  .metric-card:hover { border-color: var(--accent); }
+  .metric-card:hover { border-color: var(--accent); transform: translateY(-1px); }
 
-  .metric-card::after {
+  .metric-card::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
+    top: 0; left: 0; right: 0; height: 3px;
+    border-radius: var(--radius) var(--radius) 0 0;
   }
 
-  .metric-card.yellow::after { background: var(--accent); }
-  .metric-card.orange::after { background: var(--accent2); }
-  .metric-card.green::after { background: var(--green); }
-  .metric-card.blue::after { background: var(--blue); }
-  .metric-card.purple::after { background: var(--purple); }
+  .metric-card.yellow::before { background: var(--accent); }
+  .metric-card.orange::before { background: var(--accent2); }
+  .metric-card.green::before { background: var(--green); }
+  .metric-card.blue::before { background: var(--blue); }
+  .metric-card.purple::before { background: var(--purple); }
 
-  .metric-icon {
-    font-size: 20px;
-    margin-bottom: 16px;
-    display: block;
+  .metric-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+
+  .metric-icon-wrap {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
   }
 
-  .metric-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
+  .yellow .metric-icon-wrap { background: rgba(245,197,66,0.12); }
+  .orange .metric-icon-wrap { background: rgba(255,107,53,0.12); }
+  .green  .metric-icon-wrap { background: rgba(34,197,94,0.12); }
+  .blue   .metric-icon-wrap { background: rgba(59,130,246,0.12); }
+  .purple .metric-icon-wrap { background: rgba(139,92,246,0.12); }
 
-  .metric-value {
-    font-size: 28px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    line-height: 1;
-    margin-bottom: 6px;
-  }
+  .metric-label { font-size: 11px; color: var(--text2); font-weight: 500; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .metric-value { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; line-height: 1; margin-bottom: 5px; font-variant-numeric: tabular-nums; }
+  .metric-sub { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
 
-  .metric-value.loading {
-    background: var(--border);
-    border-radius: 6px;
-    color: transparent;
-    animation: shimmer 1.5s infinite;
-  }
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  .loading { animation: shimmer 1.5s infinite; }
 
-  @keyframes shimmer {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; }
-    100% { opacity: 0.5; }
-  }
+  .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 16px; }
 
-  .metric-sub {
-    font-size: 12px;
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  /* ===== ВТОРОЙ РЯД — ГРАФИКИ ===== */
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  .chart-card {
+  .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    transition: background var(--transition);
   }
 
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-  }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .card-subtitle { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
 
-  .card-title {
-    font-size: 14px;
-    font-weight: 700;
-  }
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-  .card-title-sub {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
-  /* ===== НИЖНИЙ РЯД ===== */
-  .bottom-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-
-  /* Список источников */
-  .source-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .source-item:last-child { border-bottom: none; }
-
-  .source-rank {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    width: 20px;
-  }
-
-  .source-name {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .source-bar-wrap {
-    width: 80px;
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .source-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    border-radius: 2px;
-    transition: width 0.5s ease;
-  }
-
-  .source-revenue {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--accent);
-    min-width: 70px;
-    text-align: right;
-  }
-
-  /* Тарифы */
-  .tariff-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-  }
-
+  .tariff-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
   .tariff-item:last-child { border-bottom: none; }
+  .tariff-name { font-size: 13px; font-weight: 500; }
+  .tariff-count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 600; }
 
-  .tariff-name {
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .tariff-count {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    color: var(--accent);
-  }
-
-  /* Статус-бар */
   .status-bar {
-    position: fixed;
-    bottom: 20px;
-    right: 32px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 8px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    z-index: 200;
+    position: fixed; bottom: 16px; right: 24px;
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 6px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text3);
+    z-index: 100; box-shadow: var(--shadow);
   }
 
-  .status-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-    animation: pulse 2s infinite;
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+  /* ===== MOBILE ===== */
+  @media (max-width: 1024px) {
+    .metrics-grid { grid-template-columns: repeat(2,1fr); }
+    .charts-grid { grid-template-columns: 1fr; }
   }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  @media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-overlay.active { display: block; }
+    .main { margin-left: 0; }
+    .burger-btn { display: flex; }
+    .topbar { padding: 10px 16px; }
+    .period-tabs { overflow-x: auto; max-width: calc(100vw - 130px); }
+    .content { padding: 14px 16px; }
+    .metrics-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .charts-grid, .bottom-grid { grid-template-columns: 1fr; }
+    .metric-value { font-size: 20px; }
+    .status-bar { bottom: 10px; right: 16px; }
   }
 
-  /* Скелетон */
-  .skeleton {
-    background: var(--border);
-    border-radius: 6px;
-    animation: shimmer 1.5s infinite;
+  @media (max-width: 480px) {
+    .metrics-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric-card { padding: 14px; }
+    .metric-value { font-size: 17px; }
+    .topbar-title { font-size: 14px; }
   }
 </style>
 </head>
 <body>
 
-<!-- САЙДБАР -->
-<aside class="sidebar">
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <div class="sidebar-logo-inner">
       <span class="sidebar-logo-emoji">🍌</span>
@@ -498,42 +364,24 @@
       </div>
     </div>
   </div>
-
   <nav class="sidebar-nav">
     <div class="nav-section">
       <div class="nav-section-label">Главное</div>
-      <a href="/" class="nav-item active">
-        <span class="icon">📊</span> Дашборд
-      </a>
-      <a href="/users" class="nav-item">
-        <span class="icon">👥</span> Пользователи
-      </a>
-      <a href="/finances" class="nav-item">
-        <span class="icon">💰</span> Финансы
-      </a>
+      <a href="/" class="nav-item active"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item"><span class="icon">💰</span> Финансы</a>
     </div>
-
     <div class="nav-section">
       <div class="nav-section-label">Маркетинг</div>
-      <a href="/analytics" class="nav-item">
-        <span class="icon">📈</span> Аналитика
-      </a>
-      <a href="/broadcast" class="nav-item">
-        <span class="icon">📣</span> Рассылки
-      </a>
-      <a href="/links" class="nav-item">
-        <span class="icon">🔗</span> Ссылки
-      </a>
+      <a href="/analytics" class="nav-item"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item"><span class="icon">🔗</span> Ссылки</a>
     </div>
-
     <div class="nav-section">
       <div class="nav-section-label">Система</div>
-      <a href="/settings" class="nav-item">
-        <span class="icon">⚙️</span> Настройки
-      </a>
+      <a href="/settings" class="nav-item"><span class="icon">⚙️</span> Настройки</a>
     </div>
   </nav>
-
   <div class="sidebar-footer">
     <div class="sidebar-user">
       <div class="sidebar-user-avatar">👑</div>
@@ -542,272 +390,243 @@
         <div class="sidebar-user-role">administrator</div>
       </div>
     </div>
-    <a href="/logout" class="nav-item" style="color: var(--accent2);">
-      <span class="icon">🚪</span> Выйти
-    </a>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
   </div>
 </aside>
 
-<!-- ОСНОВНОЙ КОНТЕНТ -->
 <div class="main">
-
-  <!-- ТОПБАР -->
   <div class="topbar">
-    <div class="topbar-title">Дашборд</div>
+    <div class="topbar-left">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Дашборд</div>
+    </div>
     <div class="topbar-right">
       <div class="period-tabs">
         <button class="period-tab active" data-period="today">Сегодня</button>
         <button class="period-tab" data-period="yesterday">Вчера</button>
-        <button class="period-tab" data-period="week">7 дней</button>
-        <button class="period-tab" data-period="month">30 дней</button>
-        <button class="period-tab" data-period="alltime">Всё время</button>
+        <button class="period-tab" data-period="week">7д</button>
+        <button class="period-tab" data-period="month">30д</button>
+        <button class="period-tab" data-period="alltime">Всё</button>
       </div>
-      <button class="refresh-btn" id="refreshBtn" title="Обновить">↻</button>
+      <button class="icon-btn" id="themeBtn" title="Сменить тему">☀️</button>
+      <button class="icon-btn" id="refreshBtn" title="Обновить">↻</button>
     </div>
   </div>
 
-  <!-- КОНТЕНТ -->
   <div class="content">
-
-    <!-- МЕТРИКИ - РЯД 1 -->
     <div class="metrics-grid">
       <div class="metric-card yellow">
-        <span class="metric-icon">💰</span>
-        <div class="metric-label">Выручка (₽)</div>
-        <div class="metric-value" id="m-revenue">—</div>
-        <div class="metric-sub" id="m-revenue-sub">загрузка...</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Выручка ₽</div><div class="metric-value loading" id="m-revenue">—</div><div class="metric-sub" id="m-revenue-sub">загрузка...</div></div>
+          <div class="metric-icon-wrap">💰</div>
+        </div>
       </div>
       <div class="metric-card orange">
-        <span class="metric-icon">🛒</span>
-        <div class="metric-label">Транзакций</div>
-        <div class="metric-value" id="m-transactions">—</div>
-        <div class="metric-sub" id="m-transactions-sub">загрузка...</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Транзакций</div><div class="metric-value loading" id="m-transactions">—</div><div class="metric-sub" id="m-transactions-sub">загрузка...</div></div>
+          <div class="metric-icon-wrap">🛒</div>
+        </div>
       </div>
       <div class="metric-card green">
-        <span class="metric-icon">👥</span>
-        <div class="metric-label">Новых юзеров</div>
-        <div class="metric-value" id="m-users">—</div>
-        <div class="metric-sub" id="m-users-sub">загрузка...</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Новых юзеров</div><div class="metric-value loading" id="m-users">—</div><div class="metric-sub" id="m-users-sub">загрузка...</div></div>
+          <div class="metric-icon-wrap">👥</div>
+        </div>
       </div>
       <div class="metric-card blue">
-        <span class="metric-icon">📈</span>
-        <div class="metric-label">Конверсия</div>
-        <div class="metric-value" id="m-cr">—</div>
-        <div class="metric-sub" id="m-cr-sub">загрузка...</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Конверсия</div><div class="metric-value loading" id="m-cr">—</div><div class="metric-sub" id="m-cr-sub">загрузка...</div></div>
+          <div class="metric-icon-wrap">📈</div>
+        </div>
       </div>
     </div>
 
-    <!-- МЕТРИКИ - РЯД 2 -->
-    <div class="metrics-grid" style="margin-bottom: 24px;">
+    <div class="metrics-grid">
       <div class="metric-card purple">
-        <span class="metric-icon">💵</span>
-        <div class="metric-label">Средний чек</div>
-        <div class="metric-value" id="m-avgcheck">—</div>
-        <div class="metric-sub">рублей за покупку</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Средний чек</div><div class="metric-value loading" id="m-avgcheck">—</div><div class="metric-sub">рублей за покупку</div></div>
+          <div class="metric-icon-wrap">💵</div>
+        </div>
       </div>
       <div class="metric-card blue">
-        <span class="metric-icon">⚡️</span>
-        <div class="metric-label">Активных (DAU)</div>
-        <div class="metric-value" id="m-dau">—</div>
-        <div class="metric-sub" id="m-dau-sub">загрузка...</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Активных DAU</div><div class="metric-value loading" id="m-dau">—</div><div class="metric-sub" id="m-dau-sub">уникальных</div></div>
+          <div class="metric-icon-wrap">⚡️</div>
+        </div>
       </div>
       <div class="metric-card yellow">
-        <span class="metric-icon">🔄</span>
-        <div class="metric-label">Retention</div>
-        <div class="metric-value" id="m-retention">—</div>
-        <div class="metric-sub">покупок на юзера</div>
+        <div class="metric-top">
+          <div><div class="metric-label">Retention</div><div class="metric-value loading" id="m-retention">—</div><div class="metric-sub">покупок на юзера</div></div>
+          <div class="metric-icon-wrap">🔄</div>
+        </div>
       </div>
       <div class="metric-card green">
-        <span class="metric-icon">🏆</span>
-        <div class="metric-label">LTV</div>
-        <div class="metric-value" id="m-ltv">—</div>
-        <div class="metric-sub">выручка с клиента</div>
+        <div class="metric-top">
+          <div><div class="metric-label">LTV</div><div class="metric-value loading" id="m-ltv">—</div><div class="metric-sub">выручка с клиента</div></div>
+          <div class="metric-icon-wrap">🏆</div>
+        </div>
       </div>
     </div>
 
-    <!-- ГРАФИКИ -->
     <div class="charts-grid">
-      <div class="chart-card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Выручка по дням</div>
-            <div class="card-title-sub">последние 30 дней</div>
-          </div>
-        </div>
-        <canvas id="revenueChart" height="200"></canvas>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Выручка по дням</div><div class="card-subtitle">последние 30 дней</div></div></div>
+        <canvas id="revenueChart" height="180"></canvas>
       </div>
-
-      <div class="chart-card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Новые юзеры</div>
-            <div class="card-title-sub">последние 30 дней</div>
-          </div>
-        </div>
-        <canvas id="usersChart" height="200"></canvas>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Новые юзеры</div><div class="card-subtitle">последние 30 дней</div></div></div>
+        <canvas id="usersChart" height="180"></canvas>
       </div>
     </div>
 
-    <!-- НИЖНИЙ РЯД -->
     <div class="bottom-grid">
-      <div class="chart-card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Топ источников</div>
-            <div class="card-title-sub" id="sources-period-label">за выбранный период</div>
-          </div>
-        </div>
-        <div id="sources-list">
-          <div style="color: var(--muted); font-size: 13px; font-family: 'JetBrains Mono', monospace;">Загрузка...</div>
-        </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Топ источников</div><div class="card-subtitle">по выручке за период</div></div></div>
+        <div id="sources-list"><div class="metric-sub loading">Загрузка...</div></div>
       </div>
-
-      <div class="chart-card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Покупки по тарифам</div>
-            <div class="card-title-sub" id="tariffs-period-label">за выбранный период</div>
-          </div>
-        </div>
-        <div id="tariffs-list">
-          <div style="color: var(--muted); font-size: 13px; font-family: 'JetBrains Mono', monospace;">Загрузка...</div>
-        </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Покупки по тарифам</div><div class="card-subtitle">за выбранный период</div></div></div>
+        <div id="tariffs-list"><div class="metric-sub loading">Загрузка...</div></div>
       </div>
     </div>
-
   </div>
 </div>
 
-<!-- Статус бар -->
 <div class="status-bar">
   <div class="status-dot"></div>
-  <span id="last-updated">Обновляется...</span>
+  <span id="last-updated">—</span>
 </div>
 
 <script>
-  let currentPeriod = 'today';
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
   let revenueChart, usersChart;
+  let currentPeriod = 'today';
 
-  // Форматирование чисел
-  const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
-  const fmtDec = (n) => parseFloat(n).toFixed(2);
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, theme);
+    currentTheme = theme;
+    if (revenueChart) updateChartColors();
+  }
 
-  // Инициализация графиков
+  function getChartColors() {
+    return {
+      grid: currentTheme === 'dark' ? '#2a2a38' : '#e8e8f0',
+      tick: currentTheme === 'dark' ? '#606078' : '#9898b0',
+    };
+  }
+
+  function updateChartColors() {
+    const c = getChartColors();
+    [revenueChart, usersChart].forEach(chart => {
+      if (!chart) return;
+      chart.options.scales.x.grid.color = c.grid;
+      chart.options.scales.y.grid.color = c.grid;
+      chart.options.scales.x.ticks.color = c.tick;
+      chart.options.scales.y.ticks.color = c.tick;
+      chart.update();
+    });
+  }
+
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+  });
+
+  // МОБИЛЬНОЕ МЕНЮ
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  document.getElementById('burgerBtn').addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('active');
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  });
+
+  // ГРАФИКИ
   function initCharts() {
-    const chartDefaults = {
-      responsive: true,
-      maintainAspectRatio: false,
+    const c = getChartColors();
+    const base = {
+      responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: {
-          grid: { color: '#1e1e2e' },
-          ticks: { color: '#5a5a7a', font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 8 }
-        },
-        y: {
-          grid: { color: '#1e1e2e' },
-          ticks: { color: '#5a5a7a', font: { family: 'JetBrains Mono', size: 10 } }
-        }
+        x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 8 } },
+        y: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 } } }
       }
     };
 
     revenueChart = new Chart(document.getElementById('revenueChart'), {
       type: 'bar',
-      data: { labels: [], datasets: [{
-        data: [],
-        backgroundColor: 'rgba(245, 197, 66, 0.3)',
-        borderColor: '#f5c542',
-        borderWidth: 2,
-        borderRadius: 4,
-      }]},
-      options: { ...chartDefaults, plugins: { ...chartDefaults.plugins } }
+      data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(245,197,66,0.25)', borderColor: '#f5c542', borderWidth: 2, borderRadius: 4 }]},
+      options: JSON.parse(JSON.stringify(base))
     });
 
     usersChart = new Chart(document.getElementById('usersChart'), {
       type: 'line',
-      data: { labels: [], datasets: [{
-        data: [],
-        borderColor: '#60a5fa',
-        backgroundColor: 'rgba(96, 165, 250, 0.1)',
-        borderWidth: 2,
-        pointRadius: 0,
-        fill: true,
-        tension: 0.4,
-      }]},
-      options: chartDefaults
+      data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4 }]},
+      options: JSON.parse(JSON.stringify(base))
     });
   }
 
-  // Загрузка метрик
+  // УТИЛИТЫ
+  const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0));
+  const fmtDec = n => parseFloat(n || 0).toFixed(2);
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = val; el.classList.remove('loading'); }
+  };
+
+  // МЕТРИКИ
   async function loadStats(period) {
+    document.querySelectorAll('.metric-value').forEach(el => el.classList.add('loading'));
     try {
-      const res = await fetch(`/api/dashboard/stats?period=${period}`);
-      const d = await res.json();
-
-      document.getElementById('m-revenue').textContent = fmt(d.revenue) + ' ₽';
-      document.getElementById('m-revenue-sub').textContent =
-        d.stars_count > 0 ? `+ ${fmt(d.stars_revenue)} ⭐ (${d.stars_count} тр.)` : 'только рубли';
-
-      document.getElementById('m-transactions').textContent = fmt(d.transactions);
-      document.getElementById('m-transactions-sub').textContent = `всего покупок`;
-
-      document.getElementById('m-users').textContent = fmt(d.new_users);
+      const d = await fetch(`/api/dashboard/stats?period=${period}`).then(r => r.json());
+      set('m-revenue', fmt(d.revenue) + ' ₽');
+      document.getElementById('m-revenue-sub').textContent = d.stars_count > 0 ? `+ ${fmt(d.stars_revenue)} ⭐ Stars` : 'только рубли';
+      set('m-transactions', fmt(d.transactions));
+      document.getElementById('m-transactions-sub').textContent = 'покупок';
+      set('m-users', fmt(d.new_users));
       document.getElementById('m-users-sub').textContent = `всего: ${fmt(d.total_users)}`;
-
-      document.getElementById('m-cr').textContent = fmtDec(d.conversion_rate) + '%';
+      set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmt(d.total_buyers)} покупателей`;
+      set('m-avgcheck', fmt(d.avg_check) + ' ₽');
+      set('m-dau', fmt(d.active_users));
+      set('m-retention', fmtDec(d.retention));
+      set('m-ltv', fmt(d.ltv) + ' ₽');
 
-      document.getElementById('m-avgcheck').textContent = fmt(d.avg_check) + ' ₽';
-      document.getElementById('m-dau').textContent = fmt(d.active_users);
-      document.getElementById('m-dau-sub').textContent = 'уникальных активных';
+      // Тарифы
+      const tariffs = d.purchases_by_tariff || {};
+      const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
+      const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🍌','832 банана':'🔥','Telegram Stars':'⭐️'};
+      document.getElementById('tariffs-list').innerHTML = order.map(name =>
+        `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
+      ).join('');
 
-      document.getElementById('m-retention').textContent = fmtDec(d.retention);
-      document.getElementById('m-ltv').textContent = fmt(d.ltv) + ' ₽';
+      document.getElementById('sources-list').innerHTML =
+        `<div style="color:var(--text3);font-size:12px;font-family:'JetBrains Mono',monospace;padding:8px 0">Детализация — в разделе Аналитика</div>`;
 
-    } catch(e) {
-      console.error('Stats error:', e);
-    }
+    } catch(e) { console.error(e); }
   }
 
-  // Загрузка графиков
+  // ГРАФИКИ ДАННЫЕ
   async function loadCharts() {
     try {
-      const res = await fetch('/api/dashboard/chart?days=30');
-      const data = await res.json();
-
-      const labels = data.map(d => d.date);
-      const revenues = data.map(d => d.revenue);
-      const users = data.map(d => d.new_users);
-
-      revenueChart.data.labels = labels;
-      revenueChart.data.datasets[0].data = revenues;
+      const data = await fetch('/api/dashboard/chart?days=30').then(r => r.json());
+      revenueChart.data.labels = data.map(d => d.date);
+      revenueChart.data.datasets[0].data = data.map(d => d.revenue);
       revenueChart.update();
-
-      usersChart.data.labels = labels;
-      usersChart.data.datasets[0].data = users;
+      usersChart.data.labels = data.map(d => d.date);
+      usersChart.data.datasets[0].data = data.map(d => d.new_users);
       usersChart.update();
-    } catch(e) {
-      console.error('Chart error:', e);
-    }
+    } catch(e) { console.error(e); }
   }
 
-  // Загрузка источников и тарифов
-  async function loadSourcesAndTariffs(period) {
-    try {
-      const res = await fetch(`/api/dashboard/stats?period=${period}`);
-      const d = await res.json();
-
-      // Источники — рендерим из source_stats
-      // Тарифы — будем добавлять отдельный endpoint позже
-      // Пока покажем заглушку
-      document.getElementById('sources-list').innerHTML =
-        `<div style="color: var(--muted); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
-          Источники загружены в метриках выше
-        </div>`;
-
-    } catch(e) {}
-  }
-
-  // Переключение периода
+  // ПЕРИОД
   document.querySelectorAll('.period-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
@@ -817,34 +636,30 @@
     });
   });
 
-  // Кнопка обновить
+  // ОБНОВИТЬ
   document.getElementById('refreshBtn').addEventListener('click', () => {
     loadStats(currentPeriod);
     loadCharts();
+    updateTime();
     const btn = document.getElementById('refreshBtn');
     btn.style.transform = 'rotate(360deg)';
     btn.style.transition = 'transform 0.5s';
     setTimeout(() => { btn.style.transform = ''; btn.style.transition = ''; }, 500);
   });
 
-  // Обновляем время
   function updateTime() {
-    const now = new Date();
     document.getElementById('last-updated').textContent =
-      `Обновлено: ${now.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})}`;
+      new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
   }
 
-  // Старт
+  // СТАРТ
+  applyTheme(currentTheme);
   initCharts();
   loadStats(currentPeriod);
   loadCharts();
   updateTime();
-
-  // Автообновление каждые 5 минут
-  setInterval(() => {
-    loadStats(currentPeriod);
-    updateTime();
-  }, 5 * 60 * 1000);
+  setInterval(() => { loadStats(currentPeriod); updateTime(); }, 5 * 60 * 1000);
+  setInterval(updateTime, 1000);
 </script>
 </body>
 </html>
