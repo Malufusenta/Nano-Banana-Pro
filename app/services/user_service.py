@@ -27,7 +27,7 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int, username: 
     
     return user, False
 
-async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1) -> bool:
+async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1, post_id: str = None) -> bool:
     """
     Списывает указанное количество генераций (amount).
     SELECT FOR UPDATE гарантирует атомарность — второй запрос ждёт снятия блокировки.
@@ -62,7 +62,7 @@ async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amou
     user.total_generations_used += 1
     user.last_generation_at = datetime.now()
 
-    await track_banana_transaction(session, telegram_id, -amount, "spent", "Generation")
+    await track_banana_transaction(session, telegram_id, -amount, "spent", "Generation", post_id=post_id)
 
     await session.commit()
     return True
@@ -226,8 +226,8 @@ async def get_history_message_by_id(session: AsyncSession, msg_id: int):
 
 # --- ЗАДАЧИ ---
 
-async def start_generation_task(session: AsyncSession, user_id: int, cost: int):
-    task = GenerationTask(user_id=user_id, cost=cost, status="processing")
+async def start_generation_task(session: AsyncSession, user_id: int, cost: int, post_id: str = None):
+    task = GenerationTask(user_id=user_id, cost=cost, status="processing", post_id=post_id)
     session.add(task)
     await session.commit()
     return task.id
@@ -414,14 +414,16 @@ async def track_banana_transaction(
     user_id: int, 
     amount: int, 
     transaction_type: str, 
-    description: str = None
+    description: str = None,
+    post_id: str = None
 ):
     """Записывает транзакцию бананов для аналитики"""
     transaction = BananaTransaction(
         user_id=user_id,
         amount=amount,
         transaction_type=transaction_type,
-        description=description
+        description=description,
+        post_id=post_id
     )
     session.add(transaction)
     # НЕ делаем commit - он будет в родительской функции

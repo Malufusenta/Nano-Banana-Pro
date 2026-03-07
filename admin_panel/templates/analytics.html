@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nano Banana — Аналитика</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
+  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
+  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+
+  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition),background var(--transition); }
+  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
+  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
+  .sidebar-logo-emoji { font-size:26px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+  .nav-section { margin-bottom:20px; }
+  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
+  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-name { font-size:13px; font-weight:600; }
+  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+
+  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .topbar-left { display:flex; align-items:center; gap:12px; }
+  .topbar-title { font-size:16px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
+  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+
+  .period-tabs { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; }
+  .period-tab { padding:5px 12px; border-radius:6px; font-size:12px; font-weight:500; color:var(--text2); cursor:pointer; transition:all var(--transition); font-family:'JetBrains Mono',monospace; border:none; background:none; white-space:nowrap; }
+  .period-tab:hover { color:var(--text); }
+  .period-tab.active { background:var(--surface); color:var(--accent); font-weight:600; box-shadow:var(--shadow); }
+
+  .content { padding:20px 24px; flex:1; }
+
+  /* ВОРОНКА */
+  .funnel-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+  .funnel-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; text-align:center; box-shadow:var(--shadow); position:relative; }
+  .funnel-card::after { content:'→'; position:absolute; right:-14px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:16px; z-index:1; }
+  .funnel-card:last-child::after { display:none; }
+  .funnel-val { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-bottom:4px; }
+  .funnel-lbl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; }
+  .funnel-sub { font-size:11px; color:var(--text2); font-family:'JetBrains Mono',monospace; margin-top:4px; }
+
+  /* КАРТОЧКИ KPI */
+  .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+  .kpi-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .kpi-val { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .kpi-sub { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-top:4px; }
+
+  /* ТАБЛИЦА ИСТОЧНИКОВ */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); margin-bottom:16px; }
+  .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .card-title { font-size:14px; font-weight:600; }
+  .card-subtitle { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; background:var(--surface2); border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; }
+  th:hover { color:var(--text2); }
+  td { padding:10px 12px; font-size:13px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:var(--surface2); }
+  .mono { font-family:'JetBrains Mono',monospace; font-size:11px; }
+
+  /* BAR CHART в таблице */
+  .inline-bar { width:80px; height:6px; background:var(--surface3); border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:6px; }
+  .inline-bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:3px; transition:width 0.6s ease; }
+
+  /* CHARTS ROW */
+  .charts-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  .loading { animation:shimmer 1.5s infinite; color:var(--text3); }
+
+  @media (max-width:1100px) { .funnel-grid { grid-template-columns:repeat(3,1fr); } .funnel-card:nth-child(3)::after { display:none; } }
+  @media (max-width:768px) {
+    .sidebar { transform:translateX(-100%); }
+    .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay.active { display:block; }
+    .main { margin-left:0; }
+    .burger-btn { display:flex; }
+    .topbar { padding:10px 16px; }
+    .content { padding:14px 16px; }
+    .funnel-grid { grid-template-columns:repeat(2,1fr); }
+    .funnel-card::after { display:none; }
+    .kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .charts-row { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <span class="sidebar-logo-emoji">🍌</span>
+      <div>
+        <div class="sidebar-logo-text">Nano Banana</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">Главное</div>
+      <a href="/" class="nav-item"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item"><span class="icon">💰</span> Финансы</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Маркетинг</div>
+      <a href="/analytics" class="nav-item active"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item"><span class="icon">🔗</span> Ссылки</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Система</div>
+      <a href="/settings" class="nav-item"><span class="icon">⚙️</span> Настройки</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">👑</div>
+      <div>
+        <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-user-role">administrator</div>
+      </div>
+    </div>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Аналитика</div>
+    </div>
+    <div class="topbar-right">
+      <div class="period-tabs">
+        <button class="period-tab" data-period="today">Сегодня</button>
+        <button class="period-tab" data-period="yesterday">Вчера</button>
+        <button class="period-tab" data-period="week">7д</button>
+        <button class="period-tab active" data-period="month">30д</button>
+        <button class="period-tab" data-period="alltime">Всё</button>
+      </div>
+      <button class="icon-btn" id="themeBtn">☀️</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ВОРОНКА -->
+    <div class="funnel-grid">
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--blue)" id="f-new-users">—</div>
+        <div class="funnel-lbl">Новых юзеров</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--purple)" id="f-active">—</div>
+        <div class="funnel-lbl">Активных</div>
+        <div class="funnel-sub" id="f-active-pct">—</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--accent)" id="f-buyers">—</div>
+        <div class="funnel-lbl">Покупателей</div>
+        <div class="funnel-sub" id="f-conv">CR: —%</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--green)" id="f-new-buyers">—</div>
+        <div class="funnel-lbl">Новых покупат.</div>
+        <div class="funnel-sub" id="f-vet-buyers">повторных: —</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--accent2)" id="f-revenue">—</div>
+        <div class="funnel-lbl">Выручка ₽</div>
+        <div class="funnel-sub" id="f-avg">avg: —</div>
+      </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">💰 Средний чек</div>
+        <div class="kpi-val" id="k-avg-check">—</div>
+        <div class="kpi-sub">рублей за покупку</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">🔄 Retention</div>
+        <div class="kpi-val" id="k-retention">—</div>
+        <div class="kpi-sub">покупок на юзера</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">🏆 LTV</div>
+        <div class="kpi-val" id="k-ltv">—</div>
+        <div class="kpi-sub">выручка с клиента</div>
+      </div>
+    </div>
+
+    <!-- CHART: Revenue by source -->
+    <div class="charts-row">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Выручка по источникам</div>
+            <div class="card-subtitle">топ-8 источников</div>
+          </div>
+        </div>
+        <canvas id="sourceRevenueChart" style="max-height:220px"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Конверсия по источникам</div>
+            <div class="card-subtitle">% юзеров → покупатели</div>
+          </div>
+        </div>
+        <canvas id="sourceConvChart" style="max-height:220px"></canvas>
+      </div>
+    </div>
+
+    <!-- ТАБЛИЦА -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Детализация по источникам</div>
+          <div class="card-subtitle" id="sources-period-label">за 30 дней</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Источник</th>
+              <th>Юзеров</th>
+              <th>Покупателей</th>
+              <th>CR%</th>
+              <th>Выручка ₽</th>
+              <th>Средний чек</th>
+              <th>Новые / Старые</th>
+            </tr>
+          </thead>
+          <tbody id="sourcesBody">
+            <tr><td colspan="8" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  let srcRevChart, srcConvChart;
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t); currentTheme = t;
+    if (srcRevChart) updateChartColors();
+  }
+
+  function getChartColors() {
+    return { grid: currentTheme==='dark'?'#2a2a38':'#e8e8f0', tick: currentTheme==='dark'?'#606078':'#9898b0' };
+  }
+
+  function updateChartColors() {
+    const c = getChartColors();
+    [srcRevChart, srcConvChart].forEach(ch => {
+      if (!ch) return;
+      ch.options.scales.x.grid.color = c.grid;
+      ch.options.scales.y.grid.color = c.grid;
+      ch.options.scales.x.ticks.color = c.tick;
+      ch.options.scales.y.ticks.color = c.tick;
+      ch.update();
+    });
+  }
+
+  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme==='dark'?'light':'dark'));
+
+  // МОБИЛЬНОЕ МЕНЮ
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  document.getElementById('burgerBtn').addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
+  overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+
+  const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n||0));
+  const fmtDec = n => parseFloat(n||0).toFixed(2);
+  let currentPeriod = 'month';
+
+  function initCharts(labels, revenues, convs) {
+    const c = getChartColors();
+    const base = {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45 } },
+        y: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 } } }
+      }
+    };
+
+    if (srcRevChart) srcRevChart.destroy();
+    srcRevChart = new Chart(document.getElementById('sourceRevenueChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data: revenues, backgroundColor: 'rgba(245,197,66,0.3)', borderColor: '#f5c542', borderWidth: 2, borderRadius: 4 }]},
+      options: JSON.parse(JSON.stringify(base))
+    });
+
+    if (srcConvChart) srcConvChart.destroy();
+    srcConvChart = new Chart(document.getElementById('sourceConvChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data: convs, backgroundColor: 'rgba(59,130,246,0.3)', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 4 }]},
+      options: JSON.parse(JSON.stringify(base))
+    });
+  }
+
+  async function loadFunnel(period) {
+    const d = await fetch(`/api/analytics/funnel?period=${period}`).then(r => r.json());
+    const set = (id, val) => { const el = document.getElementById(id); if(el) { el.textContent = val; el.classList.remove('loading'); }};
+
+    set('f-new-users', fmt(d.new_users));
+    set('f-active', fmt(d.active_users));
+    document.getElementById('f-active-pct').textContent = d.new_users > 0 ? `${((d.active_users/d.new_users)*100).toFixed(1)}% от новых` : '—';
+    set('f-buyers', fmt(d.total_buyers));
+    document.getElementById('f-conv').textContent = `CR: ${fmtDec(d.conversion_rate)}%`;
+    set('f-new-buyers', fmt(d.new_buyers));
+    document.getElementById('f-vet-buyers').textContent = `повторных: ${fmt(d.veteran_buyers)}`;
+    set('f-revenue', fmt(d.revenue) + ' ₽');
+    document.getElementById('f-avg').textContent = `avg: ${fmt(d.avg_check)} ₽`;
+
+    document.getElementById('k-avg-check').textContent = fmt(d.avg_check) + ' ₽';
+    document.getElementById('k-retention').textContent = fmtDec(d.retention);
+    document.getElementById('k-ltv').textContent = fmt(d.ltv) + ' ₽';
+  }
+
+  async function loadSources(period) {
+    document.getElementById('sourcesBody').innerHTML = '<tr><td colspan="8" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>';
+    const data = await fetch(`/api/analytics/sources?period=${period}`).then(r => r.json());
+
+    const maxRev = Math.max(...data.map(s => s.revenue), 1);
+
+    document.getElementById('sourcesBody').innerHTML = data.map((s, i) => `
+      <tr>
+        <td class="mono" style="color:var(--text3)">${i+1}</td>
+        <td style="font-weight:500">${s.source}</td>
+        <td class="mono">${fmt(s.users)}</td>
+        <td class="mono">${fmt(s.buyers)}</td>
+        <td>
+          <span class="mono" style="color:${s.conversion>=10?'var(--green)':s.conversion>=5?'var(--accent)':'var(--text2)'}">${fmtDec(s.conversion)}%</span>
+        </td>
+        <td>
+          <span class="inline-bar"><span class="inline-bar-fill" style="width:${(s.revenue/maxRev*100).toFixed(1)}%"></span></span>
+          <span class="mono" style="color:var(--accent)">${fmt(s.revenue)} ₽</span>
+        </td>
+        <td class="mono">${fmt(s.avg_check)} ₽</td>
+        <td>
+          <span class="mono" style="color:var(--green);font-size:10px">н: ${fmt(s.new_revenue)} ₽</span>
+          <span class="mono" style="color:var(--text3);font-size:10px"> / ст: ${fmt(s.old_revenue)} ₽</span>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="8" style="padding:30px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+
+    // Графики — топ 8
+    const top8 = data.slice(0, 8);
+    initCharts(top8.map(s => s.source), top8.map(s => s.revenue), top8.map(s => s.conversion));
+  }
+
+  const periodLabels = { today: 'сегодня', yesterday: 'вчера', week: 'за 7 дней', month: 'за 30 дней', alltime: 'за всё время' };
+
+  document.querySelectorAll('.period-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentPeriod = tab.dataset.period;
+      document.getElementById('sources-period-label').textContent = periodLabels[currentPeriod] || '';
+      loadFunnel(currentPeriod);
+      loadSources(currentPeriod);
+    });
+  });
+
+  applyTheme(currentTheme);
+  loadFunnel(currentPeriod);
+  loadSources(currentPeriod);
+</script>
+</body>
+</html>

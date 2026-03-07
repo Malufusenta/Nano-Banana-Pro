@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nano Banana — Настройки</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
+  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
+  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+
+  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition); }
+  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
+  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
+  .sidebar-logo-emoji { font-size:26px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+  .nav-section { margin-bottom:20px; }
+  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
+  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-name { font-size:13px; font-weight:600; }
+  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+
+  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; }
+  .topbar-title { font-size:16px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; }
+  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; margin-right:8px; }
+  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+  .content { padding:20px 24px; flex:1; max-width:900px; }
+
+  .section { margin-bottom:24px; }
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .section-title { font-size:15px; font-weight:700; }
+  .section-sub { font-size:12px; color:var(--text3); margin-top:2px; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+  .card-body { padding:20px 24px; }
+
+  /* ТАРИФЫ */
+  .tariff-table { width:100%; border-collapse:collapse; }
+  .tariff-table th { padding:8px 12px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; background:var(--surface2); border-bottom:1px solid var(--border); }
+  .tariff-table td { padding:8px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+  .tariff-table tr:last-child td { border-bottom:none; }
+  .num-input { width:80px; padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:13px; font-family:'JetBrains Mono',monospace; outline:none; text-align:center; transition:border-color var(--transition); }
+  .num-input:focus { border-color:var(--accent); }
+  .tag { font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--surface2); border:1px solid var(--border); border-radius:5px; padding:2px 7px; color:var(--text2); }
+
+  /* СТОИМОСТЬ ГЕНЕРАЦИЙ */
+  .config-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; }
+  .config-item { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+  .config-label { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .config-input { width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:15px; font-weight:700; font-family:'JetBrains Mono',monospace; outline:none; text-align:center; transition:border-color var(--transition); }
+  .config-input:focus { border-color:var(--accent); }
+  .config-unit { font-size:10px; color:var(--text3); text-align:center; margin-top:4px; }
+
+  /* БЭКАП */
+  .backup-list { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .backup-item { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; font-size:12px; }
+  .backup-name { font-family:'JetBrains Mono',monospace; color:var(--text2); }
+  .backup-meta { font-size:11px; color:var(--text3); }
+
+  /* КНОПКИ */
+  .btn { padding:8px 18px; border-radius:8px; border:none; font-size:13px; font-weight:600; cursor:pointer; transition:all var(--transition); font-family:'Inter',sans-serif; }
+  .btn-primary { background:var(--accent); color:#000; }
+  .btn-primary:hover { opacity:0.9; }
+  .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+  .btn-danger { background:rgba(239,68,68,0.15); color:var(--red); border:1px solid rgba(239,68,68,0.3); }
+  .btn-danger:hover { background:rgba(239,68,68,0.25); }
+  .btn-green { background:rgba(34,197,94,0.15); color:var(--green); border:1px solid rgba(34,197,94,0.3); }
+  .btn-green:hover { background:rgba(34,197,94,0.25); }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; z-index:1000; transform:translateY(100px); opacity:0; transition:all 0.3s ease; }
+  .toast.show { transform:translateY(0); opacity:1; }
+  .toast.success { background:var(--green); color:#000; }
+  .toast.error { background:var(--red); color:#fff; }
+
+  @media (max-width:768px) {
+    .sidebar { transform:translateX(-100%); } .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay.active { display:block; } .main { margin-left:0; }
+    .burger-btn { display:flex; } .content { padding:14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="toast" id="toast"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <span class="sidebar-logo-emoji">🍌</span>
+      <div>
+        <div class="sidebar-logo-text">Nano Banana</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">Главное</div>
+      <a href="/" class="nav-item"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item"><span class="icon">💰</span> Финансы</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Маркетинг</div>
+      <a href="/analytics" class="nav-item"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item"><span class="icon">🔗</span> Ссылки</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Система</div>
+      <a href="/settings" class="nav-item active"><span class="icon">⚙️</span> Настройки</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">👑</div>
+      <div>
+        <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-user-role">administrator</div>
+      </div>
+    </div>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Настройки</div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="themeBtn">☀️</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ТАРИФЫ -->
+    <div class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">💳 Тарифы (рублёвые)</div>
+          <div class="section-sub">Изменения применяются сразу после сохранения</div>
+        </div>
+        <button class="btn btn-primary" onclick="savePackages()">Сохранить тарифы</button>
+      </div>
+      <div class="card">
+        <table class="tariff-table" id="packagesTable">
+          <thead>
+            <tr>
+              <th>Тариф</th>
+              <th>Название</th>
+              <th>Бананов 🍌</th>
+              <th>Цена ₽</th>
+              <th>₽ за банан</th>
+            </tr>
+          </thead>
+          <tbody id="packagesBody">
+            <tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3)">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- STARS ТАРИФЫ -->
+    <div class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">⭐ Тарифы Telegram Stars</div>
+        </div>
+        <button class="btn btn-primary" onclick="savePackages()">Сохранить</button>
+      </div>
+      <div class="card">
+        <table class="tariff-table">
+          <thead>
+            <tr>
+              <th>Ключ</th>
+              <th>Бананов 🍌</th>
+              <th>Stars ⭐</th>
+              <th>⭐ за банан</th>
+            </tr>
+          </thead>
+          <tbody id="starsBody">
+            <tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text3)">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- СТОИМОСТЬ ГЕНЕРАЦИЙ -->
+    <div class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">🍌 Стоимость генераций</div>
+          <div class="section-sub">Количество бананов за каждый тип генерации</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">Сохранить</button>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="config-grid" id="configGrid">
+            <div style="color:var(--text3)">Загрузка...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- БЭКАП -->
+    <div class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">💾 Бэкап базы данных</div>
+          <div class="section-sub">Последние 10 бэкапов</div>
+        </div>
+        <button class="btn btn-green" id="backupBtn" onclick="runBackup()">🔄 Создать бэкап</button>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="backup-list" id="backupList">
+            <div style="color:var(--text3)">Загрузка...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ЛОГИ -->
+    <div class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">📋 Логи бота</div>
+          <div class="section-sub">bot.log</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="fileSelect" onchange="loadLogs()" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;outline:none;cursor:pointer;"></select>
+          <select id="linesSelect" onchange="loadLogs()" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;outline:none;cursor:pointer;">
+            <option value="50">50 строк</option>
+            <option value="100" selected>100 строк</option>
+            <option value="300">300 строк</option>
+            <option value="500">500 строк</option>
+          </select>
+          <button class="btn btn-primary" onclick="loadLogs()">🔄 Обновить</button>
+          <button class="btn" id="autoBtn" onclick="toggleAutoRefresh(this)" style="background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3)">▶ Авто</button>
+          <button class="btn btn-green" onclick="downloadLog()">⬇️ Скачать</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          <pre id="logsBox" style="padding:16px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;overflow:auto;max-height:400px;color:var(--text2);white-space:pre-wrap;word-break:break-all">Загрузка...</pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t); currentTheme = t;
+  }
+  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+  applyTheme(currentTheme);
+
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  document.getElementById('burgerBtn').addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
+  overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0));
+
+  const CONFIG_LABELS = {
+    COST_STANDARD: 'Standard', COST_PRO_1K: 'PRO 1K', COST_PRO_2K: 'PRO 2K',
+    COST_PRO_4K: 'PRO 4K', COST_NB2_1K: 'NB2 1K', COST_NB2_2K: 'NB2 2K',
+    COST_NB2_4K: 'NB2 4K', COST_VIDEO: 'Видео', BONUS_AMOUNT: 'Бонус новому юзеру'
+  };
+
+  let currentData = {};
+
+  async function loadData() {
+    const data = await fetch('/api/settings/data').then(r => r.json());
+    currentData = data;
+
+    // Тарифы рублёвые
+    document.getElementById('packagesBody').innerHTML = Object.entries(data.packages).map(([key, pkg]) => `
+      <tr>
+        <td><span class="tag">${key}</span></td>
+        <td style="font-weight:600">${pkg.emoji} ${pkg.name}</td>
+        <td><input class="num-input" data-pkg="${key}" data-field="gens" value="${pkg.gens}"></td>
+        <td><input class="num-input" data-pkg="${key}" data-field="price" value="${pkg.price}"></td>
+        <td style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:12px" id="ppr_${key}">${(pkg.price/pkg.gens).toFixed(1)} ₽</td>
+      </tr>
+    `).join('');
+
+    // Обновляем ₽/банан при изменении
+    document.querySelectorAll('.num-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const key = inp.dataset.pkg;
+        if (!key) return;
+        const gens = parseFloat(document.querySelector(`[data-pkg="${key}"][data-field="gens"]`)?.value) || 1;
+        const price = parseFloat(document.querySelector(`[data-pkg="${key}"][data-field="price"]`)?.value) || 0;
+        const el = document.getElementById(`ppr_${key}`);
+        if (el) el.textContent = (price/gens).toFixed(1) + ' ₽';
+      });
+    });
+
+    // Stars тарифы
+    document.getElementById('starsBody').innerHTML = Object.entries(data.stars_packages).map(([key, pkg]) => `
+      <tr>
+        <td><span class="tag">${key}</span></td>
+        <td><input class="num-input" data-stars="${key}" data-field="bananas" value="${pkg.bananas}"></td>
+        <td><input class="num-input" data-stars="${key}" data-field="stars" value="${pkg.stars}"></td>
+        <td style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:12px">${(pkg.stars/pkg.bananas).toFixed(1)} ⭐</td>
+      </tr>
+    `).join('');
+
+    // Конфиг
+    document.getElementById('configGrid').innerHTML = Object.entries(data.config).map(([key, val]) => `
+      <div class="config-item">
+        <div class="config-label">${CONFIG_LABELS[key] || key}</div>
+        <input class="config-input" data-config="${key}" value="${val}">
+        <div class="config-unit">${key === 'BONUS_AMOUNT' ? 'бананов' : '🍌 бананов'}</div>
+      </div>
+    `).join('');
+
+    loadBackups();
+  }
+
+  async function savePackages() {
+    const packages = {};
+    document.querySelectorAll('[data-pkg]').forEach(inp => {
+      const key = inp.dataset.pkg;
+      const field = inp.dataset.field;
+      if (!packages[key]) packages[key] = {...currentData.packages[key]};
+      packages[key][field] = parseInt(inp.value) || 0;
+    });
+
+    const stars_packages = {};
+    document.querySelectorAll('[data-stars]').forEach(inp => {
+      const key = inp.dataset.stars;
+      const field = inp.dataset.field;
+      if (!stars_packages[key]) stars_packages[key] = {...currentData.stars_packages[key]};
+      stars_packages[key][field] = parseInt(inp.value) || 0;
+    });
+
+    const r = await fetch('/api/settings/packages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({packages, stars_packages})
+    }).then(r => r.json());
+
+    if (r.ok) showToast('✅ Тарифы сохранены');
+    else showToast('❌ Ошибка сохранения', 'error');
+  }
+
+  async function saveConfig() {
+    const config = {};
+    document.querySelectorAll('[data-config]').forEach(inp => {
+      config[inp.dataset.config] = parseInt(inp.value) || 0;
+    });
+
+    const r = await fetch('/api/settings/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(config)
+    }).then(r => r.json());
+
+    if (r.ok) showToast('✅ Настройки сохранены');
+    else showToast('❌ Ошибка сохранения', 'error');
+  }
+
+  async function runBackup() {
+    const btn = document.getElementById('backupBtn');
+    btn.textContent = '⏳ Создаю...';
+    btn.disabled = true;
+
+    const r = await fetch('/api/settings/backup', {method: 'POST'}).then(r => r.json());
+
+    btn.textContent = '🔄 Создать бэкап';
+    btn.disabled = false;
+
+    if (r.ok) {
+      const mb = (r.size / 1024 / 1024).toFixed(1);
+      showToast(`✅ Бэкап создан (${mb} MB)`);
+      loadBackups();
+    } else {
+      showToast('❌ Ошибка: ' + r.error, 'error');
+    }
+  }
+
+  async function loadBackups() {
+    const data = await fetch('/api/settings/backups').then(r => r.json());
+    if (!data.backups.length) {
+      document.getElementById('backupList').innerHTML = '<div style="color:var(--text3);font-size:13px">Бэкапы не найдены</div>';
+      return;
+    }
+    document.getElementById('backupList').innerHTML = data.backups.map(b => `
+      <div class="backup-item">
+        <div>
+          <div class="backup-name">${b.name}</div>
+          <div class="backup-meta">${b.mtime}</div>
+        </div>
+        <div class="backup-meta">${(b.size/1024/1024).toFixed(1)} MB</div>
+      </div>
+    `).join('');
+  }
+
+
+  async function loadLogFiles() {
+    const data = await fetch('/api/settings/logs/files').then(r => r.json());
+    const sel = document.getElementById('fileSelect');
+    sel.innerHTML = data.files.map(f => `<option value="${f}">${f}</option>`).join('');
+  }
+
+  async function loadLogs() {
+    const lines = document.getElementById('linesSelect').value;
+    const filename = document.getElementById('fileSelect').value;
+    document.getElementById('logsBox').textContent = 'Загрузка...';
+    const data = await fetch(`/api/settings/logs?lines=${lines}&filename=${encodeURIComponent(filename)}`).then(r => r.json());
+    document.getElementById('logsBox').textContent = data.logs;
+    document.getElementById('logsBox').scrollTop = 99999;
+  }
+
+  function downloadLog() {
+    const filename = document.getElementById('fileSelect').value;
+    window.location.href = `/api/settings/logs/download?filename=${encodeURIComponent(filename)}`;
+  }
+
+  let autoRefreshInterval = null;
+
+  function toggleAutoRefresh(btn) {
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+      btn.textContent = '▶ Авто';
+      btn.style.background = '';
+    } else {
+      loadLogs();
+      autoRefreshInterval = setInterval(loadLogs, 5000);
+      btn.textContent = '⏹ Стоп';
+      btn.style.background = 'var(--red)';
+    }
+  }
+
+  loadData();
+  loadLogFiles().then(() => loadLogs());
+</script>
+</body>
+</html>

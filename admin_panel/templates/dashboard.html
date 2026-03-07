@@ -237,7 +237,7 @@
 
   .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px; margin-bottom: 16px;
   }
 
@@ -408,6 +408,12 @@
         <button class="period-tab" data-period="month">30д</button>
         <button class="period-tab" data-period="alltime">Всё</button>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:4px;">
+        <input type="date" id="dateFrom" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;">
+        <span style="color:var(--text3);font-size:12px;">→</span>
+        <input type="date" id="dateTo" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;">
+        <button onclick="applyCustomPeriod()" style="padding:6px 10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-size:12px;font-weight:600;cursor:pointer;">▶</button>
+      </div>
       <button class="icon-btn" id="themeBtn" title="Сменить тему">☀️</button>
       <button class="icon-btn" id="refreshBtn" title="Обновить">↻</button>
     </div>
@@ -419,6 +425,12 @@
         <div class="metric-top">
           <div><div class="metric-label">Выручка ₽</div><div class="metric-value loading" id="m-revenue">—</div><div class="metric-sub" id="m-revenue-sub">загрузка...</div></div>
           <div class="metric-icon-wrap">💰</div>
+        </div>
+      </div>
+      <div class="metric-card purple">
+        <div class="metric-top">
+          <div><div class="metric-label">Stars ⭐</div><div class="metric-value loading" id="m-stars">—</div><div class="metric-sub" id="m-stars-sub">транзакций</div></div>
+          <div class="metric-icon-wrap">⭐️</div>
         </div>
       </div>
       <div class="metric-card orange">
@@ -466,16 +478,28 @@
           <div class="metric-icon-wrap">🏆</div>
         </div>
       </div>
+      <div class="metric-card yellow">
+        <div class="metric-top">
+          <div><div class="metric-label">🍌 Потрачено</div><div class="metric-value loading" id="m-bananas-spent">—</div><div class="metric-sub">бананов за период</div></div>
+          <div class="metric-icon-wrap">🍌</div>
+        </div>
+      </div>
+      <div class="metric-card orange">
+        <div class="metric-top">
+          <div><div class="metric-label">🎁 Выдано</div><div class="metric-value loading" id="m-bananas-given">—</div><div class="metric-sub">приветственных</div></div>
+          <div class="metric-icon-wrap">🎁</div>
+        </div>
+      </div>
     </div>
 
     <div class="charts-grid">
       <div class="card">
         <div class="card-header"><div><div class="card-title">Выручка по дням</div><div class="card-subtitle">последние 30 дней</div></div></div>
-        <canvas id="revenueChart" height="180"></canvas>
+        <canvas id="revenueChart" style="max-height:220px"></canvas>
       </div>
       <div class="card">
         <div class="card-header"><div><div class="card-title">Новые юзеры</div><div class="card-subtitle">последние 30 дней</div></div></div>
-        <canvas id="usersChart" height="180"></canvas>
+        <canvas id="usersChart" style="max-height:220px"></canvas>
       </div>
     </div>
 
@@ -551,7 +575,7 @@
   function initCharts() {
     const c = getChartColors();
     const base = {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: true,
       plugins: { legend: { display: false } },
       scales: {
         x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 8 } },
@@ -566,8 +590,8 @@
     });
 
     usersChart = new Chart(document.getElementById('usersChart'), {
-      type: 'line',
-      data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4 }]},
+      type: 'bar',
+      data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(59,130,246,0.25)', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 4 }]},
       options: JSON.parse(JSON.stringify(base))
     });
   }
@@ -582,12 +606,52 @@
   };
 
   // МЕТРИКИ
+  function updateDashboard(d) {
+    set('m-revenue', fmt(d.revenue) + ' ₽');
+    document.getElementById('m-revenue-sub').textContent = 'рублей';
+    set('m-stars', fmt(d.stars_revenue) + ' ⭐');
+    document.getElementById('m-stars-sub').textContent = `${fmt(d.stars_count)} транзакций`;
+    set('m-transactions', fmt(d.transactions));
+    set('m-new-users', fmt(d.new_users));
+    set('m-active', fmt(d.active_users));
+    document.getElementById('m-active-sub').textContent = (d.active_users && d.new_users ? (d.active_users/d.new_users*100).toFixed(1) : 0) + '% от новых';
+    set('m-buyers', fmt(d.total_buyers));
+    document.getElementById('m-buyers-sub').textContent = 'CR: ' + (d.conversion_rate||0).toFixed(2) + '%';
+    set('m-conversion', fmt(d.total_buyers - (d.newbie_buyers||0)));
+    set('m-avg-check', fmt(d.avg_check) + ' ₽');
+    set('m-retention', (d.retention||0).toFixed(2));
+    set('m-ltv', fmt(d.ltv) + ' ₽');
+    set('m-bananas-spent', fmt(d.bananas_spent));
+    set('m-bananas-given', fmt(d.bananas_given));
+    // тарифы
+    const tariffs = d.purchases_by_tariff || {};
+    const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🔥','832 банана':'🔥','Telegram Stars':'⭐'};
+    const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
+    document.getElementById('tariffs-list').innerHTML = order.map(name =>
+      `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
+    ).join('');
+    // топ источников
+    const sources = d.top_sources || [];
+    document.getElementById('sources-list').innerHTML = sources.length
+      ? sources.map((s, i) => `
+        <div class="tariff-item">
+          <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span>
+          <span style="display:flex;gap:12px;align-items:center">
+            <span style="font-size:11px;color:var(--text3)">${fmt(s.count)} покуп.</span>
+            <span class="tariff-count">${fmt(s.revenue)} ₽</span>
+          </span>
+        </div>`).join('')
+      : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
+  }
+
   async function loadStats(period) {
     document.querySelectorAll('.metric-value').forEach(el => el.classList.add('loading'));
     try {
       const d = await fetch(`/api/dashboard/stats?period=${period}`).then(r => r.json());
       set('m-revenue', fmt(d.revenue) + ' ₽');
-      document.getElementById('m-revenue-sub').textContent = d.stars_count > 0 ? `+ ${fmt(d.stars_revenue)} ⭐ Stars` : 'только рубли';
+      document.getElementById('m-revenue-sub').textContent = 'рублей';
+      set('m-stars', fmt(d.stars_revenue) + ' ⭐');
+      document.getElementById('m-stars-sub').textContent = `${fmt(d.stars_count)} транзакций`;
       set('m-transactions', fmt(d.transactions));
       document.getElementById('m-transactions-sub').textContent = 'покупок';
       set('m-users', fmt(d.new_users));
@@ -598,6 +662,8 @@
       set('m-dau', fmt(d.active_users));
       set('m-retention', fmtDec(d.retention));
       set('m-ltv', fmt(d.ltv) + ' ₽');
+    set('m-bananas-spent', fmt(d.bananas_spent));
+    set('m-bananas-given', fmt(d.bananas_given));
 
       // Тарифы
       const tariffs = d.purchases_by_tariff || {};
@@ -607,8 +673,17 @@
         `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
       ).join('');
 
-      document.getElementById('sources-list').innerHTML =
-        `<div style="color:var(--text3);font-size:12px;font-family:'JetBrains Mono',monospace;padding:8px 0">Детализация — в разделе Аналитика</div>`;
+      const sources = d.top_sources || [];
+      document.getElementById('sources-list').innerHTML = sources.length
+        ? sources.map((s, i) => `
+          <div class="tariff-item">
+            <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span>
+            <span style="display:flex;gap:12px;align-items:center">
+              <span style="font-size:11px;color:var(--text3)">${fmt(s.count)} покуп.</span>
+              <span class="tariff-count">${fmt(s.revenue)} ₽</span>
+            </span>
+          </div>`).join('')
+        : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
 
     } catch(e) { console.error(e); }
   }
@@ -627,10 +702,54 @@
   }
 
   // ПЕРИОД
+  // DATE PICKER
+  async function applyCustomPeriod() {
+    const from = document.getElementById('dateFrom').value;
+    const to = document.getElementById('dateTo').value;
+    if (!from || !to) return;
+
+    document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+    // Загружаем данные через loadStats с кастомными параметрами
+    document.querySelectorAll('.metric-value').forEach(el => el.classList.add('loading'));
+    try {
+      const d = await fetch(`/api/dashboard/stats?date_from=${from}&date_to=${to}`).then(r => r.json());
+      set('m-revenue', fmt(d.revenue) + ' ₽');
+      document.getElementById('m-revenue-sub').textContent = 'рублей';
+      set('m-stars', fmt(d.stars_revenue) + ' ⭐');
+      document.getElementById('m-stars-sub').textContent = `${fmt(d.stars_count)} транзакций`;
+      set('m-transactions', fmt(d.transactions));
+      document.getElementById('m-transactions-sub').textContent = 'покупок';
+      set('m-users', fmt(d.new_users));
+      document.getElementById('m-users-sub').textContent = `всего: ${fmt(d.total_users)}`;
+      set('m-cr', fmtDec(d.conversion_rate) + '%');
+      document.getElementById('m-cr-sub').textContent = `${fmt(d.total_buyers)} покупателей`;
+      set('m-avgcheck', fmt(d.avg_check) + ' ₽');
+      set('m-dau', fmt(d.active_users));
+      set('m-retention', fmtDec(d.retention));
+      set('m-ltv', fmt(d.ltv) + ' ₽');
+    set('m-bananas-spent', fmt(d.bananas_spent));
+    set('m-bananas-given', fmt(d.bananas_given));
+      const tariffs = d.purchases_by_tariff || {};
+      const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
+      const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🍌','832 банана':'🔥','Telegram Stars':'⭐️'};
+      document.getElementById('tariffs-list').innerHTML = order.map(name =>
+        `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
+      ).join('');
+      const sources = d.top_sources || [];
+      document.getElementById('sources-list').innerHTML = sources.length
+        ? sources.map((s, i) => `<div class="tariff-item"><span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span><span style="display:flex;gap:12px;align-items:center"><span style="font-size:11px;color:var(--text3)">${fmt(s.count)} покуп.</span><span class="tariff-count">${fmt(s.revenue)} ₽</span></span></div>`).join('')
+        : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
+      document.querySelectorAll('.metric-value').forEach(el => el.classList.remove('loading'));
+    } catch(e) { console.error(e); }
+  }
+
+
   document.querySelectorAll('.period-tab').forEach(tab => {
     tab.addEventListener('click', () => {
+      if (tab.dataset.period === 'custom') return;
       document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+
       currentPeriod = tab.dataset.period;
       loadStats(currentPeriod);
     });
@@ -655,6 +774,11 @@
   // СТАРТ
   applyTheme(currentTheme);
   initCharts();
+  // Дефолтные даты для инпутов
+  const todayStr = new Date().toISOString().split('T')[0];
+  const weekAgoStr = new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0];
+  document.getElementById('dateFrom').value = weekAgoStr;
+  document.getElementById('dateTo').value = todayStr;
   loadStats(currentPeriod);
   loadCharts();
   updateTime();

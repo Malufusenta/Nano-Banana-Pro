@@ -35,7 +35,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     
     await state.clear()
     user_id = message.from_user.id
-    welcome_bonus = 2
+    from app.config import BONUS_AMOUNT; welcome_bonus = BONUS_AMOUNT
 
     # 🔥 ПРОВЕРКА БЛОКИРОВКИ
     async with async_session() as session:
@@ -230,7 +230,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     broadcast_prompt=post_config.prompt,
                     broadcast_ratio=post_config.aspect_ratio,
                     broadcast_model=post_config.model_type,
-                    from_broadcast=True
+                    from_broadcast=True,
+                    current_post_id=post_config.config_id
                 )
                 
                 from app.handlers.generation import GenState
@@ -328,7 +329,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     broadcast_prompt=post_config.prompt,
                     broadcast_ratio=post_config.aspect_ratio,
                     broadcast_model=post_config.model_type,
-                    from_broadcast=True
+                    from_broadcast=True,
+                    current_post_id=post_config.config_id
                 )
                 
                 from app.handlers.generation import GenState

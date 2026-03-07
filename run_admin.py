@@ -1,6 +1,9 @@
 """
 Запуск админ-панели: python run_admin.py
 """
+from dotenv import load_dotenv
+load_dotenv()  # Загружаем .env ДО любых импортов
+
 import uvicorn
 
 if __name__ == "__main__":

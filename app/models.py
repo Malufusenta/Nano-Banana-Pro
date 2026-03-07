@@ -94,6 +94,7 @@ class GenerationTask(Base):
     deducted_from_paid: Mapped[int] = mapped_column(Integer, server_default='0', nullable=False)
     deducted_from_free: Mapped[int] = mapped_column(Integer, server_default='0', nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    post_id: Mapped[str] = mapped_column(String, nullable=True)
 
     # 5. Таблица Рассылок
 class Broadcast(Base):
@@ -175,6 +176,7 @@ class BananaTransaction(Base):
     transaction_type: Mapped[str] = mapped_column(String)  # "spent", "earned_ref", "earned_sub", "purchased", "welcome"
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    post_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 # 8. Таблица задач генерации видео
 class VideoGenerationTask(Base):

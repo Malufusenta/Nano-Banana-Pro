@@ -1183,7 +1183,7 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     if period == "custom":
         await cb_stats_custom_start(callback, state)
         return
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
     today_start = get_today_start_msk()
 
 # Определяем период
@@ -1362,24 +1362,13 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
 
 def get_today_start_msk():
     """
-    Возвращает UTC-время, которое соответствует 00:00:00 по Москве.
-    Нужно для фильтрации в базе данных.
+    Возвращает начало сегодняшнего дня по Москве (naive datetime).
+    База хранит даты в MSK без timezone.
     """
-    # 1. Текущее время в UTC
-    now_utc = datetime.now(timezone.utc)
-    
-    # 2. Переводим в МСК (UTC+3)
     msk_tz = timezone(timedelta(hours=3))
-    now_msk = now_utc.astimezone(msk_tz)
-    
-    # 3. Обрезаем до начала дня (00:00:00)
+    now_msk = datetime.now(msk_tz)
     start_of_day_msk = now_msk.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # 4. Переводим обратно в UTC, чтобы база поняла
-    start_of_day_utc = start_of_day_msk.astimezone(timezone.utc)
-    
-    # 5. Убираем информацию о зоне (делаем naive), так как в базе даты "голые"
-    return start_of_day_utc.replace(tzinfo=None)
+    return start_of_day_msk.replace(tzinfo=None)
 
 def create_date_navigation_keyboard(date: datetime):
     """Создаёт кнопки навигации по датам"""
@@ -1483,27 +1472,27 @@ async def cb_prompts_period(callback: types.CallbackQuery, state: FSMContext):
         await cb_prompts_custom_start(callback, state)
         return
     
-    now = datetime.now()
-    
+    now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+    today_start = get_today_start_msk()
+
     # Определяем период (как в отчётах)
     if period == "today":
-        date_from = get_today_start_msk()
-        date_to = datetime.now()
-        date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
+        date_from = today_start
+        date_to = now
+        date_str = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d.%m.%Y") + " (сегодня)"
     
     elif period == "yesterday":
-        yesterday = now - timedelta(days=1)
-        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
-        date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
+        date_from = today_start - timedelta(days=1)
+        date_to = today_start - timedelta(seconds=1)
+        date_str = (datetime.now(timezone.utc) + timedelta(hours=3) - timedelta(days=1)).strftime("%d.%m.%Y") + " (вчера)"
     
     elif period == "week":
-        date_from = now - timedelta(days=7)
+        date_from = today_start - timedelta(days=7)
         date_to = now
         date_str = "7 дней"
     
     elif period == "month":
-        date_from = now - timedelta(days=30)
+        date_from = today_start - timedelta(days=30)
         date_to = now
         date_str = "30 дней"
     
@@ -1711,34 +1700,35 @@ async def cb_payment_depth_period(callback: types.CallbackQuery, state: FSMConte
         await cb_depth_custom_start(callback, state)
         return
     
-    now = datetime.now()
-    
+    now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+    today_start = get_today_start_msk()
+    now_msk = datetime.now(timezone.utc) + timedelta(hours=3)
+
     # Логика дат (аналогична обычной статистике)
     if period == "today":
-        date_from = get_today_start_msk()
-        date_to = datetime.now()
-        date_label_start = datetime.now().strftime("%d.%m.%Y")
-        date_label_end = datetime.now().strftime("%d.%m.%Y")
+        date_from = today_start
+        date_to = now
+        date_label_start = now_msk.strftime("%d.%m.%Y")
+        date_label_end = now_msk.strftime("%d.%m.%Y")
         
     elif period == "yesterday":
-        yesterday = now - timedelta(days=1)
-        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
-        date_label_start = yesterday.strftime("%d.%m.%Y")
-        date_label_end = yesterday.strftime("%d.%m.%Y")
+        date_from = today_start - timedelta(days=1)
+        date_to = today_start - timedelta(seconds=1)
+        yesterday_msk = now_msk - timedelta(days=1)
+        date_label_start = yesterday_msk.strftime("%d.%m.%Y")
+        date_label_end = yesterday_msk.strftime("%d.%m.%Y")
         
     elif period == "week":
-        date_from = now - timedelta(days=7)
+        date_from = today_start - timedelta(days=7)
         date_to = now
-        date_label_start = date_from.strftime("%d.%m.%Y")
-        date_label_end = now.strftime("%d.%m.%Y")
+        date_label_start = (now_msk - timedelta(days=7)).strftime("%d.%m.%Y")
+        date_label_end = now_msk.strftime("%d.%m.%Y")
 
-        
     elif period == "month":
-        date_from = now - timedelta(days=30)
+        date_from = today_start - timedelta(days=30)
         date_to = now
-        date_label_start = date_from.strftime("%d.%m.%Y")
-        date_label_end = now.strftime("%d.%m.%Y")
+        date_label_start = (now_msk - timedelta(days=30)).strftime("%d.%m.%Y")
+        date_label_end = now_msk.strftime("%d.%m.%Y")
         
     elif period == "alltime":
         async with async_session() as session:

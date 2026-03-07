@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, text
 
 from app.database import async_session
 from app.models import User, Purchase, BananaTransaction
@@ -17,20 +17,29 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 
 
+def get_today_start_msk():
+    from datetime import timezone
+    now_utc = datetime.now(timezone.utc)
+    msk_tz = timezone(timedelta(hours=3))
+    now_msk = now_utc.astimezone(msk_tz)
+    start_of_day_msk = now_msk.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_of_day_msk.replace(tzinfo=None)
+
 def get_period_dates(period: str):
-    now = datetime.utcnow()
+    from datetime import timezone
+    now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+    today_start = get_today_start_msk()
     if period == "today":
-        date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_from = today_start
         date_to = now
     elif period == "yesterday":
-        yesterday = now - timedelta(days=1)
-        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_to = yesterday.replace(hour=23, minute=59, second=59)
+        date_from = today_start - timedelta(days=1)
+        date_to = today_start - timedelta(seconds=1)
     elif period == "week":
-        date_from = now - timedelta(days=7)
+        date_from = today_start - timedelta(days=7)
         date_to = now
     elif period == "month":
-        date_from = now - timedelta(days=30)
+        date_from = today_start - timedelta(days=30)
         date_to = now
     else:  # alltime
         date_from = datetime(2020, 1, 1)
@@ -47,7 +56,51 @@ async def dashboard(request: Request):
 
 
 @router.get("/api/dashboard/stats")
-async def dashboard_stats(request: Request, period: str = "today"):
+async def dashboard_stats(request: Request, period: str = "today", date_from: str = None, date_to: str = None):
+    # Произвольный период
+    if date_from and date_to:
+        from datetime import datetime as dt
+        df = dt.strptime(date_from, "%Y-%m-%d")
+        dt_ = dt.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        user = get_current_user(request)
+        if not user:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        async with async_session() as session:
+            data = await get_analytics_report(session, df, dt_)
+            total_users = await session.scalar(select(func.count()).select_from(User))
+            total_gens = await session.scalar(select(func.count()).select_from(User).where(User.total_generations_used > 0)) or 0
+            bananas_given = await session.scalar(text("""
+                SELECT COALESCE(SUM(amount), 0) FROM banana_transactions
+                WHERE transaction_type = 'welcome'
+                AND created_at >= :df AND created_at <= :dt
+            """), {"df": df, "dt": dt_}) or 0
+            bananas_spent = await session.scalar(text("""
+                SELECT COALESCE(ABS(SUM(amount)), 0) FROM banana_transactions
+                WHERE transaction_type = 'spent'
+                AND created_at >= :df AND created_at <= :dt
+            """), {"df": df, "dt": dt_}) or 0
+        rev = data["revenue"]
+        users_data = data["users"]
+
+        return JSONResponse({
+            "revenue": rev["rub_revenue"],
+            "stars_revenue": rev["stars_revenue"],
+            "stars_count": rev["stars_count"],
+            "transactions": rev["transactions"],
+            "avg_check": rev["avg_check"],
+            "new_users": users_data["new"],
+            "active_users": users_data["active"],
+            "total_buyers": users_data["total_buyers"],
+            "conversion_rate": users_data["conversion_rate"],
+            "total_users": total_users,
+            "total_gens": total_gens,
+            "retention": rev.get("retention", 0),
+            "ltv": rev.get("ltv", 0),
+            "bananas_given": int(bananas_given),
+            "bananas_spent": int(bananas_spent),
+            "purchases_by_tariff": data.get("purchases_by_tariff", {}),
+            "top_sources": sorted([{"name": k, "revenue": v["revenue"], "count": v["count"]} for k, v in data.get("revenue_by_source", {}).items()], key=lambda x: x["revenue"], reverse=True)[:5],
+        })
     user = get_current_user(request)
     if not user:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
@@ -69,6 +122,18 @@ async def dashboard_stats(request: Request, period: str = "today"):
             )
         ) or 0
 
+        bananas_given = await session.scalar(text("""
+            SELECT COALESCE(SUM(amount), 0) FROM banana_transactions
+            WHERE transaction_type = 'welcome'
+            AND created_at >= :df AND created_at <= :dt
+        """), {"df": date_from, "dt": date_to}) or 0
+
+        bananas_spent = await session.scalar(text("""
+            SELECT COALESCE(ABS(SUM(amount)), 0) FROM banana_transactions
+            WHERE transaction_type = 'spent'
+            AND created_at >= :df AND created_at <= :dt
+        """), {"df": date_from, "dt": date_to}) or 0
+
     rev = data["revenue"]
     users_data = data["users"]
 
@@ -86,6 +151,10 @@ async def dashboard_stats(request: Request, period: str = "today"):
         "total_gens": total_gens,
         "retention": rev.get("retention", 0),
         "ltv": rev.get("ltv", 0),
+        "bananas_given": int(bananas_given),
+        "bananas_spent": int(bananas_spent),
+        "top_sources": sorted([{"name": k, "revenue": v["revenue"], "count": v["count"]} for k, v in data.get("revenue_by_source", {}).items()], key=lambda x: x["revenue"], reverse=True)[:5],
+        "purchases_by_tariff": data.get("purchases_by_tariff", {}),
     })
 
 

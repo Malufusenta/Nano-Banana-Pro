@@ -2,12 +2,14 @@
 Nano Banana Admin Panel — FastAPI
 """
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
-from admin_panel.routers import auth, dashboard, users, analytics, broadcast
+from admin_panel.routers import auth, dashboard, users, analytics, broadcast, finances, links, settings
 
 BASE_DIR = Path(__file__).parent
 
@@ -21,3 +23,6 @@ app.include_router(dashboard.router)
 app.include_router(users.router)
 app.include_router(analytics.router)
 app.include_router(broadcast.router)
+app.include_router(finances.router)
+app.include_router(links.router)
+app.include_router(settings.router)

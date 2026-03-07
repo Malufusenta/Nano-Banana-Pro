@@ -652,7 +652,8 @@ async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
         use_pro_model=use_pro,
         use_nb2_model=use_nb2,
         resolution=resolution,
-        is_blend_mode=data.get("is_blend_mode", False)
+        is_blend_mode=data.get("is_blend_mode", False),
+        post_id=data.get("current_post_id")
     )
 
     from_retry_flow = data.get("force_pro_mode", False)
@@ -1548,7 +1549,8 @@ async def process_generation(
     use_pro_model: bool = False, 
     use_nb2_model: bool = False,
     resolution: str = "1K",
-    is_blend_mode: bool = False
+    is_blend_mode: bool = False,
+    post_id: str = None
 
 ):
     """Основная функция генерации изображений"""
@@ -1556,7 +1558,7 @@ async def process_generation(
     
     # 1. Проверка и списание баланса
     async with async_session() as session:
-        has_balance = await check_and_deduct_balance(session, user_id, amount=cost)
+        has_balance = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id)
         balance_left = await get_user_balance(session, user_id)
 
     if not has_balance:
