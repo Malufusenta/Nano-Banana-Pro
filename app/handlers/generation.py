@@ -766,7 +766,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     )
         await message.answer(
         text,
-        reply_markup=get_preflight_kb("standard", broadcast_ratio, "2k"),
+        reply_markup=get_preflight_kb("standard", broadcast_ratio, "1k"),
         parse_mode="Markdown"
     )
         return
@@ -1132,7 +1132,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
 )
         await message.answer(
     text,
-    reply_markup=get_preflight_kb("standard", ratio, "2k"),
+    reply_markup=get_preflight_kb(model, ratio, "1k"),  # 👈 только это
     parse_mode="Markdown"
 )
         return
@@ -2008,7 +2008,7 @@ async def process_generation(
             await wait_msg.edit_text(final_text, parse_mode="HTML")
         except: 
             await message.answer(final_text, parse_mode="HTML")
-@router.callback_query(F.data.startswith("bc_"))
+@router.callback_query(F.data.regexp(r"^bc_\d+$"))  # только bc_123, не bc_model_
 async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext):
     """Обработка нажатия кнопки генерации из рассылки"""
     
@@ -2043,6 +2043,7 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     await state.update_data(
         broadcast_prompt=broadcast.hidden_prompt,
         broadcast_ratio=broadcast.aspect_ratio or "1:1",
+        broadcast_model=broadcast.model_type or "standard",  # 👈
         from_broadcast=True
     )
     

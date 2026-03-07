@@ -113,6 +113,7 @@ class Broadcast(Base):
     # Для Type B кнопок - скрытый промпт
     hidden_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     aspect_ratio = Column(String(10), default="1:1")
+    model_type = Column(String(20), default="standard")  # 👈 ДОБАВИТЬ
     
     # Статистика
     status: Mapped[str] = mapped_column(String, default="draft")  # draft, sending, completed

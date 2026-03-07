@@ -42,6 +42,7 @@ class AdminState(StatesGroup):
 class BroadcastState(StatesGroup):
     waiting_for_content = State()       # Ждём контент (текст/фото/альбом)
     waiting_for_buttons = State()  
+    waiting_for_model = State()       # 👈 УЖЕ ЕСТЬ — просто убедись
     waiting_for_aspect_ratio = State()  # 👈 ДОБАВЬ ЭТУ СТРОКУ
      # Ждём список кнопок
     waiting_for_confirmation = State()  # Показываем превью, ждём подтверждения
@@ -193,6 +194,62 @@ async def cb_broadcast_menu(callback: types.CallbackQuery):
     await callback.message.edit_text(
         "📢 <b>Управление рассылками</b>\n\n"
         "Выберите действие:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "broadcast_history")
+async def cb_broadcast_history(callback: types.CallbackQuery):
+    """История рассылок"""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Broadcast)
+            .order_by(Broadcast.created_at.desc())
+            .limit(10)
+        )
+        broadcasts = result.scalars().all()
+    
+    if not broadcasts:
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🔙 Назад", callback_data="admin_broadcast")
+        await callback.message.edit_text(
+            "📋 <b>История рассылок</b>\n\nРассылок пока не было.",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+    
+    text = "📋 <b>История рассылок (последние 10)</b>\n\n"
+    
+    for bc in broadcasts:
+        # Статус
+        status_icon = {"draft": "📝", "sending": "⏳", "completed": "✅"}.get(bc.status, "❓")
+        
+        # Дата
+        date_str = bc.created_at.strftime("%d.%m.%Y %H:%M")
+        
+        # Тип контента
+        content_type = {"photo": "🖼", "video": "🎥"}.get(bc.media_type, "📝")
+        
+        # Промпт
+        prompt_str = f"\n└─ 🎨 Промпт: <code>{bc.hidden_prompt[:40]}...</code>" if bc.hidden_prompt else ""
+        model_str = f" | {bc.model_type.upper()}" if bc.hidden_prompt and bc.model_type else ""
+        
+        text += (
+            f"{status_icon} <b>#{bc.id}</b> {content_type} — {date_str}\n"
+            f"├─ 👥 Отправлено: {bc.delivered_count}/{bc.sent_count}\n"
+            f"├─ 🚫 Заблокировали: {bc.blocked_count}\n"
+            f"└─ 📐 {bc.aspect_ratio or '1:1'}{model_str}"
+            f"{prompt_str}\n\n"
+        )
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_broadcast")
+    
+    await callback.message.edit_text(
+        text,
         reply_markup=builder.as_markup(),
         parse_mode="HTML"
     )
@@ -391,20 +448,20 @@ async def process_broadcast_buttons(message: types.Message, state: FSMContext):
         hidden_prompt=hidden_prompt
     )
     
-# 🔥 НОВЫЙ БЛОК - ЕСЛИ ЕСТЬ ПРОМПТ, СПРАШИВАЕМ ФОРМАТ 🔥
+# 🔥 НОВЫЙ БЛОК - ЕСЛИ ЕСТЬ ПРОМПТ, СПРАШИВАЕМ МОДЕЛЬ, ПОТОМ ФОРМАТ 🔥
     if hidden_prompt:
-        await state.set_state(BroadcastState.waiting_for_aspect_ratio)
+        await state.set_state(BroadcastState.waiting_for_model)
         
         builder = InlineKeyboardBuilder()
-        ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
-        for r in ratios:
-            builder.button(text=r, callback_data=f"bc_ratio_{r}")
-        builder.adjust(3, 3, 2, 2)
+        builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="bc_model_standard")
+        builder.button(text=f"🍌 Nano Banana 2 ({config.COST_NB2_1K} банана)", callback_data="bc_model_nb2")
+        builder.button(text=f"💎 PRO ({config.COST_PRO_1K} банана)", callback_data="bc_model_pro")
+        builder.button(text="❌ Отмена", callback_data="admin_menu")
+        builder.adjust(1)
         
         await message.answer(
-            "📐 <b>Выберите формат результата:</b>\n\n"
-            "Это формат, в котором юзер получит изображение после генерации.\n"
-            "💡 Выбирайте тот же формат, что на примере в рассылке!",
+            "🤖 <b>Выберите модель генерации:</b>\n\n"
+            "Это модель, которая будет генерировать изображение по кнопке в рассылке.",
             reply_markup=builder.as_markup(),
             parse_mode="HTML"
         )
@@ -511,6 +568,7 @@ async def cb_broadcast_confirm(callback: types.CallbackQuery, state: FSMContext)
             buttons=data.get('buttons'),
             hidden_prompt=data.get('hidden_prompt'),
             aspect_ratio=data.get('aspect_ratio', '1:1'),
+            model_type=data.get('model_type', 'standard'),  # 👈 ДОБАВИТЬ
             status="sending",
             total_users=total_users
         )
@@ -920,7 +978,34 @@ async def cb_broadcast_select_ratio(callback: types.CallbackQuery, state: FSMCon
     # Показываем превью
     await show_broadcast_preview(callback.message, state)
 
-    # =====================================================================
+@router.callback_query(BroadcastState.waiting_for_model, F.data.startswith("bc_model_"))
+async def cb_broadcast_select_model(callback: types.CallbackQuery, state: FSMContext):
+    """Выбор модели для broadcast генерации"""
+    model = callback.data.split("_")[2]  # standard / nb2 / pro
+    
+    await state.update_data(model_type=model)
+    await state.set_state(BroadcastState.waiting_for_aspect_ratio)
+    
+    # Разные форматы для nb2
+    builder = InlineKeyboardBuilder()
+    if model == "nb2":
+        ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
+    else:
+        ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
+    
+    for r in ratios:
+        builder.button(text=r, callback_data=f"bc_ratio_{r}")
+    builder.adjust(3, 3, 2, 2)
+    
+    await callback.message.edit_text(
+        "📐 <b>Выберите формат результата:</b>\n\n"
+        "Это формат, в котором юзер получит изображение после генерации.\n"
+        "💡 Выбирайте тот же формат, что на примере в рассылке!",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await callback.answer(f"✅ Модель: {model}")
+
 # СОЗДАНИЕ POST LINK
 # =====================================================================
 @router.callback_query(F.data == "admin_create_postlink")

@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from app.database import async_session
 from app.models import AdScenario, User
 from app.config import ADMIN_IDS  # Список админов
+from aiogram.exceptions import TelegramBadRequest
 
 import re
 
@@ -889,7 +890,11 @@ async def callback_admin_scenarios_menu(callback: CallbackQuery, state: FSMConte
             else:
                 raise
         
+    # admin_scenarios.py, строка ~892
+    try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except TelegramBadRequest:
+        pass
         await state.set_state(AdminScenarioStates.viewing_list)
     
     await callback.answer()
