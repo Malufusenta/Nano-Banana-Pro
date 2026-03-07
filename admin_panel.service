@@ -1,0 +1,17 @@
+[Unit]
+Description=Nano Banana Admin Panel
+After=network.target
+
+[Service]
+Type=simple
+User=Dianka
+WorkingDirectory=/home/Dianka/Nano-Banana-Pro
+Environment="ADMIN_LOGIN=admin"
+Environment="ADMIN_PASSWORD=your_strong_password_here"
+Environment="ADMIN_SECRET_KEY=your_random_secret_key_here"
+ExecStart=/home/Dianka/Nano-Banana-Pro/venv/bin/python run_admin.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
