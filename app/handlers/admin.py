@@ -1183,34 +1183,27 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
     if period == "custom":
         await cb_stats_custom_start(callback, state)
         return
-    now = datetime.now()
-    
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    today_start = get_today_start_msk()
+
 # Определяем период
     if period == "today":
-        # 1. Вызываем твою новую функцию (она посчитает начало дня по МСК и вернет UTC)
-        date_from = get_today_start_msk()
-        
-        # 2. Конец периода - текущее время UTC
-        # replace(tzinfo=None) нужен, чтобы убрать часовой пояс, так как в SQLite даты "голые"
-        date_to = datetime.now()
-        
-        date_str = datetime.now().strftime("%d.%m.%Y") + " (сегодня)"
+        date_from = today_start
+        date_to = now
+        date_str = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%d.%m.%Y") + " (сегодня)"
     
     elif period == "yesterday":
-        # ... дальше код не трогаем
-    # ...
-        yesterday = now - timedelta(days=1)
-        date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-        date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
-        date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
+        date_from = today_start - timedelta(days=1)
+        date_to = today_start - timedelta(seconds=1)
+        date_str = (datetime.now(timezone.utc) + timedelta(hours=3) - timedelta(days=1)).strftime("%d.%m.%Y") + " (вчера)"
     
     elif period == "week":
-        date_from = now - timedelta(days=7)
+        date_from = today_start - timedelta(days=7)
         date_to = now
         date_str = "7 дней"
     
     elif period == "month":
-        date_from = now - timedelta(days=30)
+        date_from = today_start - timedelta(days=30)
         date_to = now
         date_str = "30 дней"
     
