@@ -62,8 +62,19 @@ class Purchase(Base):
     user_source: Mapped[str | None] = mapped_column(String, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     payment_id: Mapped[str | None] = mapped_column(String, nullable=True)
-
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    payment_method: Mapped[str | None] = mapped_column(String, nullable=True)
+    # "yookassa_card", "yookassa_sbp", "telegram_stars"
+    # нужно для блока 1: Stars отдельной строкой
+
+    income_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # сумма после комиссии ЮKassa (income_amount из вебхука)
+    # для блока 1: чистая выручка копейка в копейку
+
+    is_first_purchase: Mapped[bool] = mapped_column(Boolean, default=False)
+    # нужно для блока 4: новые vs старые покупатели
+    # и для блока 3: CAC = директ / кол-во новых
 
 # 3. Таблица Истории (Контекст + Галерея)
 class MessageHistory(Base):
@@ -95,6 +106,11 @@ class GenerationTask(Base):
     deducted_from_free: Mapped[int] = mapped_column(Integer, server_default='0', nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     post_id: Mapped[str] = mapped_column(String, nullable=True)
+    # ДОБАВИТЬ:
+    kie_credits_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Стоимость генерации в кредитах kie.ai (1 кредит = $0.005)
+    model_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    # "standard", "pro", "nb2" — для аналитики по моделям
 
     # 5. Таблица Рассылок
 class Broadcast(Base):
@@ -177,6 +193,8 @@ class BananaTransaction(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     post_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    kie_credits_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model_type: Mapped[str | None] = mapped_column(String, nullable=True)
 
 # 8. Таблица задач генерации видео
 class VideoGenerationTask(Base):

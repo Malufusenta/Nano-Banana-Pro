@@ -21,6 +21,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     # Выручка и транзакции
     revenue_query = select(
         func.sum(Purchase.price).label('total_revenue'),
+        func.sum(Purchase.income_amount).label('total_income_amount'),
         func.count(Purchase.id).label('total_transactions')
     ).where(
         Purchase.status == 'succeeded',
@@ -32,6 +33,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     revenue_data = revenue_result.first()
     
     total_revenue = revenue_data.total_revenue or 0
+    total_income_amount = round((revenue_data.total_income_amount or 0) / 100, 2)
     total_transactions = revenue_data.total_transactions or 0
     
     # Первые покупки (ТОЛЬКО рубли, без Stars)
@@ -277,6 +279,40 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         BananaTransaction.created_at <= date_to
     )
     purchased = await session.scalar(purchased_query) or 0
+
+    # ========== ТРАТЫ НА KIE.AI ==========
+    kie_query = select(
+        func.sum(BananaTransaction.kie_credits_cost).label('total_credits'),
+        func.count(BananaTransaction.id).label('total_gens'),
+    ).where(
+        BananaTransaction.transaction_type == 'spent',
+        BananaTransaction.created_at >= date_from,
+        BananaTransaction.created_at <= date_to,
+        BananaTransaction.kie_credits_cost.isnot(None)
+    )
+    kie_result = await session.execute(kie_query)
+    kie_data = kie_result.first()
+
+    kie_total_credits = kie_data.total_credits or 0
+    kie_total_usd = round(kie_total_credits * 0.005, 4)
+
+    # По моделям
+    kie_by_model_query = select(
+        BananaTransaction.model_type,
+        func.sum(BananaTransaction.kie_credits_cost).label('credits'),
+        func.count(BananaTransaction.id).label('gens')
+    ).where(
+        BananaTransaction.transaction_type == 'spent',
+        BananaTransaction.created_at >= date_from,
+        BananaTransaction.created_at <= date_to,
+        BananaTransaction.kie_credits_cost.isnot(None)
+    ).group_by(BananaTransaction.model_type)
+
+    kie_by_model_result = await session.execute(kie_by_model_query)
+    kie_by_model = {
+        row.model_type: {'credits': row.credits, 'gens': row.gens, 'usd': round(row.credits * 0.005, 4)}
+        for row in kie_by_model_result
+    }
     
     # ========== ПОКУПКИ ПО ТАРИФАМ ==========
     
@@ -440,6 +476,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     return {
     'revenue': {
         'total': total_revenue,
+        'income_amount': total_income_amount,  # 👈 ДОБАВИТЬ
         'rub_revenue': rub_revenue,
         'stars_revenue': stars_revenue,
         'stars_count': stars_count,
@@ -449,6 +486,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         'avg_check': avg_check,
         'retention': retention,   # 👈 НОВОЕ
         'ltv': ltv                # 👈 НОВОЕ
+        
     },
     # ... остальное без изменений
         'revenue_by_source': revenue_by_source,
@@ -461,7 +499,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'earned_welcome': earned_welcome,
             'purchased': purchased
         },
-        'purchases_by_tariff': purchases_by_tariff,
+'purchases_by_tariff': purchases_by_tariff,
         'users': {
             'new': new_users,
             'active': active_users,
@@ -472,8 +510,14 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'farmed_first': farmed_first,
             'veteran_buyers': veteran_buyers,
             'blocked': blocked
+        },
+        'kie': {
+            'total_credits': kie_total_credits,
+            'total_usd': kie_total_usd,
+            'by_model': kie_by_model
         }
     }
+
 
 def format_report_message(data: dict, date_str: str, is_all_time: bool = False) -> str:
     """
@@ -500,6 +544,16 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
     # ДЕНЬГИ
     text += "💰 ДЕНЬГИ\n"
     text += f"Выручка (рубли): {rev['rub_revenue']:.0f} ₽\n"
+    text += f"Чистая выручка: {rev['income_amount']:.2f} ₽\n"
+
+    # ПОСЛЕ блока 💰 ДЕНЬГИ, добавить:
+    kie = data.get('kie', {})
+    if kie.get('total_credits', 0) > 0:
+        text += "🤖 РАСХОДЫ НА ГЕНЕРАЦИИ (kie.ai)\n"
+        text += f"Кредитов потрачено: {kie['total_credits']} кред. (${kie['total_usd']})\n"
+        for model, stats in kie.get('by_model', {}).items():
+            text += f"— {model}: {stats['gens']} ген. / {stats['credits']} кред. (${stats['usd']})\n"
+        text += "\n"
 
     # Показываем звёзды только если они есть
     if rev['stars_count'] > 0:

@@ -21,6 +21,7 @@ from app.services.user_service import (
     get_user_model_preference, set_user_model_preference, has_user_purchased, get_user, track_banana_transaction, increment_generations_count
 )
 from app.services.ai_engine import generate_image
+from app.services.kie_pricing import get_kie_credits
 from app.utils import prompts
 from sqlalchemy import func
 from app.utils.prompt_validator import is_lazy_prompt
@@ -1558,7 +1559,9 @@ async def process_generation(
     
     # 1. Проверка и списание баланса
     async with async_session() as session:
-        has_balance = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id)
+        model_type = "pro" if use_pro_model else "nb2" if use_nb2_model else "standard"
+        kie_credits = get_kie_credits(model_type, resolution)
+        has_balance = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits)
         balance_left = await get_user_balance(session, user_id)
 
     if not has_balance:
@@ -1772,6 +1775,11 @@ async def process_generation(
                     has_image=bool(final_urls)
                 )
                 await increment_generations_count(session, user_id)
+
+                
+                model_type = "pro" if use_pro_model else "nb2" if use_nb2_model else "standard"
+                kie_credits = get_kie_credits(model_type, resolution)
+
 
                 model_msg = await add_history(
                     session, user_id, "model", meta_data, 

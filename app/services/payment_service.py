@@ -1,8 +1,7 @@
-from sqlalchemy import select, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Purchase, User
 from datetime import datetime # ✅ Добавил, чтобы работало время
-from sqlalchemy import select, update, desc
+from sqlalchemy import select, update, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Purchase, User, BananaTransaction
 from datetime import datetime
@@ -109,7 +108,9 @@ async def update_purchase_analytics(
     user_id: int, 
     price: float,
     tariff_name: str,
-    payment_id: str = None
+    payment_id: str = None,
+    income_amount: float = None,
+    payment_method: str = None
 ):
     """
     Обновляет аналитику после успешной покупки:
@@ -141,6 +142,20 @@ async def update_purchase_analytics(
         purchase.completed_at = datetime.now()
         if payment_id:
             purchase.payment_id = payment_id
+
+        if income_amount:
+            purchase.income_amount = int(income_amount * 100)
+        if payment_method:
+            purchase.payment_method = payment_method
+        prev_count = await session.scalar(
+            select(func.count()).where(
+                Purchase.user_id == user_id,
+                Purchase.status == "succeeded",
+                Purchase.id != purchase.id,
+                Purchase.completed_at < purchase.completed_at
+            )
+        )
+        purchase.is_first_purchase = (prev_count == 0)
     
     # 3. Обновляем LTV метрики юзера
     user.total_revenue += int(price)

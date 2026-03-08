@@ -71,6 +71,7 @@ def get_admin_menu_kb():
     builder.button(text="🔗 Создать ссылку", callback_data="admin_create_postlink")  # 👈 НОВАЯ КНОПКА
     builder.button(text="📈 Отчёты", callback_data="admin_stats_new")  # Новая
     builder.button(text="🎨 Промпты", callback_data="admin_prompts")  # ← НОВАЯ КНОПКА
+    builder.button(text="💳 Баланс kie.ai", callback_data="admin_kie_balance")
     builder.button(text="❌ Выйти", callback_data="close_admin")
     builder.adjust(2, 2, 1, 2, 1, 1)  # По 2 в ряд для красоты
     return builder.as_markup()
@@ -1825,3 +1826,25 @@ async def cb_depth_custom_process(message: types.Message, state: FSMContext):
             "Попробуйте: <code>01.01.2026 - 31.01.2026</code>",
             parse_mode="HTML"
         )
+
+@router.callback_query(F.data == "admin_kie_balance")
+async def cb_kie_balance(callback: types.CallbackQuery):
+    await callback.answer("⏳ Запрашиваю...")
+    
+    from app.services.kie_pricing import get_kie_balance
+    balance = await get_kie_balance()
+    
+    if 'error' in balance:
+        text = f"❌ Ошибка получения баланса:\n{balance['error']}"
+    else:
+        text = (
+            f"💳 <b>Баланс kie.ai</b>\n\n"
+            f"Кредитов: <b>{balance['credits']}</b>\n"
+            f"В долларах: <b>${balance['usd']}</b>\n\n"
+            f"💡 1 кредит = $0.005"
+        )
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Меню", callback_data="admin_menu")
+    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")

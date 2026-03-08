@@ -29,6 +29,7 @@ async def handle_yookassa(request):
         if event == "payment.succeeded":
             payment_id = object_.get("id")
             metadata = object_.get("metadata", {})
+        
             
             # Ищем ID юзера
             user_id = int(metadata.get("user_id", 0)) if metadata.get("user_id") else 0
@@ -68,10 +69,15 @@ async def handle_yookassa(request):
                     # 1. Записываем покупку
                     try:
                         await mark_purchase_as_succeeded(session, user_id, amount)
+
+                        income_amount = float(object_.get("income_amount", {}).get("value", 0.0))
+                        payment_method = object_.get("payment_method", {}).get("type", None)
                         
                         # 2. Обновляем аналитику
-                        await update_purchase_analytics(session, user_id, amount, tariff_name, payment_id)
-                        
+                        await update_purchase_analytics(session, user_id, amount, tariff_name, payment_id,
+                            income_amount=income_amount,
+                            payment_method=payment_method
+)                        
                         # 3. Начисляем бананы
                         await add_paid_balance(session, user_id, gens_to_add)
                         await session.commit()
