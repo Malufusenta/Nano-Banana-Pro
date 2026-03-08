@@ -2,7 +2,7 @@ from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Purchase, BananaTransaction, Broadcast, PostConfig
 from datetime import datetime, timedelta
-from app.models import VideoGenerationTask
+from app.models import VideoGenerationTask, FixedExpense
 
 async def get_analytics_report(session: AsyncSession, date_from: datetime, date_to: datetime):
     """
@@ -498,7 +498,11 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     # Retention и LTV (для отчёта "За всё время")
     retention = round(total_transactions / total_buyers, 2) if total_buyers > 0 else 0.00
     ltv = round(avg_check * retention, 2)
-
+    # Фиксированные расходы
+    fixed_result = await session.execute(select(FixedExpense))
+    fixed_expenses = fixed_result.scalars().all()
+    fixed_total_month = sum(e.amount_rub for e in fixed_expenses)
+    fixed_daily = round(fixed_total_month / 30, 2)
     return {
     'revenue': {
         'total': total_revenue,
@@ -525,7 +529,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'earned_welcome': earned_welcome,
             'purchased': purchased
         },
-'purchases_by_tariff': purchases_by_tariff,
+        'purchases_by_tariff': purchases_by_tariff,
         'users': {
             'new': new_users,
             'active': active_users,
@@ -541,7 +545,12 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'total_credits': kie_total_credits,
             'total_usd': kie_total_usd,
             'by_model': kie_by_model
-        }
+        },
+        'fixed_expenses': {
+            'total_month': fixed_total_month,
+            'daily': fixed_daily,
+            'items': [{'name': e.name, 'amount': e.amount_rub} for e in fixed_expenses]
+        },
     }
 
 
@@ -591,6 +600,12 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
         if video_credits > 0:
             text += f"🎬 Видео: {video_gens} ген. / {video_credits} кред. (${round(video_credits * 0.005, 2)})\n"
         text += "\n"
+    fixed = data.get('fixed_expenses', {})
+    if fixed.get('daily', 0) > 0:
+        text += "🏢 ФИКС. РАСХОДЫ\n"
+        for item in fixed.get('items', []):
+            text += f"• {item['name']}: {item['amount']} ₽/мес\n"
+        text += f"📅 В день: {fixed['daily']} ₽\n\n"
 
     # Показываем звёзды только если они есть
     if rev['stars_count'] > 0:
