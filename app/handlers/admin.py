@@ -72,6 +72,7 @@ def get_admin_menu_kb():
     builder.button(text="📈 Отчёты", callback_data="admin_stats_new")  # Новая
     builder.button(text="🎨 Промпты", callback_data="admin_prompts")  # ← НОВАЯ КНОПКА
     builder.button(text="💳 Баланс kie.ai", callback_data="admin_kie_balance")
+    builder.button(text="⚙️ Фикс. расходы", callback_data="admin_fixed_expenses")
     builder.button(text="❌ Выйти", callback_data="close_admin")
     builder.adjust(2, 2, 1, 2, 1, 1)  # По 2 в ряд для красоты
     return builder.as_markup()
@@ -1848,3 +1849,143 @@ async def cb_kie_balance(callback: types.CallbackQuery):
     builder.button(text="🔙 Меню", callback_data="admin_menu")
     
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@router.callback_query(F.data == "admin_fixed_expenses")
+async def cb_fixed_expenses(callback: types.CallbackQuery):
+    await callback.answer()
+    from app.database import async_session
+    from app.models import FixedExpense
+    from sqlalchemy import select
+    
+    async with async_session() as session:
+        result = await session.execute(select(FixedExpense).order_by(FixedExpense.id))
+        expenses = result.scalars().all()
+    
+    if expenses:
+        total = sum(e.amount_rub for e in expenses)
+        daily = round(total / 30, 2)
+        text = "⚙️ <b>Фиксированные расходы</b>\n\n"
+        for e in expenses:
+            text += f"• {e.name}: {e.amount_rub} ₽/мес\n"
+        text += f"\n💰 Итого: {total} ₽/мес\n"
+        text += f"📅 В день: {daily} ₽"
+    else:
+        text = "⚙️ <b>Фиксированные расходы</b>\n\nПока ничего не добавлено."
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Добавить", callback_data="admin_fixed_add")
+    builder.button(text="🗑 Удалить", callback_data="admin_fixed_delete")
+    builder.button(text="🔙 Меню", callback_data="admin_menu")
+    builder.adjust(2, 1)
+    
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+
+class FixedExpenseStates(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_amount = State()
+    waiting_for_delete = State()
+
+
+@router.callback_query(F.data == "admin_fixed_add")
+async def cb_fixed_add(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.set_state(FixedExpenseStates.waiting_for_name)
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="❌ Отмена", callback_data="admin_fixed_expenses")
+    
+    await callback.message.edit_text(
+        "⚙️ Введи название расхода:\n\nНапример: Сервер, Tilda, Claude",
+        reply_markup=builder.as_markup()
+    )
+
+
+@router.message(FixedExpenseStates.waiting_for_name)
+async def process_fixed_name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text.strip())
+    await state.set_state(FixedExpenseStates.waiting_for_amount)
+    
+    await message.answer("💰 Введи сумму в рублях за месяц (только цифры):")
+
+
+@router.message(FixedExpenseStates.waiting_for_amount)
+async def process_fixed_amount(message: types.Message, state: FSMContext):
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введи только цифры, например: 1500")
+        return
+    
+    data = await state.get_data()
+    name = data['name']
+    
+    from app.database import async_session
+    from app.models import FixedExpense
+    
+    async with async_session() as session:
+        expense = FixedExpense(name=name, amount_rub=amount)
+        session.add(expense)
+        await session.commit()
+    
+    await state.clear()
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="⚙️ К расходам", callback_data="admin_fixed_expenses")
+    builder.button(text="🔙 Меню", callback_data="admin_menu")
+    builder.adjust(1)
+    
+    await message.answer(
+        f"✅ Добавлено: <b>{name}</b> — {amount} ₽/мес",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data == "admin_fixed_delete")
+async def cb_fixed_delete(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    from app.database import async_session
+    from app.models import FixedExpense
+    from sqlalchemy import select
+    
+    async with async_session() as session:
+        result = await session.execute(select(FixedExpense).order_by(FixedExpense.id))
+        expenses = result.scalars().all()
+    
+    if not expenses:
+        await callback.answer("Нет расходов для удаления", show_alert=True)
+        return
+    
+    builder = InlineKeyboardBuilder()
+    for e in expenses:
+        builder.button(text=f"🗑 {e.name} ({e.amount_rub} ₽)", callback_data=f"admin_fixed_del_{e.id}")
+    builder.button(text="🔙 Назад", callback_data="admin_fixed_expenses")
+    builder.adjust(1)
+    
+    await callback.message.edit_text(
+        "🗑 Выбери расход для удаления:",
+        reply_markup=builder.as_markup()
+    )
+
+
+@router.callback_query(F.data.startswith("admin_fixed_del_"))
+async def cb_fixed_del_confirm(callback: types.CallbackQuery):
+    expense_id = int(callback.data.split("_")[-1])
+    
+    from app.database import async_session
+    from app.models import FixedExpense
+    
+    async with async_session() as session:
+        expense = await session.get(FixedExpense, expense_id)
+        if expense:
+            name = expense.name
+            amount = expense.amount_rub
+            await session.delete(expense)
+            await session.commit()
+            await callback.answer(f"✅ Удалено: {name}", show_alert=True)
+        else:
+            await callback.answer("❌ Не найдено", show_alert=True)
+    
+    # Возвращаемся к списку
+    await cb_fixed_expenses(callback)

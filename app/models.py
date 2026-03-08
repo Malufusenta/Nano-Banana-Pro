@@ -226,3 +226,12 @@ class VideoGenerationTask(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+class FixedExpense(Base):
+    """Фиксированные расходы (сервер, Tilda, Claude и т.д.)"""
+    __tablename__ = "fixed_expenses"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)  # "Сервер", "Tilda", "Claude"
+    amount_rub: Mapped[int] = mapped_column(Integer, nullable=False)  # Сумма в рублях за месяц
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
