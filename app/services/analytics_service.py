@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Purchase, BananaTransaction, Broadcast, PostConfig
 from datetime import datetime, timedelta
 from app.models import VideoGenerationTask, FixedExpense
+from app import config
+
 
 async def get_analytics_report(session: AsyncSession, date_from: datetime, date_to: datetime):
     """
@@ -606,6 +608,21 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
         for item in fixed.get('items', []):
             text += f"• {item['name']}: {item['amount']} ₽/мес\n"
         text += f"📅 В день: {fixed['daily']} ₽\n\n"
+
+        # БЛОК 3: ГЛАВНЫЕ МЕТРИКИ
+    income = rev.get('income_amount', 0)
+    kie_usd = data.get('kie', {}).get('total_usd', 0)
+    kie_rub = round(kie_usd * config.USD_TO_RUB, 2)
+    fixed_day = fixed.get('daily', 0)
+    net_profit = round(income - kie_rub - fixed_day, 2)
+    margin = round((net_profit / rev['rub_revenue']) * 100, 1) if rev['rub_revenue'] > 0 else 0
+    new_buyers = rev.get('first_purchases', 0)
+
+    text += "📈 ГЛАВНЫЕ МЕТРИКИ\n"
+    text += f"Чистая прибыль: {net_profit} ₽\n"
+    text += f"Маржинальность: {margin}%\n"
+    text += f"CAC: — (подключи Яндекс Директ)\n"
+    text += "\n"
 
     # Показываем звёзды только если они есть
     if rev['stars_count'] > 0:
