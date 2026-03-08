@@ -34,6 +34,17 @@ content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
 )
 
+def calc_cost(model_type: str, quality: str) -> int:
+    if model_type == "pro":
+        if quality == "4k": return config.COST_PRO_4K
+        elif quality == "2k": return config.COST_PRO_2K
+        else: return config.COST_PRO_1K
+    elif model_type == "nb2":
+        if quality == "4k": return config.COST_NB2_4K
+        elif quality == "2k": return config.COST_NB2_2K
+        else: return config.COST_NB2_1K
+    return config.COST_STANDARD
+
 router = Router()
 
 COMPLAINT_INSTRUCTION_PHOTO = "AgACAgIAAxkBAALT5Wljc3V_Fhya4RZZ0xab7eXhFtE-AAIZDGsbxiYgS76CBLyQRXTjAQADAgADeQADOAQ"  # 👈 Вставь свой file_id
@@ -274,17 +285,7 @@ def get_preflight_kb(model_type: str, ratio: str, quality: str):
     else:
         qual_btn = None
 
-    # Расчёт стоимости
-    if model_type == "pro":
-        if quality == "4k": cost = config.COST_PRO_4K
-        elif quality == "2k": cost = config.COST_PRO_2K
-        else: cost = config.COST_PRO_1K
-    elif model_type == "nb2":
-        if quality == "4k": cost = config.COST_NB2_4K
-        elif quality == "2k": cost = config.COST_NB2_2K
-        else: cost = config.COST_NB2_1K
-    else:
-        cost = config.COST_STANDARD
+    cost = calc_cost(model_type, quality)
 
     builder.button(text=model_btn, callback_data="pf_toggle_model")
     if qual_btn:
@@ -424,15 +425,17 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     else:
         cost = config.COST_STANDARD
     has_photo = normalized_urls is not None and len(normalized_urls) > 0
-
     if not has_photo or is_edit_mode:
+        cost = calc_cost(pref_model, "hd")
         text = (
             f"⚙️ <b>Настройки генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {prompt[:30]}...\n\n"
+            f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
             f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     else:
+        cost = calc_cost(pref_model, "hd")
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {prompt[:30]}...\n\n"
@@ -488,6 +491,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
         )
     else:
         safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        cost = calc_cost(new_model, quality)
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
@@ -532,6 +536,7 @@ async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext)
         cost = config.COST_STANDARD
 
     safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    cost = calc_cost(model, new_q)
     text = (
         f"🎨 <b>Параметры генерации</b>\n\n"
         f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
@@ -585,6 +590,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
         )
     else:
         safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        cost = calc_cost(data.get("pf_model"), data.get("pf_quality"))
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
