@@ -2,6 +2,7 @@ from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Purchase, BananaTransaction, Broadcast, PostConfig
 from datetime import datetime, timedelta
+from app.models import VideoGenerationTask
 
 async def get_analytics_report(session: AsyncSession, date_from: datetime, date_to: datetime):
     """
@@ -314,6 +315,31 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         for row in kie_by_model_result
     }
     
+    # Добавляем видео кредиты
+    
+    video_kie_query = select(
+        func.sum(VideoGenerationTask.kie_credits_cost).label('total_credits'),
+        func.count(VideoGenerationTask.id).label('total_gens'),
+    ).where(
+        VideoGenerationTask.created_at >= date_from,
+        VideoGenerationTask.created_at <= date_to,
+        VideoGenerationTask.kie_credits_cost.isnot(None)
+    )
+    video_kie_result = await session.execute(video_kie_query)
+    video_kie_data = video_kie_result.first()
+    video_credits = video_kie_data.total_credits or 0
+    video_gens = video_kie_data.total_gens or 0
+
+    # Суммируем с фото
+    kie_total_credits += video_credits
+    kie_total_usd = round(kie_total_credits * 0.005, 4)
+    if video_credits > 0:
+        kie_by_model['video'] = {
+            'credits': video_credits,
+            'gens': video_gens,
+            'usd': round(video_credits * 0.005, 4)
+        }
+
     # ========== ПОКУПКИ ПО ТАРИФАМ ==========
     
     tariff_query = select(
@@ -549,10 +575,21 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
     # ПОСЛЕ блока 💰 ДЕНЬГИ, добавить:
     kie = data.get('kie', {})
     if kie.get('total_credits', 0) > 0:
+        photo_credits = sum(s['credits'] for k, s in kie.get('by_model', {}).items() if k != 'video')
+        photo_gens = sum(s['gens'] for k, s in kie.get('by_model', {}).items() if k != 'video')
+        video_stats = kie.get('by_model', {}).get('video', {})
+        video_credits = video_stats.get('credits', 0)
+        video_gens = video_stats.get('gens', 0)
+
         text += "🤖 РАСХОДЫ НА ГЕНЕРАЦИИ (kie.ai)\n"
-        text += f"Кредитов потрачено: {kie['total_credits']} кред. (${kie['total_usd']})\n"
-        for model, stats in kie.get('by_model', {}).items():
-            text += f"— {model}: {stats['gens']} ген. / {stats['credits']} кред. (${stats['usd']})\n"
+        text += f"Всего: {kie['total_credits']} кред. (${kie['total_usd']})\n"
+        if photo_credits > 0:
+            text += f"📸 Фото: {photo_gens} ген. / {photo_credits} кред. (${round(photo_credits * 0.005, 2)})\n"
+            for model, stats in kie.get('by_model', {}).items():
+                if model != 'video':
+                    text += f"  — {model}: {stats['gens']} ген. / {stats['credits']} кред.\n"
+        if video_credits > 0:
+            text += f"🎬 Видео: {video_gens} ген. / {video_credits} кред. (${round(video_credits * 0.005, 2)})\n"
         text += "\n"
 
     # Показываем звёзды только если они есть
