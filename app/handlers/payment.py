@@ -7,9 +7,10 @@ from app.services.user_service import get_bot_stats, find_user_by_input, admin_c
 from app.services.user_service import get_user_profile_data, admin_change_balance, get_user_balance, get_user_financial_stats
 from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded, update_purchase_analytics
 from app import config
+from datetime import datetime
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
 from app.services.admin_logger import log_payment
-from app.models import Purchase  # ← Добавь в начало
+from app.models import Purchase, User# ← Добавь в начало
 from sqlalchemy import select     # ← Добавь в начало
 from app.packages import PACKAGES, STARS_PACKAGES
 
@@ -392,7 +393,16 @@ async def cmd_about(message: types.Message):
 @router.callback_query(F.data == "goto_shop")
 async def cb_goto_shop(callback: types.CallbackQuery):
     await callback.answer()
-    # Вызываем функцию магазина (она выше в этом же файле)
+    
+    # Трекинг воронки: зашёл в магазин
+
+    async with async_session() as session:
+        result = await session.execute(select(User).where(User.telegram_id == callback.from_user.id))
+        user = result.scalar_one_or_none()
+        if user and not user.visited_shop_at:
+            user.visited_shop_at = datetime.now()
+            await session.commit()
+    
     await cmd_shop(callback.message)
 
 @router.callback_query(F.data == "goto_free")

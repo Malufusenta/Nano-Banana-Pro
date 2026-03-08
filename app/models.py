@@ -43,6 +43,7 @@ class User(Base):
     orders_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     first_purchase_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     had_free_actions_before_purchase: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    visited_shop_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Воронка: зашёл в магазин
 
     
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -366,6 +366,44 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         )
     ) or 0
     
+    # Воронка
+    funnel_spent_1 = await session.scalar(
+        select(func.count(func.distinct(BananaTransaction.user_id))).where(
+            BananaTransaction.transaction_type == 'spent',
+            BananaTransaction.created_at >= date_from,
+            BananaTransaction.created_at <= date_to
+        )
+    ) or 0
+
+    funnel_spent_2 = await session.scalar(
+        select(func.count()).select_from(
+            select(BananaTransaction.user_id)
+            .where(
+                BananaTransaction.transaction_type == 'spent',
+                BananaTransaction.created_at >= date_from,
+                BananaTransaction.created_at <= date_to
+            )
+            .group_by(BananaTransaction.user_id)
+            .having(func.count(BananaTransaction.id) >= 2)
+            .subquery()
+        )
+    ) or 0
+
+    funnel_shop = await session.scalar(
+        select(func.count(User.id)).where(
+            User.visited_shop_at >= date_from,
+            User.visited_shop_at <= date_to
+        )
+    ) or 0
+
+    funnel_paid = await session.scalar(
+        select(func.count(func.distinct(Purchase.user_id))).where(
+            Purchase.status == 'succeeded',
+            Purchase.completed_at >= date_from,
+            Purchase.completed_at <= date_to
+        )
+    ) or 0
+
     # Активные (DAU) - юзеры с активностью (генерации)
     active_users = await session.scalar(
     select(func.count(func.distinct(BananaTransaction.user_id))).where(
@@ -542,6 +580,13 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'farmed_first': farmed_first,
             'veteran_buyers': veteran_buyers,
             'blocked': blocked
+        },
+        'funnel': {
+            'start': new_users,
+            'spent_1': funnel_spent_1,
+            'spent_2': funnel_spent_2,
+            'shop': funnel_shop,
+            'paid': funnel_paid
         },
         'kie': {
             'total_credits': kie_total_credits,
@@ -729,6 +774,17 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
     text += f"— Старичков (Повторная покупка): {users['veteran_buyers']}\n"
     text += f"Заблокировали: {users['blocked']} (всего за всё время)"
     
+    # ВОРОНКА
+    funnel = data.get('funnel', {})
+    if funnel.get('start', 0) > 0:
+        start = funnel['start']
+        text += "\n\n🔽 ВОРОНКА\n"
+        text += f"👤 /start: {start} (100%)\n"
+        text += f"🍌 1 генерация: {funnel['spent_1']} ({round(funnel['spent_1']/start*100, 1)}%)\n"
+        text += f"🍌🍌 2+ генерации: {funnel['spent_2']} ({round(funnel['spent_2']/start*100, 1)}%)\n"
+        text += f"💰 Зашёл в магазин: {funnel['shop']} ({round(funnel['shop']/start*100, 1)}%)\n"
+        text += f"✅ Оплатил: {funnel['paid']} ({round(funnel['paid']/start*100, 1)}%)\n"
+
     return text
 
 
