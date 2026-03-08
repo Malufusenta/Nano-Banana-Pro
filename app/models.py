@@ -222,6 +222,7 @@ class VideoGenerationTask(Base):
     # Финансы
     cost: Mapped[int] = mapped_column(Integer, default=10)  # 10 бананов
     refunded: Mapped[bool] = mapped_column(Boolean, default=False)  # Возврат средств при ошибке
+    kie_credits_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

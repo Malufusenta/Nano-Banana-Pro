@@ -214,7 +214,8 @@ async def create_video_generation_task(
             source_image_file_id=image_file_id,
             source_image_url=image_url,
             status="waiting",
-            cost=10
+            cost=10,
+            kie_credits_cost=56  # ← добавить
         )
         session.add(task)
         await session.commit()
