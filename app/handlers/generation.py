@@ -765,8 +765,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         await state.set_state(GenState.preflight_check)
     
 
-        cost = config.COST_STANDARD
-
+        cost = calc_cost(broadcast_model, "hd" if broadcast_model == "nb2" else "2k")
     # 🔥 УПРОЩЁННОЕ СООБЩЕНИЕ ДЛЯ BROADCAST 🔥
         text = (
         f"🎨 *Параметры генерации*\n\n"
@@ -774,8 +773,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     )
         await message.answer(
         text,
-        reply_markup=get_preflight_kb("standard", broadcast_ratio, "1k"),
-        parse_mode="Markdown"
+        reply_markup=get_preflight_kb(broadcast_model, broadcast_ratio, "hd" if broadcast_model == "nb2" else "2k"),        parse_mode="Markdown"
     )
         return
     # 🔥 КОНЕЦ BROADCAST ЛОГИКИ 🔥
