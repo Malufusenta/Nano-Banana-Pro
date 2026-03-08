@@ -370,8 +370,12 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     funnel_spent_1 = await session.scalar(
         select(func.count(func.distinct(BananaTransaction.user_id))).where(
             BananaTransaction.transaction_type == 'spent',
-            BananaTransaction.created_at >= date_from,
-            BananaTransaction.created_at <= date_to
+            BananaTransaction.user_id.in_(
+                select(User.telegram_id).where(
+                    User.created_at >= date_from,
+                    User.created_at <= date_to
+                )
+            )
         )
     ) or 0
 
@@ -380,8 +384,12 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             select(BananaTransaction.user_id)
             .where(
                 BananaTransaction.transaction_type == 'spent',
-                BananaTransaction.created_at >= date_from,
-                BananaTransaction.created_at <= date_to
+                BananaTransaction.user_id.in_(
+                    select(User.telegram_id).where(
+                        User.created_at >= date_from,
+                        User.created_at <= date_to
+                    )
+                )
             )
             .group_by(BananaTransaction.user_id)
             .having(func.count(BananaTransaction.id) >= 2)
