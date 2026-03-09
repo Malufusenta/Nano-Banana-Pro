@@ -541,6 +541,16 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     
     # Сортируем по популярности
     prompt_campaigns.sort(key=lambda x: x['clicks'], reverse=True)
+
+    # Яндекс Директ расходы
+    direct_data = {'total': 0, 'campaigns': {}, 'error': None}
+    if config.YANDEX_DIRECT_TOKEN:
+        from app.services.yandex_direct import get_direct_spending
+        direct_data = await get_direct_spending(
+            config.YANDEX_DIRECT_TOKEN,
+            date_from.date() if hasattr(date_from, 'date') else date_from,
+            date_to.date() if hasattr(date_to, 'date') else date_to
+        )
     
     # ========== ФОРМИРУЕМ РЕЗУЛЬТАТ ==========
     # Retention и LTV (для отчёта "За всё время")
@@ -606,6 +616,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'daily': fixed_daily,
             'items': [{'name': e.name, 'amount': e.amount_rub} for e in fixed_expenses]
         },
+
+        'direct': direct_data,
     }
 
 
@@ -662,19 +674,31 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
             text += f"• {item['name']}: {item['amount']} ₽/мес\n"
         text += f"📅 В день: {fixed['daily']} ₽\n\n"
 
-        # БЛОК 3: ГЛАВНЫЕ МЕТРИКИ
+        direct = data.get('direct', {})
+    if direct.get('error'):
+        text += f"📢 ЯНДЕКС ДИРЕКТ\n❌ Ошибка: {direct['error']}\n\n"
+    elif direct.get('total', 0) > 0:
+        text += f"📢 ЯНДЕКС ДИРЕКТ (с НДС 20%)\n"
+        text += f"Итого: {direct['total']} ₽\n"
+        for camp_name, camp_cost in direct.get('campaigns', {}).items():
+            text += f"• {camp_name}: {camp_cost} ₽\n"
+        text += "\n"
+
     income = rev.get('income_amount', 0)
     kie_usd = data.get('kie', {}).get('total_usd', 0)
     kie_rub = round(kie_usd * config.USD_TO_RUB, 2)
     fixed_day = fixed.get('daily', 0)
-    net_profit = round(income - kie_rub - fixed_day, 2)
+    direct_total = direct.get('total', 0)
+    net_profit = round(income - kie_rub - fixed_day - direct_total, 2)
     margin = round((net_profit / rev['rub_revenue']) * 100, 1) if rev['rub_revenue'] > 0 else 0
     new_buyers = rev.get('first_purchases', 0)
-
     text += "📈 ГЛАВНЫЕ МЕТРИКИ\n"
     text += f"Чистая прибыль: {net_profit} ₽\n"
     text += f"Маржинальность: {margin}%\n"
-    text += f"CAC: — (подключи Яндекс Директ)\n"
+    if direct_total > 0 and new_buyers > 0:
+        text += f"CAC: {round(direct_total / new_buyers, 2)} ₽\n"
+    else:
+        text += f"CAC: — (подключи Яндекс Директ)\n"
     text += "\n"
 
     # Показываем звёзды только если они есть
