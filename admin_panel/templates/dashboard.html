@@ -15,6 +15,7 @@
     --green: #22c55e;
     --blue: #3b82f6;
     --purple: #8b5cf6;
+    --red: #ef4444;
     --sidebar-w: 240px;
     --radius: 12px;
     --transition: 0.2s ease;
@@ -279,6 +280,8 @@
   .green  .metric-icon-wrap { background: rgba(34,197,94,0.12); }
   .blue   .metric-icon-wrap { background: rgba(59,130,246,0.12); }
   .purple .metric-icon-wrap { background: rgba(139,92,246,0.12); }
+  .red    .metric-icon-wrap { background: rgba(239,68,68,0.12); }
+  .metric-card.red::before { background: var(--red); }
 
   .metric-label { font-size: 11px; color: var(--text2); font-weight: 500; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
   .metric-value { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; line-height: 1; margin-bottom: 5px; font-variant-numeric: tabular-nums; }
@@ -308,6 +311,67 @@
   .tariff-item:last-child { border-bottom: none; }
   .tariff-name { font-size: 13px; font-weight: 500; }
   .tariff-count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 600; }
+
+  .funnel-row { margin-bottom: 11px; }
+  .funnel-row-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .funnel-row-head .funnel-label { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .funnel-row-head .funnel-meta { display: flex; gap: 8px; align-items: baseline; }
+  .funnel-row-head .funnel-count { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; color: var(--text); }
+  .funnel-row-head .funnel-pct { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text3); }
+  .funnel-bar-wrap { height: 6px; background: var(--surface3); border-radius: 4px; overflow: hidden; }
+  .funnel-bar { height: 100%; border-radius: 4px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .funnel-arrow { text-align: center; color: var(--text3); font-size: 10px; margin: -5px 0 4px; }
+
+  .bananas-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .bananas-row:last-child { border-bottom: none; }
+  .bananas-row-left { display: flex; align-items: center; gap: 7px; color: var(--text2); }
+  .bananas-row-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+  .bananas-row-label { font-size: 12px; }
+
+  .kie-totals { display: flex; gap: 8px; margin-bottom: 12px; }
+  .kie-total-chip { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .kie-total-chip .kc-label { font-size: 10px; color: var(--text3); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .kie-total-chip .kc-value { font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .kie-models-list { display: flex; flex-direction: column; gap: 0; }
+  .kie-model { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .kie-model:last-child { border-bottom: none; }
+  .kie-model-name { font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+  .kie-model-stats { display: flex; gap: 10px; flex-shrink: 0; }
+  .kie-gen { color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .kie-credits { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+  .kie-balance { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kie-balance-chips { display: flex; gap: 6px; flex: 1; }
+  .kie-balance-chip { flex: 1; border-radius: 8px; padding: 8px 10px; border: 1px solid var(--border); }
+  .kie-balance-chip.ok { background: rgba(34,197,94,0.07); border-color: rgba(34,197,94,0.2); }
+  .kie-balance-chip.warn { background: rgba(255,107,53,0.1); border-color: rgba(255,107,53,0.35); }
+  .kie-balance-chip .kbc-label { font-size: 10px; color: var(--text3); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .kie-balance-chip .kbc-val { font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .kie-balance-chip.ok .kbc-val { color: var(--green); }
+  .kie-balance-chip.warn .kbc-val { color: var(--accent2); }
+  .kie-balance-chip .kbc-usd { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text3); margin-top: 1px; }
+
+  .direct-total { display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .direct-total-val { font-size: 24px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--accent2); }
+  .direct-total-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .direct-campaign { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .direct-campaign:last-child { border-bottom: none; }
+  .direct-campaign-name { color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
+  .direct-campaign-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent2); flex-shrink: 0; }
+
+  .profit-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .profit-row:last-child { border-bottom: none; }
+  .profit-row-label { color: var(--text2); display: flex; align-items: center; gap: 6px; }
+  .profit-divider { height: 1px; background: var(--border); margin: 4px 0; }
+  .profit-result { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; margin-top: 10px; }
+  .profit-result-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .profit-result-val { font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .profit-result.positive { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25); }
+  .profit-result.negative { background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.25); }
+  .profit-meta { display: flex; gap: 8px; margin-top: 8px; }
+  .profit-meta-chip { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px; text-align: center; }
+  .profit-meta-chip .pmc-label { font-size: 10px; color: var(--text3); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; margin-bottom: 2px; }
+  .profit-meta-chip .pmc-val { font-size: 14px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 
   .status-bar {
     position: fixed; bottom: 16px; right: 24px;
@@ -439,10 +503,10 @@
           <div class="metric-icon-wrap">🛒</div>
         </div>
       </div>
-      <div class="metric-card green">
+      <div class="metric-card purple">
         <div class="metric-top">
-          <div><div class="metric-label">Новых юзеров</div><div class="metric-value loading" id="m-users">—</div><div class="metric-sub" id="m-users-sub">загрузка...</div></div>
-          <div class="metric-icon-wrap">👥</div>
+          <div><div class="metric-label">Средний чек</div><div class="metric-value loading" id="m-avgcheck">—</div><div class="metric-sub">рублей за покупку</div></div>
+          <div class="metric-icon-wrap">💵</div>
         </div>
       </div>
       <div class="metric-card blue">
@@ -454,10 +518,10 @@
     </div>
 
     <div class="metrics-grid">
-      <div class="metric-card purple">
+      <div class="metric-card green">
         <div class="metric-top">
-          <div><div class="metric-label">Средний чек</div><div class="metric-value loading" id="m-avgcheck">—</div><div class="metric-sub">рублей за покупку</div></div>
-          <div class="metric-icon-wrap">💵</div>
+          <div><div class="metric-label">Новых юзеров</div><div class="metric-value loading" id="m-users">—</div><div class="metric-sub" id="m-users-sub">загрузка...</div></div>
+          <div class="metric-icon-wrap">👥</div>
         </div>
       </div>
       <div class="metric-card blue">
@@ -466,16 +530,10 @@
           <div class="metric-icon-wrap">⚡️</div>
         </div>
       </div>
-      <div class="metric-card yellow">
+      <div class="metric-card red">
         <div class="metric-top">
-          <div><div class="metric-label">Retention</div><div class="metric-value loading" id="m-retention">—</div><div class="metric-sub">покупок на юзера</div></div>
-          <div class="metric-icon-wrap">🔄</div>
-        </div>
-      </div>
-      <div class="metric-card green">
-        <div class="metric-top">
-          <div><div class="metric-label">LTV</div><div class="metric-value loading" id="m-ltv">—</div><div class="metric-sub">выручка с клиента</div></div>
-          <div class="metric-icon-wrap">🏆</div>
+          <div><div class="metric-label">Отток</div><div class="metric-value loading" id="m-blocked" style="color:var(--red)">—</div><div class="metric-sub">заблокировали бота</div></div>
+          <div class="metric-icon-wrap">🚫</div>
         </div>
       </div>
       <div class="metric-card yellow">
@@ -492,15 +550,9 @@
       </div>
     </div>
 
-    <div class="charts-grid">
-      <div class="card">
-        <div class="card-header"><div><div class="card-title">Выручка по дням</div><div class="card-subtitle">последние 30 дней</div></div></div>
-        <canvas id="revenueChart" style="max-height:220px"></canvas>
-      </div>
-      <div class="card">
-        <div class="card-header"><div><div class="card-title">Новые юзеры</div><div class="card-subtitle">последние 30 дней</div></div></div>
-        <canvas id="usersChart" style="max-height:220px"></canvas>
-      </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div><div class="card-title">Новые юзеры</div><div class="card-subtitle">последние 30 дней</div></div></div>
+      <canvas id="usersChart" style="max-height:180px"></canvas>
     </div>
 
     <div class="bottom-grid">
@@ -511,6 +563,33 @@
       <div class="card">
         <div class="card-header"><div><div class="card-title">Покупки по тарифам</div><div class="card-subtitle">за выбранный период</div></div></div>
         <div id="tariffs-list"><div class="metric-sub loading">Загрузка...</div></div>
+      </div>
+    </div>
+
+    <div class="bottom-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Воронка</div><div class="card-subtitle">/start → 1 ген → 2+ ген → магазин → оплатил</div></div></div>
+        <div id="funnelBlock"><div class="metric-sub loading">Загрузка...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Бананы</div><div class="card-subtitle">потрачено / куплено / приветственные / рефералы</div></div></div>
+        <div id="bananasBlock"><div class="metric-sub loading">Загрузка...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">KIE</div><div class="card-subtitle">кредиты и генерации по моделям</div></div></div>
+        <div id="kieBlock"><div class="metric-sub loading">Загрузка...</div></div>
+        <div id="kieBalanceBlock" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div class="metric-sub loading">Загрузка баланса...</div></div>
+      </div>
+    </div>
+
+    <div class="bottom-grid">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">📣 Яндекс Директ</div><div class="card-subtitle">расходы на рекламу за период</div></div></div>
+        <div id="directBlock"><div class="metric-sub loading">Загрузка...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">💹 Финансовый итог</div><div class="card-subtitle">выручка − директ − kie.ai</div></div></div>
+        <div id="profitBlock"><div class="metric-sub loading">Загрузка...</div></div>
       </div>
     </div>
   </div>
@@ -525,7 +604,7 @@
   // ТЕМА
   const THEME_KEY = 'nb_admin_theme';
   let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
-  let revenueChart, usersChart;
+  let usersChart;
   let currentPeriod = 'today';
 
   function applyTheme(theme) {
@@ -533,7 +612,7 @@
     document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
     localStorage.setItem(THEME_KEY, theme);
     currentTheme = theme;
-    if (revenueChart) updateChartColors();
+    if (usersChart) updateChartColors();
   }
 
   function getChartColors() {
@@ -545,7 +624,7 @@
 
   function updateChartColors() {
     const c = getChartColors();
-    [revenueChart, usersChart].forEach(chart => {
+    [usersChart].forEach(chart => {
       if (!chart) return;
       chart.options.scales.x.grid.color = c.grid;
       chart.options.scales.y.grid.color = c.grid;
@@ -583,12 +662,6 @@
       }
     };
 
-    revenueChart = new Chart(document.getElementById('revenueChart'), {
-      type: 'bar',
-      data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(245,197,66,0.25)', borderColor: '#f5c542', borderWidth: 2, borderRadius: 4 }]},
-      options: JSON.parse(JSON.stringify(base))
-    });
-
     usersChart = new Chart(document.getElementById('usersChart'), {
       type: 'bar',
       data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(59,130,246,0.25)', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 4 }]},
@@ -604,6 +677,177 @@
     const el = document.getElementById(id);
     if (el) { el.textContent = val; el.classList.remove('loading'); }
   };
+
+  function renderExtras(d) {
+    var funnelEl = document.getElementById('funnelBlock');
+    var bananasEl = document.getElementById('bananasBlock');
+    var kieEl = document.getElementById('kieBlock');
+    if (!funnelEl || !bananasEl || !kieEl) return;
+
+    // --- ВОРОНКА ---
+    var funnel = d.funnel || {};
+    var fStart = Math.max(1, funnel.start || 0);
+    var fSteps = [
+      { label: '/start', val: fStart, color: 'var(--blue)', icon: '🚀' },
+      { label: '1 ген', val: funnel.spent_1 || 0, color: 'var(--purple)', icon: '✨' },
+      { label: '2+ ген', val: funnel.spent_2 || 0, color: 'var(--accent)', icon: '🔥' },
+      { label: 'Магазин', val: funnel.shop || 0, color: 'var(--green)', icon: '🛍️' },
+      { label: 'Оплатил', val: funnel.paid || 0, color: 'var(--accent2)', icon: '💳' }
+    ];
+    funnelEl.innerHTML = fSteps.map(function(step, idx) {
+      var pct = fStart ? Math.min(100, (step.val / fStart) * 100) : 0;
+      var pctLabel = pct < 1 && pct > 0 ? '<1%' : Math.round(pct) + '%';
+      var arrowHtml = idx > 0 ? '<div class="funnel-arrow">↓</div>' : '';
+      return arrowHtml +
+        '<div class="funnel-row">' +
+          '<div class="funnel-row-head">' +
+            '<span class="funnel-label">' + step.icon + ' ' + step.label + '</span>' +
+            '<span class="funnel-meta">' +
+              '<span class="funnel-count">' + fmt(step.val) + '</span>' +
+              '<span class="funnel-pct">' + pctLabel + '</span>' +
+            '</span>' +
+          '</div>' +
+          '<div class="funnel-bar-wrap"><div class="funnel-bar" style="width:' + pct + '%;background:' + step.color + '"></div></div>' +
+        '</div>';
+    }).join('');
+    funnelEl.classList.remove('loading');
+
+    // --- БАНАНЫ ---
+    var detail = d.bananas_detail || {};
+    var bSpent = d.bananas_spent != null ? d.bananas_spent : 0;
+    var bRows = [
+      { label: 'Потрачено', val: bSpent, color: 'var(--accent2)', icon: '🔥' },
+      { label: 'Куплено', val: detail.purchased != null ? detail.purchased : 0, color: 'var(--green)', icon: '🛒' },
+      { label: 'Приветственных', val: detail.welcome != null ? detail.welcome : 0, color: 'var(--blue)', icon: '🎁' },
+      { label: 'Рефералы', val: detail.ref != null ? detail.ref : 0, color: 'var(--purple)', icon: '🤝' }
+    ];
+    bananasEl.innerHTML = bRows.map(function(r) {
+      return '<div class="bananas-row">' +
+        '<span class="bananas-row-left"><span class="bananas-row-icon">' + r.icon + '</span><span class="bananas-row-label">' + r.label + '</span></span>' +
+        '<span style="color:' + r.color + ';font-weight:700;font-family:\'JetBrains Mono\',monospace;font-size:13px">' + fmt(r.val) + '</span>' +
+      '</div>';
+    }).join('');
+    bananasEl.classList.remove('loading');
+
+    // --- KIE ---
+    var kie = d.kie || {};
+    var byModel = kie.by_model || {};
+    var kTotalCredits = kie.total_credits != null ? kie.total_credits : 0;
+    var kTotalUsd = kie.total_usd != null ? kie.total_usd : 0;
+    var modelNames = Object.keys(byModel);
+    var kieHtml =
+      '<div class="kie-totals">' +
+        '<div class="kie-total-chip">' +
+          '<div class="kc-label">Кредиты</div>' +
+          '<div class="kc-value" style="color:var(--accent)">' + fmt(kTotalCredits) + '</div>' +
+        '</div>' +
+        '<div class="kie-total-chip">' +
+          '<div class="kc-label">Стоимость</div>' +
+          '<div class="kc-value" style="color:var(--green)">' + fmtDec(kTotalUsd) + ' $</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="kie-models-list">';
+    for (var ki = 0; ki < modelNames.length; ki++) {
+      var kName = modelNames[ki];
+      var kM = byModel[kName] || {};
+      var kGens = kM.gens != null ? kM.gens : 0;
+      var kCredits = kM.credits != null ? kM.credits : 0;
+      kieHtml += '<div class="kie-model">' +
+        '<span class="kie-model-name">' + kName + '</span>' +
+        '<span class="kie-model-stats">' +
+          '<span class="kie-gen">' + fmt(kGens) + ' ген</span>' +
+          '<span class="kie-credits">' + fmt(kCredits) + ' кр</span>' +
+        '</span>' +
+      '</div>';
+    }
+    kieHtml += '</div>';
+    kieEl.innerHTML = kieHtml;
+    kieEl.classList.remove('loading');
+
+    renderDirectProfit(d);
+    loadKieBalance();
+  }
+
+  async function loadKieBalance() {
+    var balEl = document.getElementById('kieBalanceBlock');
+    if (!balEl) return;
+    try {
+      var balResp = await fetch('/api/settings/kie-balance');
+      if (!balResp.ok) throw new Error('HTTP ' + balResp.status);
+      var bal = await balResp.json();
+      var credits = bal.credits != null ? bal.credits : 0;
+      var usd = bal.usd != null ? bal.usd : 0;
+      var isLow = credits < 10000;
+      var chipClass = isLow ? 'warn' : 'ok';
+      var warning = isLow ? '<span style="font-size:11px;color:var(--accent2);font-weight:600">⚠️ Мало кредитов!</span>' : '';
+      balEl.innerHTML =
+        '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-family:\'JetBrains Mono\',monospace;margin-bottom:7px">Баланс аккаунта</div>' +
+        '<div class="kie-balance">' +
+          '<div class="kie-balance-chips">' +
+            '<div class="kie-balance-chip ' + chipClass + '">' +
+              '<div class="kbc-label">💳 Кредиты</div>' +
+              '<div class="kbc-val">' + fmt(credits) + '</div>' +
+            '</div>' +
+            '<div class="kie-balance-chip ok">' +
+              '<div class="kbc-label">💵 Баланс</div>' +
+              '<div class="kbc-val" style="color:var(--green)">' + parseFloat(usd).toFixed(2) + ' $</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        (warning ? '<div style="margin-top:7px">' + warning + '</div>' : '');
+      balEl.classList.remove('loading');
+    } catch(e) {
+      var balElErr = document.getElementById('kieBalanceBlock');
+      if (balElErr) balElErr.innerHTML = '<span style="color:var(--text3);font-size:12px">Баланс недоступен</span>';
+    }
+  }
+
+  function renderDirectProfit(d) {
+    var directEl = document.getElementById('directBlock');
+    var profitEl = document.getElementById('profitBlock');
+    if (!directEl || !profitEl) return;
+
+    var direct = d.direct || {};
+    var directTotal = direct.total != null ? direct.total : 0;
+    var campaigns = direct.campaigns || {};
+    var campNames = Object.keys(campaigns);
+
+    var directHtml = '<div class="direct-total"><span class="direct-total-val">' + fmt(directTotal) + ' ₽</span><span class="direct-total-label">итого за период</span></div>';
+    if (campNames.length) {
+      for (var ci = 0; ci < campNames.length; ci++) {
+        var cName = campNames[ci];
+        directHtml += '<div class="direct-campaign"><span class="direct-campaign-name">' + cName + '</span><span class="direct-campaign-val">' + fmt(campaigns[cName]) + ' ₽</span></div>';
+      }
+    } else {
+      directHtml += '<div style="color:var(--text3);font-size:12px;padding:4px 0">Нет данных</div>';
+    }
+    directEl.innerHTML = directHtml;
+    directEl.classList.remove('loading');
+
+    var revenue = d.revenue != null ? d.revenue : 0;
+    var kieUsd = (d.kie && d.kie.total_usd != null) ? d.kie.total_usd : 0;
+    var kieRub = kieUsd * 82;
+    var profit = revenue - directTotal - kieRub;
+    var margin = revenue > 0 ? (profit / revenue * 100) : 0;
+    var newUsers = d.new_users != null ? d.new_users : 0;
+    var cac = newUsers > 0 ? (directTotal / newUsers) : 0;
+    var isPositive = profit >= 0;
+
+    var profitHtml =
+      '<div class="profit-row"><span class="profit-row-label">💰 Выручка</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600">' + fmt(revenue) + ' ₽</span></div>' +
+      '<div class="profit-row"><span class="profit-row-label">📣 Яндекс Директ</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(directTotal) + ' ₽</span></div>' +
+      '<div class="profit-row"><span class="profit-row-label">🤖 KIE.ai (~82₽/$)</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(kieRub) + ' ₽</span></div>' +
+      '<div class="profit-result ' + (isPositive ? 'positive' : 'negative') + '">' +
+        '<span class="profit-result-label" style="color:' + (isPositive ? 'var(--green)' : 'var(--accent2)') + '">Чистая прибыль</span>' +
+        '<span class="profit-result-val" style="color:' + (isPositive ? 'var(--green)' : 'var(--accent2)') + '">' + (isPositive ? '' : '−') + fmt(Math.abs(profit)) + ' ₽</span>' +
+      '</div>' +
+      '<div class="profit-meta">' +
+        '<div class="profit-meta-chip"><div class="pmc-label">Маржа</div><div class="pmc-val" style="color:' + (margin >= 0 ? 'var(--green)' : 'var(--accent2)') + '">' + margin.toFixed(1) + '%</div></div>' +
+        '<div class="profit-meta-chip"><div class="pmc-label">CAC</div><div class="pmc-val" style="color:var(--blue)">' + fmt(cac) + ' ₽</div></div>' +
+      '</div>';
+    profitEl.innerHTML = profitHtml;
+    profitEl.classList.remove('loading');
+  }
 
   // МЕТРИКИ
   function updateDashboard(d) {
@@ -623,6 +867,7 @@
     set('m-ltv', fmt(d.ltv) + ' ₽');
     set('m-bananas-spent', fmt(d.bananas_spent));
     set('m-bananas-given', fmt(d.bananas_given));
+    renderExtras(d);
     // тарифы
     const tariffs = d.purchases_by_tariff || {};
     const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🔥','832 банана':'🔥','Telegram Stars':'⭐'};
@@ -658,12 +903,14 @@
       document.getElementById('m-users-sub').textContent = `всего: ${fmt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmt(d.total_buyers)} покупателей`;
+      set('m-blocked', fmt(d.blocked || 0));
       set('m-avgcheck', fmt(d.avg_check) + ' ₽');
       set('m-dau', fmt(d.active_users));
       set('m-retention', fmtDec(d.retention));
       set('m-ltv', fmt(d.ltv) + ' ₽');
     set('m-bananas-spent', fmt(d.bananas_spent));
     set('m-bananas-given', fmt(d.bananas_given));
+    renderExtras(d);
 
       // Тарифы
       const tariffs = d.purchases_by_tariff || {};
@@ -692,9 +939,6 @@
   async function loadCharts() {
     try {
       const data = await fetch('/api/dashboard/chart?days=30').then(r => r.json());
-      revenueChart.data.labels = data.map(d => d.date);
-      revenueChart.data.datasets[0].data = data.map(d => d.revenue);
-      revenueChart.update();
       usersChart.data.labels = data.map(d => d.date);
       usersChart.data.datasets[0].data = data.map(d => d.new_users);
       usersChart.update();
@@ -723,12 +967,14 @@
       document.getElementById('m-users-sub').textContent = `всего: ${fmt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmt(d.total_buyers)} покупателей`;
+      set('m-blocked', fmt(d.blocked || 0));
       set('m-avgcheck', fmt(d.avg_check) + ' ₽');
       set('m-dau', fmt(d.active_users));
       set('m-retention', fmtDec(d.retention));
       set('m-ltv', fmt(d.ltv) + ' ₽');
     set('m-bananas-spent', fmt(d.bananas_spent));
     set('m-bananas-given', fmt(d.bananas_given));
+    renderExtras(d);
       const tariffs = d.purchases_by_tariff || {};
       const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
       const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🍌','832 банана':'🔥','Telegram Stars':'⭐️'};
@@ -759,6 +1005,7 @@
   document.getElementById('refreshBtn').addEventListener('click', () => {
     loadStats(currentPeriod);
     loadCharts();
+    loadKieBalance();
     updateTime();
     const btn = document.getElementById('refreshBtn');
     btn.style.transform = 'rotate(360deg)';
@@ -781,8 +1028,10 @@
   document.getElementById('dateTo').value = todayStr;
   loadStats(currentPeriod);
   loadCharts();
+  loadKieBalance();
   updateTime();
   setInterval(() => { loadStats(currentPeriod); updateTime(); }, 5 * 60 * 1000);
+  setInterval(loadKieBalance, 10 * 60 * 1000);
   setInterval(updateTime, 1000);
 </script>
 </body>

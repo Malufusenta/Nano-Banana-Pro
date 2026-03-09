@@ -156,6 +156,8 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         "top_sources": sorted([{"name": k, "revenue": v["revenue"], "count": v["count"]} for k, v in data.get("revenue_by_source", {}).items()], key=lambda x: x["revenue"], reverse=True)[:5],
         "purchases_by_tariff": data.get("purchases_by_tariff", {}),
         "funnel": data.get("funnel", {}),
+        "direct": data.get("direct", {}),
+        "fixed_expenses": data.get("fixed_expenses", {}),
         "kie": data.get("kie", {}),
         "blocked": data.get("users", {}).get("blocked", 0),
         "bananas_detail": {

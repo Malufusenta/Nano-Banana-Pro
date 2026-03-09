@@ -154,6 +154,13 @@ async def list_backups(user=Depends(require_auth)):
         return JSONResponse({"backups": []})
 
 
+@router.get("/api/settings/kie-balance")
+async def get_kie_balance_endpoint(user=Depends(require_auth)):
+    from app.services.kie_pricing import get_kie_balance
+    balance = await get_kie_balance()
+    return JSONResponse(balance)
+
+
 LOG_DIR = "/home/Dianka/Nano-Banana-Pro"
 
 @router.get("/api/settings/logs/files")
