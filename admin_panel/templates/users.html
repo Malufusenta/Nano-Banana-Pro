@@ -365,24 +365,63 @@
       </table>
     ` : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Транзакций нет</div>';
 
+    const daysAgo = u.created_at ? Math.floor((Date.now() - new Date(u.created_at.split(' ')[0].split('.').reverse().join('-'))) / 86400000) : '?';
+
     document.getElementById('modalBody').innerHTML = `
-      <div class="user-stats-grid">
-        <div class="user-stat"><div class="user-stat-val">${fmt(u.balance_paid)} 🍌</div><div class="user-stat-lbl">Баланс (платный)</div></div>
-        <div class="user-stat"><div class="user-stat-val">${fmt(u.balance_free)}</div><div class="user-stat-lbl">Баланс (free)</div></div>
+      <!-- Шапка -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+          ${u.full_name ? u.full_name[0].toUpperCase() : '?'}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700">${u.full_name || '—'}</div>
+          <div style="font-size:12px;color:var(--text3)">${u.username ? '@'+u.username : ''} · 🆔 ${u.telegram_id}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">📅 ${u.created_at} · ${daysAgo} дней с нами</div>
+        </div>
+        <div style="font-size:20px">${u.is_blocked ? '🔴' : '🟢'}</div>
+      </div>
+
+      <!-- Балансы -->
+      <div class="user-stats-grid" style="margin-bottom:14px">
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--accent)">${fmt(u.balance_paid)} 🍌</div><div class="user-stat-lbl">Платные</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--blue)">${fmt(u.balance_free)}</div><div class="user-stat-lbl">Бесплатные</div></div>
         <div class="user-stat"><div class="user-stat-val">${u.orders_count}</div><div class="user-stat-lbl">Покупок</div></div>
-        <div class="user-stat"><div class="user-stat-val">${u.total_revenue ? fmt(u.total_revenue)+' ₽' : '—'}</div><div class="user-stat-lbl">Выручка</div></div>
-        <div class="user-stat"><div class="user-stat-val">${fmt(u.total_generations_used)}</div><div class="user-stat-lbl">Генераций</div></div>
-        <div class="user-stat"><div class="user-stat-val" style="font-size:12px">${u.preferred_model}</div><div class="user-stat-lbl">Модель</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--green)">${u.total_revenue ? fmt(u.total_revenue)+' ₽' : '—'}</div><div class="user-stat-lbl">Выручка</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--purple)">${fmt(u.total_generations_used)}</div><div class="user-stat-lbl">Генераций</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="font-size:11px">${u.preferred_model}</div><div class="user-stat-lbl">Модель</div></div>
+      </div>
+
+      <!-- Кнопки действий -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button onclick="toggleBlock(${u.telegram_id}, ${u.is_blocked})" style="padding:7px 14px;border-radius:7px;border:1px solid ${u.is_blocked ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'};background:${u.is_blocked ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'};color:${u.is_blocked ? 'var(--green)' : 'var(--red)'};font-size:12px;font-weight:600;cursor:pointer" id="blockBtn_${u.telegram_id}">
+          ${u.is_blocked ? '🔓 Разблокировать' : '🔒 Заблокировать'}
+        </button>
+        <button onclick="showBalanceForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(245,197,66,0.4);background:rgba(245,197,66,0.1);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">🍌 Баланс</button>
+        <button onclick="showMessageForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.1);color:var(--blue);font-size:12px;font-weight:600;cursor:pointer">✉️ Написать</button>
+      </div>
+
+      <!-- Форма баланса -->
+      <div id="balanceForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">🍌 Изменить баланс</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="balanceAmount_${u.telegram_id}" type="number" placeholder="Кол-во (+/-)" style="width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+          <input id="balanceComment_${u.telegram_id}" type="text" placeholder="Комментарий" style="flex:1;min-width:120px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+          <button onclick="submitBalance(${u.telegram_id})" style="padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#000;font-size:12px;font-weight:600;cursor:pointer">OK</button>
+        </div>
+      </div>
+
+      <!-- Форма сообщения -->
+      <div id="messageForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">✉️ Написать пользователю</div>
+        <textarea id="messageText_${u.telegram_id}" rows="3" placeholder="Текст сообщения (поддерживается HTML)" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:'Inter',sans-serif"></textarea>
+        <button onclick="submitMessage(${u.telegram_id})" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Отправить</button>
       </div>
 
       <div class="section-title" style="margin-top:4px">Информация</div>
-      <div style="margin-bottom:20px">
-        <div class="user-info-row"><span class="user-info-key">Telegram ID</span><span class="user-info-val"><a class="tg-link" href="tg://user?id=${u.telegram_id}" target="_blank">${u.telegram_id}</a></span></div>
+      <div style="margin-bottom:16px">
         <div class="user-info-row"><span class="user-info-key">Источник</span><span class="user-info-val">${u.source}</span></div>
-        <div class="user-info-row"><span class="user-info-key">Регистрация</span><span class="user-info-val">${u.created_at}</span></div>
         <div class="user-info-row"><span class="user-info-key">Первая покупка</span><span class="user-info-val">${u.first_purchase_at}</span></div>
         <div class="user-info-row"><span class="user-info-key">Последняя генерация</span><span class="user-info-val">${u.last_generation_at}</span></div>
-        <div class="user-info-row"><span class="user-info-key">Статус</span><span class="user-info-val">${u.is_blocked ? '<span class="badge badge-red">заблокирован</span>' : '<span class="badge badge-green">активен</span>'}</span></div>
         ${u.referrer_id ? `<div class="user-info-row"><span class="user-info-key">Реферер ID</span><span class="user-info-val">${u.referrer_id}</span></div>` : ''}
       </div>
 
@@ -392,6 +431,54 @@
       <div class="section-title">Транзакции бананов</div>
       ${txnsHtml}
     `;
+  }
+
+  function showToast(msg, type='success') {
+    let t = document.getElementById('toast');
+    if (!t) { t = document.createElement('div'); t.id='toast'; document.body.appendChild(t); t.style.cssText='position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:all 0.3s'; }
+    t.textContent = msg;
+    t.style.background = type === 'success' ? 'var(--green)' : 'var(--red)';
+    t.style.color = type === 'success' ? '#000' : '#fff';
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 3000);
+  }
+
+  async function toggleBlock(userId, isBlocked) {
+    const r = await fetch(`/api/users/${userId}/block`, {method: 'POST', credentials: 'include'}).then(r => r.json());
+    if (r.ok) { showToast(r.is_blocked ? '🔴 Заблокирован' : '🟢 Разблокирован'); openUser(userId); }
+  }
+
+  function showBalanceForm(userId) {
+    const f = document.getElementById(`balanceForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function showMessageForm(userId) {
+    const f = document.getElementById(`messageForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function submitBalance(userId) {
+    const amount = parseInt(document.getElementById(`balanceAmount_${userId}`).value);
+    const comment = document.getElementById(`balanceComment_${userId}`).value || 'Admin adjustment';
+    if (!amount) return;
+    const r = await fetch(`/api/users/${userId}/balance`, {
+      method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount, comment})
+    }).then(r => r.json());
+    if (r.ok) { showToast(`✅ Баланс изменён на ${amount > 0 ? '+' : ''}${amount} 🍌`); openUser(userId); }
+    else showToast('❌ Ошибка', 'error');
+  }
+
+  async function submitMessage(userId) {
+    const text = document.getElementById(`messageText_${userId}`).value;
+    if (!text.trim()) return;
+    const r = await fetch(`/api/users/${userId}/message`, {
+      method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    }).then(r => r.json());
+    if (r.ok) { showToast('✅ Сообщение отправлено'); document.getElementById(`messageText_${userId}`).value = ''; }
+    else showToast('❌ ' + (r.error || 'Ошибка'), 'error');
   }
 
   document.getElementById('modalClose').addEventListener('click', () => document.getElementById('modalOverlay').classList.remove('open'));

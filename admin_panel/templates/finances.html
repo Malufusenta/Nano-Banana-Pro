@@ -17,37 +17,99 @@ async function openUserModal(userId) {
       const resp = await fetch('/api/users/' + userId).then(r => r.json());
       if (resp.error) { document.getElementById('modalUserBody').innerHTML = '<div style="color:var(--red);padding:20px">Пользователь не найден</div>'; return; }
       const u = resp.user;
+      const txns = resp.transactions || [];
+
+      // Считаем дней с регистрации
+      const regDate = u.created_at ? u.created_at.split(' ')[0] : null;
+      const daysAgo = regDate ? Math.floor((Date.now() - new Date(regDate.split('.').reverse().join('-'))) / 86400000) : '?';
+
+      document.getElementById('modalUserTitle').textContent = u.full_name || u.username || userId;
+
       document.getElementById('modalUserBody').innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:20px;font-weight:700;color:var(--accent)">${fmt(u.balance_paid)}</div>
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">Баланс</div>
+        <!-- Шапка -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+            ${u.full_name ? u.full_name[0].toUpperCase() : '?'}
           </div>
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:20px;font-weight:700;color:var(--green)">${fmt(u.total_revenue)} ₽</div>
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">Выручка</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:17px;font-weight:700">${u.full_name || '—'}</div>
+            <div style="font-size:12px;color:var(--text3)">${u.username ? '@'+u.username : ''} · 🆔 ${u.telegram_id}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">📅 ${u.created_at} · ${daysAgo} дней с нами</div>
           </div>
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:20px;font-weight:700;color:var(--blue)">${fmt(u.orders_count)}</div>
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">Покупок</div>
+          <div style="font-size:20px">${u.is_blocked ? '🔴' : '🟢'}</div>
+        </div>
+
+        <!-- Балансы -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--accent)">${fmt(u.balance_paid)}</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Платные 🍌</div>
           </div>
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:20px;font-weight:700;color:var(--purple)">${fmt(u.total_generations_used)}</div>
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-top:2px">Генераций</div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmt(u.balance_free)}</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Бесплатные 🍌</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--green)">${fmt(u.total_revenue)} ₽</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Выручка</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--purple)">${fmt(u.total_generations_used)}</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Генераций</div>
           </div>
         </div>
-        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Информация</div>
-        <div>
+
+        <!-- Инфо -->
+        <div style="margin-bottom:14px">
           ${[
-            ['Имя', u.full_name || '—'],
-            ['Username', u.username ? '@'+u.username : '—'],
-            ['Telegram ID', u.telegram_id],
-            ['Источник', u.source || 'organic'],
-            ['Модель', u.preferred_model || '—'],
-            ['Зарегистрирован', u.created_at || '—'],
-            ['Первая покупка', u.first_purchase_at || '—'],
-            ['Заблокирован', u.is_blocked ? '🔴 Да' : '🟢 Нет'],
-          ].map(([k,v]) => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2)">${k}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">${v}</span></div>`).join('')}
+            ['🛒 Покупок', u.orders_count + ' шт · первая ' + (u.first_purchase_at || '—')],
+            ['🎨 Последняя генерация', u.last_generation_at || '—'],
+            ['🔗 Источник', u.source || 'organic'],
+            ['🤖 Модель', u.preferred_model || '—'],
+            ['🔒 Статус', u.is_blocked ? '🔴 Заблокирован' : '🟢 Активен'],
+          ].map(([k,v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--text2)">${k}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;text-align:right;max-width:60%">${v}</span></div>`).join('')}
+        </div>
+
+        <!-- Кнопки действий -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button onclick="toggleBlock(${u.telegram_id}, ${u.is_blocked})" style="padding:7px 14px;border-radius:7px;border:1px solid ${u.is_blocked ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'};background:${u.is_blocked ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'};color:${u.is_blocked ? 'var(--green)' : 'var(--red)'};font-size:12px;font-weight:600;cursor:pointer" id="blockBtn_${u.telegram_id}">
+            ${u.is_blocked ? '🔓 Разблокировать' : '🔒 Заблокировать'}
+          </button>
+          <button onclick="showBalanceForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(245,197,66,0.4);background:rgba(245,197,66,0.1);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">
+            🍌 Баланс
+          </button>
+          <button onclick="showMessageForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.1);color:var(--blue);font-size:12px;font-weight:600;cursor:pointer">
+            ✉️ Написать
+          </button>
+        </div>
+
+        <!-- Форма баланса (скрытая) -->
+        <div id="balanceForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">🍌 Изменить баланс</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="balanceAmount_${u.telegram_id}" type="number" placeholder="Кол-во (+/-)" style="width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+            <input id="balanceComment_${u.telegram_id}" type="text" placeholder="Комментарий" style="flex:1;min-width:120px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+            <button onclick="submitBalance(${u.telegram_id})" style="padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#000;font-size:12px;font-weight:600;cursor:pointer">OK</button>
+          </div>
+        </div>
+
+        <!-- Форма сообщения (скрытая) -->
+        <div id="messageForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">✉️ Написать пользователю</div>
+          <textarea id="messageText_${u.telegram_id}" rows="3" placeholder="Текст сообщения (поддерживается HTML)" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:'Inter',sans-serif"></textarea>
+          <button onclick="submitMessage(${u.telegram_id})" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Отправить</button>
+        </div>
+
+        <!-- Транзакции -->
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Транзакции бананов</div>
+        <div style="max-height:180px;overflow-y:auto">
+          ${txns.length ? txns.map(t => `
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+              <span style="color:var(--text3)">${t.created_at}</span>
+              <span style="color:var(--text2)">${t.description}</span>
+              <span style="font-weight:600;color:${t.amount > 0 ? 'var(--green)' : 'var(--red)'};font-family:'JetBrains Mono',monospace">${t.amount > 0 ? '+' : ''}${t.amount} 🍌</span>
+            </div>
+          `).join('') : '<div style="color:var(--text3);padding:10px 0;font-size:12px">Нет транзакций</div>'}
         </div>
       `;
     } catch(e) {
@@ -57,6 +119,57 @@ async function openUserModal(userId) {
 
   function closeUserModal() {
     document.getElementById('userModal').style.display = 'none';
+  }
+
+  async function toggleBlock(userId, isBlocked) {
+    const r = await fetch(`/api/users/${userId}/block`, {method: 'POST', credentials: 'include'}).then(r => r.json());
+    if (r.ok) {
+      showToast(r.is_blocked ? '🔴 Пользователь заблокирован' : '🟢 Пользователь разблокирован');
+      openUserModal(userId);
+    }
+  }
+
+  function showBalanceForm(userId) {
+    const f = document.getElementById(`balanceForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function showMessageForm(userId) {
+    const f = document.getElementById(`messageForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function submitBalance(userId) {
+    const amount = parseInt(document.getElementById(`balanceAmount_${userId}`).value);
+    const comment = document.getElementById(`balanceComment_${userId}`).value || 'Admin adjustment';
+    if (!amount) return;
+    const r = await fetch(`/api/users/${userId}/balance`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount, comment})
+    }).then(r => r.json());
+    if (r.ok) {
+      showToast(`✅ Баланс изменён на ${amount > 0 ? '+' : ''}${amount} 🍌`);
+      openUserModal(userId);
+    } else {
+      showToast('❌ Ошибка', 'error');
+    }
+  }
+
+  async function submitMessage(userId) {
+    const text = document.getElementById(`messageText_${userId}`).value;
+    if (!text.trim()) return;
+    const r = await fetch(`/api/users/${userId}/message`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    }).then(r => r.json());
+    if (r.ok) {
+      showToast('✅ Сообщение отправлено');
+      document.getElementById(`messageText_${userId}`).value = '';
+    } else {
+      showToast('❌ ' + (r.error || 'Ошибка'), 'error');
+    }
   }
   document.getElementById('userModal').addEventListener('click', e => {
     if (e.target === document.getElementById('userModal')) closeUserModal();

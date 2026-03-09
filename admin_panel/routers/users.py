@@ -5,7 +5,7 @@ from fastapi.requests import Request
 from sqlalchemy import select, func, desc, or_
 from app.database import async_session
 from app.models import User, Purchase, BananaTransaction, GenerationTask
-from .auth import require_auth
+from .auth import require_auth, require_auth_api
 
 router = APIRouter()
 templates = Jinja2Templates(directory="admin_panel/templates")
@@ -125,3 +125,55 @@ async def get_user_detail(telegram_id: int, user=Depends(require_auth)):
             "created_at": g.created_at.strftime("%d.%m.%Y %H:%M") if g.created_at else "—",
         } for g in gens],
     }
+
+
+@router.post("/api/users/{telegram_id}/block")
+async def toggle_block(telegram_id: int, request: Request, user=Depends(require_auth_api)):
+    async with async_session() as session:
+        u = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if not u:
+            raise HTTPException(status_code=404, detail="Not found")
+        u.is_blocked = not u.is_blocked
+        await session.commit()
+        return {"ok": True, "is_blocked": u.is_blocked}
+
+
+@router.post("/api/users/{telegram_id}/balance")
+async def change_balance(telegram_id: int, request: Request, user=Depends(require_auth_api)):
+    body = await request.json()
+    amount = int(body.get("amount", 0))
+    comment = body.get("comment", "Admin adjustment")
+    async with async_session() as session:
+        u = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if not u:
+            raise HTTPException(status_code=404, detail="Not found")
+        u.balance_paid = max(0, (u.balance_paid or 0) + amount)
+        u.generations_balance = u.balance_paid + (u.balance_free or 0)
+        from app.models import BananaTransaction
+        t = BananaTransaction(
+            user_id=telegram_id,
+            amount=amount,
+            transaction_type="earned_manual" if amount > 0 else "spent",
+            description=f"Admin: {comment}"
+        )
+        session.add(t)
+        await session.commit()
+        return {"ok": True, "new_balance": u.balance_paid}
+
+
+@router.post("/api/users/{telegram_id}/message")
+async def send_message(telegram_id: int, request: Request, user=Depends(require_auth_api)):
+    import aiohttp, os
+    body = await request.json()
+    text = body.get("text", "")
+    if not text:
+        return {"ok": False, "error": "Пустое сообщение"}
+    token = os.environ.get("BOT_TOKEN", "")
+    async with aiohttp.ClientSession() as s:
+        r = await s.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+            "chat_id": telegram_id,
+            "text": text,
+            "parse_mode": "HTML"
+        })
+        data = await r.json()
+    return {"ok": data.get("ok", False), "error": data.get("description", "")}

@@ -52,6 +52,13 @@ def require_auth(request: Request) -> str:
         raise HTTPException(status_code=302, headers={"Location": "/login"})
     return user
 
+def require_auth_api(request: Request) -> str:
+    """Для API эндпоинтов — возвращает 401 вместо редиректа"""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
