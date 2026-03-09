@@ -674,7 +674,7 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
             text += f"• {item['name']}: {item['amount']} ₽/мес\n"
         text += f"📅 В день: {fixed['daily']} ₽\n\n"
 
-        direct = data.get('direct', {})
+    direct = data.get('direct', {})
     if direct.get('error'):
         text += f"📢 ЯНДЕКС ДИРЕКТ\n❌ Ошибка: {direct['error']}\n\n"
     elif direct.get('total', 0) > 0:
