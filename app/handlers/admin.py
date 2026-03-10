@@ -1866,8 +1866,10 @@ async def cb_fixed_expenses(callback: types.CallbackQuery):
         daily = round(total / 30, 2)
         text = "⚙️ <b>Фиксированные расходы</b>\n\n"
         for e in expenses:
-            text += f"• {e.name}: {e.amount_rub} ₽/мес\n"
-        text += f"\n💰 Итого: {total} ₽/мес\n"
+            amt = int(e.amount_rub) if e.amount_rub == int(e.amount_rub) else e.amount_rub
+            text += f"• {e.name}: {amt} ₽/мес\n"
+        total_fmt = int(total) if total == int(total) else total
+        text += f"\n💰 Итого: {total_fmt} ₽/мес\n"
         text += f"📅 В день: {daily} ₽"
     else:
         text = "⚙️ <b>Фиксированные расходы</b>\n\nПока ничего не добавлено."
