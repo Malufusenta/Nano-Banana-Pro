@@ -826,7 +826,7 @@
 
     var revenue = d.revenue != null ? d.revenue : 0;
     var kieUsd = (d.kie && d.kie.total_usd != null) ? d.kie.total_usd : 0;
-    var kieRub = kieUsd * 82;
+    var kieRub = kieUsd * (d.usd_rate || 90);
     var profit = revenue - directTotal - kieRub;
     var margin = revenue > 0 ? (profit / revenue * 100) : 0;
     var newUsers = d.new_users != null ? d.new_users : 0;

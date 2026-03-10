@@ -11,6 +11,7 @@ from sqlalchemy import select, func, or_, text
 from app.database import async_session
 from app.models import User, Purchase, BananaTransaction
 from app.services.analytics_service import get_analytics_report
+from app.services.currency import get_usd_rate
 from admin_panel.routers.auth import get_current_user
 
 router = APIRouter()
@@ -65,6 +66,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         user = get_current_user(request)
         if not user:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
+        usd_rate = await get_usd_rate()
         async with async_session() as session:
             data = await get_analytics_report(session, df, dt_)
             total_users = await session.scalar(select(func.count()).select_from(User))
@@ -100,12 +102,14 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "bananas_spent": int(bananas_spent),
             "purchases_by_tariff": data.get("purchases_by_tariff", {}),
             "top_sources": sorted([{"name": k, "revenue": v["revenue"], "count": v["count"]} for k, v in data.get("revenue_by_source", {}).items()], key=lambda x: x["revenue"], reverse=True)[:5],
+            "usd_rate": usd_rate,
         })
     user = get_current_user(request)
     if not user:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     date_from, date_to = get_period_dates(period)
+    usd_rate = await get_usd_rate()
 
     async with async_session() as session:
         data = await get_analytics_report(session, date_from, date_to)
@@ -166,6 +170,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "channel": data.get("bananas", {}).get("earned_sub", 0),
             "purchased": data.get("bananas", {}).get("purchased", 0),
         },
+        "usd_rate": usd_rate,
     })
 
 
