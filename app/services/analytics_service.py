@@ -468,10 +468,10 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     )
     veteran_buyers = await session.scalar(veteran_buyers_query) or 0
     
-# Заблокировали (всего за всё время, т.к. нет поля blocked_at)
     blocked = await session.scalar(
         select(func.count(User.id)).where(
-            User.is_blocked == True
+            User.blocked_at >= date_from,
+            User.blocked_at <= date_to
         )
     ) or 0
     
@@ -804,7 +804,7 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
     text += f"Купило всего: {users['total_buyers']} чел. (CR: {users['conversion_rate']:.1f}%)\n"
     text += f"— Новичков (Первая покупка): {users['newbie_buyers']}\n"
     text += f"— Старичков (Повторная покупка): {users['veteran_buyers']}\n"
-    text += f"Заблокировали: {users['blocked']} (всего за всё время)"
+    text += f"Заблокировали: {users['blocked']}"
     
     # ВОРОНКА
     funnel = data.get('funnel', {})

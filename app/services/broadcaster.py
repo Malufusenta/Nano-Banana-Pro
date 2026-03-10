@@ -9,7 +9,7 @@ Broadcaster - Система массовых рассылок
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, update
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest, TelegramRetryAfter
@@ -146,7 +146,10 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
             try:
                 async with async_session() as session:
                     await session.execute(
-                        update(User).where(User.telegram_id == user_id).values(is_blocked=True)
+                        update(User).where(User.telegram_id == user_id).values(
+                            is_blocked=True,
+                            blocked_at=datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+                        )
                     )
                     await session.commit()
             except Exception as db_error:

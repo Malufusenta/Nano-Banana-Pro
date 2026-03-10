@@ -30,6 +30,7 @@ class User(Base):
     is_model_manually_selected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     generations_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     first_generation_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
 
