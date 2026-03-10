@@ -23,7 +23,8 @@ from app.services.user_service import (
 from app.services.ai_engine import generate_image
 from app.services.kie_pricing import get_kie_credits
 from app.utils import prompts
-from sqlalchemy import func
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import func, update
 from app.utils.prompt_validator import is_lazy_prompt
 from app import config
 import asyncio
@@ -837,6 +838,17 @@ async def cmd_start_creating(message: types.Message, state: FSMContext):
     try:
         await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
     except TelegramForbiddenError:
+        try:
+            async with async_session() as session:
+                await session.execute(
+                    update(User).where(User.telegram_id == message.from_user.id).values(
+                        is_blocked=True,
+                        blocked_at=datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+                    )
+                )
+                await session.commit()
+        except Exception:
+            pass
         return
 
     # 👇 ВСТАВИТЬ ЭТО ПОСЛЕ cmd_start_creating 👇
@@ -1812,8 +1824,6 @@ async def process_generation(
 # ======================================================
                         # 🕒 БЕЗОПАСНАЯ ПРОВЕРКА ДАТЫ (Smart Fix)
                         # ======================================================
-                        from datetime import datetime, timezone
-                        
                         # 1. Берем текущее время (в UTC)
                         now_utc = datetime.now(timezone.utc)
                         
