@@ -782,7 +782,7 @@
 
     var profitHtml =
       '<div class="profit-row"><span class="profit-row-label">💰 Выручка</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600">' + fmt(revenue) + ' ₽</span></div>' +
-      (starsNetRub > 0 ? '<div class="profit-row"><span class="profit-row-label">⭐ Stars (чистые)</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--green)">+' + fmt(starsNetRub) + ' ₽</span></div>' : '') +
+      (starsNetRub > 0 ? '<div class="profit-row"><span class="profit-row-label">⭐ Stars</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--green)">+' + fmt(starsNetRub) + ' ₽</span></div>' : '') +
       '<div class="profit-row"><span class="profit-row-label">📣 Яндекс Директ</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(directTotal) + ' ₽</span></div>' +
       '<div class="profit-row"><span class="profit-row-label">🤖 KIE.ai (~' + (d.usd_rate || 90).toFixed(2) + '₽/$)</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(kieRub) + ' ₽</span></div>' +
       '<div class="profit-result ' + (isPositive ? 'positive' : 'negative') + '">' +
