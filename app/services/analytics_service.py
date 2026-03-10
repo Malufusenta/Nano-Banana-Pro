@@ -1,6 +1,7 @@
 from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, Purchase, BananaTransaction, Broadcast, PostConfig
+import calendar
 from datetime import datetime, timedelta
 from app.models import VideoGenerationTask, FixedExpense
 from app import config
@@ -560,7 +561,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     fixed_result = await session.execute(select(FixedExpense))
     fixed_expenses = fixed_result.scalars().all()
     fixed_total_month = sum(e.amount_rub for e in fixed_expenses)
-    fixed_daily = round(fixed_total_month / 30, 2)
+    days_in_month = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
+    fixed_daily = round(fixed_total_month / days_in_month, 2)
     return {
     'revenue': {
         'total': total_revenue,

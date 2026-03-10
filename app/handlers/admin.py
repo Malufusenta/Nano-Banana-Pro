@@ -19,6 +19,7 @@ from app.services.analytics_service import (
     get_payment_depth_stats,       # 👈 Новое
     format_payment_depth_message   # 👈 Новое
 )
+import calendar
 from datetime import datetime, timedelta, timezone
 from aiogram.fsm.state import State, StatesGroup
 import logging
@@ -1863,7 +1864,8 @@ async def cb_fixed_expenses(callback: types.CallbackQuery):
     
     if expenses:
         total = sum(e.amount_rub for e in expenses)
-        daily = round(total / 30, 2)
+        days_in_month = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
+        daily = round(total / days_in_month, 2)
         text = "⚙️ <b>Фиксированные расходы</b>\n\n"
         for e in expenses:
             amt = int(e.amount_rub) if e.amount_rub == int(e.amount_rub) else e.amount_rub
