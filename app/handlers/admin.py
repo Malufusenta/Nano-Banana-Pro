@@ -1936,7 +1936,7 @@ async def process_fixed_amount(message: types.Message, state: FSMContext):
     builder.adjust(1)
     
     await message.answer(
-        f"✅ Добавлено: <b>{name}</b> — {amount} ₽/мес",
+        f"✅ Добавлено: <b>{name}</b> — {int(amount) if amount == int(amount) else amount} ₽/мес",
         reply_markup=builder.as_markup(),
         parse_mode="HTML"
     )
