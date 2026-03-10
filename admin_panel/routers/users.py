@@ -176,4 +176,15 @@ async def send_message(telegram_id: int, request: Request, user=Depends(require_
             "parse_mode": "HTML"
         })
         data = await r.json()
+    if not data.get("ok") and data.get("error_code") == 403:
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import update
+        async with async_session() as db:
+            await db.execute(
+                update(User).where(User.telegram_id == telegram_id).values(
+                    is_blocked=True,
+                    blocked_at=datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+                )
+            )
+            await db.commit()
     return {"ok": data.get("ok", False), "error": data.get("description", "")}
