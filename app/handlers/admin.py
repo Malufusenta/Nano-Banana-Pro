@@ -1968,7 +1968,6 @@ async def cb_fixed_delete(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-
 @router.callback_query(F.data.startswith("admin_fixed_del_"))
 async def cb_fixed_del_confirm(callback: types.CallbackQuery):
     expense_id = int(callback.data.split("_")[-1])
