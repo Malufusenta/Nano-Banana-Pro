@@ -1912,7 +1912,7 @@ async def process_fixed_name(message: types.Message, state: FSMContext):
 @router.message(FixedExpenseStates.waiting_for_amount)
 async def process_fixed_amount(message: types.Message, state: FSMContext):
     try:
-        amount = int(message.text.strip())
+        amount = float(message.text.strip().replace(',', '.'))
     except ValueError:
         await message.answer("❌ Введи только цифры, например: 1500")
         return

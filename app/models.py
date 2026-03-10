@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column
+from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from datetime import datetime
@@ -235,5 +235,5 @@ class FixedExpense(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)  # "Сервер", "Tilda", "Claude"
-    amount_rub: Mapped[int] = mapped_column(Integer, nullable=False)  # Сумма в рублях за месяц
+    amount_rub: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # Сумма в рублях за месяц
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
