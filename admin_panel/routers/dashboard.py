@@ -100,6 +100,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
 
         return JSONResponse({
             "revenue": rev["rub_revenue"],
+            "income_amount": rev.get("income_amount", rev["rub_revenue"]),
             "stars_revenue": rev["stars_revenue"],
             "stars_revenue_rub": rev.get("stars_revenue_rub", 0),
             "stars_net_rub": rev.get("stars_net_rub", 0),
@@ -159,6 +160,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
 
     return JSONResponse({
         "revenue": rev["rub_revenue"],
+        "income_amount": rev.get("income_amount", rev["rub_revenue"]),
         "stars_revenue": rev["stars_revenue"],
         "stars_revenue_rub": rev.get("stars_revenue_rub", 0),
         "stars_net_rub": rev.get("stars_net_rub", 0),
