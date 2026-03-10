@@ -71,6 +71,14 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     stars_revenue = stars_data.stars_revenue or 0
     stars_count = stars_data.stars_count or 0
 
+    # Конвертация Stars в рубли: 1 звезда = $0.013, минус комиссия Telegram 30%
+    from app.services.currency import get_usd_rate
+    usd_rate = await get_usd_rate()
+    stars_revenue_usd = round(stars_revenue * 0.013, 2)
+    stars_revenue_rub = round(stars_revenue_usd * usd_rate, 2)
+    stars_net_usd = round(stars_revenue * 0.013 * 0.7, 2)
+    stars_net_rub = round(stars_net_usd * usd_rate, 2)
+
     # Рублевая выручка (revenue_query уже исключил Stars)
     rub_revenue = total_revenue
     
@@ -569,6 +577,10 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         'income_amount': total_income_amount,  # 👈 ДОБАВИТЬ
         'rub_revenue': rub_revenue,
         'stars_revenue': stars_revenue,
+        'stars_revenue_usd': stars_revenue_usd,
+        'stars_revenue_rub': stars_revenue_rub,
+        'stars_net_usd': stars_net_usd,
+        'stars_net_rub': stars_net_rub,
         'stars_count': stars_count,
         'transactions': total_transactions + stars_count,
         'first_purchases': first_purchases,
