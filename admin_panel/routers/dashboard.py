@@ -2,6 +2,7 @@
 Дашборд — главная страница с живыми метриками
 """
 from datetime import datetime, timedelta
+from decimal import Decimal
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -13,6 +14,11 @@ from app.models import User, Purchase, BananaTransaction
 from app.services.analytics_service import get_analytics_report
 from app.services.currency import get_usd_rate
 from admin_panel.routers.auth import get_current_user
+
+
+def _f(v):
+    """Конвертирует Decimal в float для JSON-сериализации."""
+    return float(v) if isinstance(v, Decimal) else v
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -87,8 +93,8 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         return JSONResponse({
             "revenue": rev["rub_revenue"],
             "stars_revenue": rev["stars_revenue"],
-            "stars_revenue_rub": rev.get("stars_revenue_rub", 0),
-            "stars_net_rub": rev.get("stars_net_rub", 0),
+            "stars_revenue_rub": _f(rev.get("stars_revenue_rub", 0)),
+            "stars_net_rub": _f(rev.get("stars_net_rub", 0)),
             "stars_count": rev["stars_count"],
             "transactions": rev["transactions"],
             "avg_check": rev["avg_check"],
@@ -104,7 +110,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "bananas_spent": int(bananas_spent),
             "purchases_by_tariff": data.get("purchases_by_tariff", {}),
             "top_sources": sorted([{"name": k, "revenue": v["revenue"], "count": v["count"]} for k, v in data.get("revenue_by_source", {}).items()], key=lambda x: x["revenue"], reverse=True)[:5],
-            "usd_rate": usd_rate,
+            "usd_rate": _f(usd_rate),
         })
     user = get_current_user(request)
     if not user:
@@ -146,8 +152,8 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
     return JSONResponse({
         "revenue": rev["rub_revenue"],
         "stars_revenue": rev["stars_revenue"],
-        "stars_revenue_rub": rev.get("stars_revenue_rub", 0),
-        "stars_net_rub": rev.get("stars_net_rub", 0),
+        "stars_revenue_rub": _f(rev.get("stars_revenue_rub", 0)),
+        "stars_net_rub": _f(rev.get("stars_net_rub", 0)),
         "stars_count": rev["stars_count"],
         "transactions": rev["transactions"],
         "avg_check": rev["avg_check"],
@@ -174,7 +180,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "channel": data.get("bananas", {}).get("earned_sub", 0),
             "purchased": data.get("bananas", {}).get("purchased", 0),
         },
-        "usd_rate": usd_rate,
+        "usd_rate": _f(usd_rate),
     })
 
 
