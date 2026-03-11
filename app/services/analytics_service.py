@@ -77,8 +77,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     usd_rate = await get_usd_rate()
     stars_revenue_usd = round(stars_revenue * 0.013, 2)
     stars_revenue_rub = round(stars_revenue_usd * usd_rate, 2)
-    stars_net_usd = round(stars_revenue * 0.013 * 0.7, 2)
-    stars_net_rub = round(stars_net_usd * usd_rate, 2)
+    stars_net_usd = stars_revenue_usd  # без комиссии
+    stars_net_rub = stars_revenue_rub  # без комиссии
 
     # Рублевая выручка (revenue_query уже исключил Stars)
     rub_revenue = total_revenue
