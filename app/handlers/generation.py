@@ -62,15 +62,14 @@ IGNORED_TEXTS = [
     "/profile", "/free", "/about", "/support", "/guide"
 ]
 
-async def get_smart_alert_message(user_id: int, balance: int, cost: int) -> tuple[str, InlineKeyboardBuilder]:
+async def get_smart_alert_message(session, user_id: int, balance: int, cost: int) -> tuple[str, InlineKeyboardBuilder]:
     """
     Возвращает умное сообщение и клавиатуру в зависимости от сценария
     
     Returns:
         (text, keyboard_builder)
     """
-    async with async_session() as session:
-        has_purchases = await has_user_purchased(session, user_id)
+    has_purchases = await has_user_purchased(session, user_id)
     
     builder = InlineKeyboardBuilder()
     
@@ -1580,16 +1579,16 @@ async def process_generation(
         has_balance = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits)
         balance_left = await get_user_balance(session, user_id)
 
-    if not has_balance:
-        # 🔥 SMART ALERT: Определяем сценарий и показываем умное уведомление
-        alert_text, alert_kb = await get_smart_alert_message(user_id, balance_left, cost)
-        
-        await message.answer(
-            alert_text,
-            reply_markup=alert_kb.as_markup(),
-            parse_mode="HTML"
-        )
-        return
+        if not has_balance:
+            # 🔥 SMART ALERT: Определяем сценарий и показываем умное уведомление
+            alert_text, alert_kb = await get_smart_alert_message(session, user_id, balance_left, cost)
+            
+            await message.answer(
+                alert_text,
+                reply_markup=alert_kb.as_markup(),
+                parse_mode="HTML"
+            )
+            return
 
     # ✅ Нормализация URL
     final_urls = normalize_image_urls(image_urls)
@@ -2202,11 +2201,11 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
     async with async_session() as session:
         has_balance = await check_and_deduct_balance(session, user_id, amount=COST)
         balance_left = await get_user_balance(session, user_id)
-    
-    if not has_balance:
-        alert_text, alert_kb = await get_smart_alert_message(user_id, balance_left, COST)
-        await message.answer(alert_text, reply_markup=alert_kb.as_markup(), parse_mode="HTML")
-        return
+
+        if not has_balance:
+            alert_text, alert_kb = await get_smart_alert_message(session, user_id, balance_left, COST)
+            await message.answer(alert_text, reply_markup=alert_kb.as_markup(), parse_mode="HTML")
+            return
     
 # Списали деньги - запускаем генерацию
     if from_result_button:
