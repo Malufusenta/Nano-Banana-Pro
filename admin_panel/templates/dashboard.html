@@ -756,7 +756,7 @@
     var direct = d.direct || {};
     var directTotal = direct.total != null ? direct.total : 0;
     var campaigns = direct.campaigns || {};
-    var campNames = Object.keys(campaigns);
+    var campNames = Object.entries(campaigns).sort((a, b) => b[1] - a[1]).map(e => e[0]);
 
     var directHtml = '<div class="direct-total"><span class="direct-total-val">' + fmt(directTotal) + ' ₽</span><span class="direct-total-label">итого за период</span></div>';
     if (campNames.length) {
