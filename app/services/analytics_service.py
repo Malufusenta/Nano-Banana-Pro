@@ -698,7 +698,7 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
             text += f"• {camp_name}: {camp_cost} ₽\n"
         text += "\n"
 
-    income = rev.get('income_amount', 0)
+    income = rev.get('rub_revenue', 0)
     kie_usd = data.get('kie', {}).get('total_usd', 0)
     kie_rub = round(kie_usd * config.USD_TO_RUB, 2)
     fixed_day = float(fixed.get('daily', 0) or 0)
