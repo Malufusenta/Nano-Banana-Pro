@@ -778,8 +778,8 @@
     var profit = revenue + starsNetRub - directTotal - kieRub - fixedDaily;
     var margin = (revenue + starsNetRub) > 0 ? (profit / (revenue + starsNetRub) * 100) : 0;
     var newUsers = d.new_users != null ? d.new_users : 0;
-    var newBuyers = d.new_buyers || 0;
-    var cac = newBuyers > 0 ? (directTotal / newBuyers) : 0;
+    var cacBuyers = d.cac_buyers || 0;
+    var cac = cacBuyers > 0 ? (directTotal / cacBuyers) : 0;
     var isPositive = profit >= 0;
 
     var profitHtml =

@@ -466,6 +466,24 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     ) or 0
     
     farmed_first = newbie_buyers - bought_immediately
+
+    # CAC знаменатель: зарегался И купил впервые - оба в периоде
+    cac_buyers = await session.scalar(
+        select(func.count(func.distinct(Purchase.user_id))).where(
+            Purchase.status == 'succeeded',
+            Purchase.completed_at >= date_from,
+            Purchase.completed_at <= date_to,
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),
+            Purchase.user_id.in_(
+                select(User.telegram_id).where(
+                    User.created_at >= date_from,
+                    User.created_at <= date_to,
+                    User.first_purchase_at >= date_from,
+                    User.first_purchase_at <= date_to
+                )
+            )
+        )
+    ) or 0
     
     # Старички (юзеры с повторными покупками — более 1 покупки всего)
     veteran_buyers_query = select(func.count()).select_from(
@@ -585,6 +603,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         'stars_count': stars_count,
         'transactions': total_transactions + stars_count,
         'first_purchases': first_purchases,
+        'cac_buyers': cac_buyers,
         'repeat_purchases': repeat_purchases,
         'avg_check': avg_check,
         'retention': retention,   # 👈 НОВОЕ
@@ -709,7 +728,7 @@ async def format_report_message(data: dict, date_str: str, is_all_time: bool = F
     stars_net_rub = rev.get('stars_net_rub', 0)
     net_profit = round(income + stars_net_rub - kie_rub - fixed_day - direct_total, 2)
     margin = round((net_profit / income) * 100, 1) if income > 0 else 0
-    new_buyers = rev.get('first_purchases', 0)
+    new_buyers = rev.get('cac_buyers', 0)
     text += "📈 ГЛАВНЫЕ МЕТРИКИ\n"
     text += f"Чистая прибыль: {net_profit} ₽\n"
     text += f"Маржинальность: {margin}%\n"

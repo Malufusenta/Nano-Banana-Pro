@@ -122,6 +122,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "usd_rate": usd_rate,
             "new_buyers": data.get("revenue", {}).get("first_purchases", 0),
             "fixed_daily": data.get("fixed_expenses", {}).get("daily", 0),
+            "cac_buyers": data.get("revenue", {}).get("cac_buyers", 0),
         })
     user = get_current_user(request)
     if not user:
@@ -195,6 +196,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         "usd_rate": usd_rate,
         "new_buyers": data.get("revenue", {}).get("first_purchases", 0),
         "fixed_daily": data.get("fixed_expenses", {}).get("daily", 0),
+        "cac_buyers": data.get("revenue", {}).get("cac_buyers", 0),
     })
 
 
