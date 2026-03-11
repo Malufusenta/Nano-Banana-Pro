@@ -2044,22 +2044,12 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
             select(Broadcast).where(Broadcast.id == broadcast_id)
         )
         broadcast = result.scalar_one_or_none()
-    
-    if not broadcast or not broadcast.hidden_prompt:
-        await callback.answer("⚠️ Ошибка: промпт не найден", show_alert=True)
-        return
-    
-    # ✅ НОВОЕ: Увеличиваем счётчик clicks_count для PostConfig
-    # Находим PostConfig созданный в тот же день что и broadcast
-    post_config_result = await session.execute(
-        select(PostConfig)
-        .where(func.date(PostConfig.created_at) == func.date(broadcast.created_at))
-        .limit(1)  # ← Берём только первую запись
-    )
-    post_config = post_config_result.scalars().first()  # ← scalars().first() вместо scalar_one_or_none()
-        
-    if post_config:
-        post_config.clicks_count += 1
+
+        if not broadcast or not broadcast.hidden_prompt:
+            await callback.answer("⚠️ Ошибка: промпт не найден", show_alert=True)
+            return
+
+        broadcast.clicks_count += 1
         await session.commit()
     
     # Сохраняем промпт И ФОРМАТ в state

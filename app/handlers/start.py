@@ -51,32 +51,36 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     ad_scenario_key = None
 
     if args:
+        # ===== ФОРМАТ 2: source__cid_123456 (проверяем первым, т.к. тоже содержит '_') =====
+        if '__cid_' in args:
+            parts = args.split('__cid_')
+            source_part = parts[0]
+            cid_part = parts[1] if len(parts) > 1 else None
+
+            if cid_part and re.match(r'^\d{15,20}$', cid_part):
+                yandex_client_id = cid_part
+
+            # Нормализуем ключ: "ad_yandex_rsya_3" → "yandex_rsya_3"
+            clean_key = re.sub(r'^ad_', '', source_part)
+            if clean_key:
+                ad_scenario_key = clean_key
+                source = f"ad_{clean_key}"
+
+            args = None
+
         # ===== ФОРМАТ 1: scenario_clientid (РЕКЛАМНЫЕ СЦЕНАРИИ) =====
-        if '_' in args and not args.startswith('post_') and not args.startswith('cid_'):
-            
-            
+        elif '_' in args and not args.startswith('post_') and not args.startswith('cid_'):
             parts = args.rsplit('_', 1)
             scenario_key = parts[0]
             client_id_part = parts[1] if len(parts) > 1 else None
-            
+
             # Валидация ClientID (15-20 цифр)
             if client_id_part and re.match(r'^\d{15,20}$', client_id_part):
                 yandex_client_id = client_id_part
                 ad_scenario_key = scenario_key
                 source = f"ad_{scenario_key}"
                 args = None
-        
-        # ===== ФОРМАТ 2: source__cid_123456 =====
-        elif '__cid_' in args:
-            parts = args.split('__cid_')
-            source_part = parts[0]
-            cid_part = parts[1] if len(parts) > 1 else None
-            
-            if cid_part and re.match(r'^\d{15,20}$', cid_part):
-                yandex_client_id = cid_part
-            
-            args = source_part
-        
+
         # ===== ФОРМАТ 3: cid_123456 =====
         elif args.startswith("cid_"):
             potential_cid = args.replace("cid_", "")
@@ -149,7 +153,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             if is_ad_scenario and ad_scenario:
                 user_source = f"ad_{ad_scenario.scenario_key}"
             elif is_post_link and post_config:
-                user_source = f"post_{post_config.config_id}"
+                user_source = post_config.config_id
             else:
                 user_source = source
             
@@ -170,7 +174,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             user = await get_user(session, user_id)
             
             if user:
-                await log_new_user(bot, message.from_user, deep_link=args)
+                await log_new_user(bot, message.from_user, deep_link=source or args)
             
             # Сохраняем ClientID если есть
             if yandex_client_id and user:
