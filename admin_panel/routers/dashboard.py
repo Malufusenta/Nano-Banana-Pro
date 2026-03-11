@@ -120,6 +120,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "purchases_by_tariff": data.get("purchases_by_tariff", {}),
             "top_sources": sorted([{"name": k, "revenue": v["revenue"], "count": v["count"]} for k, v in data.get("revenue_by_source", {}).items()], key=lambda x: x["revenue"], reverse=True)[:5],
             "usd_rate": usd_rate,
+            "new_buyers": data.get("revenue", {}).get("first_purchases", 0),
         })
     user = get_current_user(request)
     if not user:
@@ -191,6 +192,7 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "purchased": data.get("bananas", {}).get("purchased", 0),
         },
         "usd_rate": usd_rate,
+        "new_buyers": data.get("revenue", {}).get("first_purchases", 0),
     })
 
 
