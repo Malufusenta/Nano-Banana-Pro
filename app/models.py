@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column, Numeric
+from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column, Numeric, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from datetime import datetime
@@ -49,6 +49,11 @@ class User(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    __table_args__ = (
+        Index('ix_users_referrer_id', 'referrer_id'),
+        Index('ix_users_source', 'source'),
+    )
+
 # 2. Таблица Покупок
 class Purchase(Base):
     __tablename__ = "purchases"
@@ -77,6 +82,11 @@ class Purchase(Base):
     is_first_purchase: Mapped[bool] = mapped_column(Boolean, default=False)
     # нужно для блока 4: новые vs старые покупатели
     # и для блока 3: CAC = директ / кол-во новых
+
+    __table_args__ = (
+        Index('ix_purchases_user_status', 'user_id', 'status'),
+        Index('ix_purchases_payment_id', 'payment_id', unique=True),
+    )
 
 # 3. Таблица Истории (Контекст + Галерея)
 class MessageHistory(Base):
@@ -198,6 +208,11 @@ class BananaTransaction(Base):
     post_id: Mapped[str | None] = mapped_column(String, nullable=True)
     kie_credits_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     model_type: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index('ix_banana_tx_user_id', 'user_id'),
+        Index('ix_banana_tx_user_type', 'user_id', 'transaction_type'),
+    )
 
 # 8. Таблица задач генерации видео
 class VideoGenerationTask(Base):
