@@ -776,7 +776,8 @@
     var starsNetRub = d.stars_net_rub != null ? d.stars_net_rub : 0;
     var kieUsd = (d.kie && d.kie.total_usd != null) ? d.kie.total_usd : 0;
     var kieRub = kieUsd * (d.usd_rate || 90);
-    var profit = incomeAmount + starsNetRub - directTotal - kieRub;
+    var fixedDaily = d.fixed_daily || 0;
+    var profit = incomeAmount + starsNetRub - directTotal - kieRub - fixedDaily;
     var margin = incomeAmount > 0 ? (profit / incomeAmount * 100) : 0;
     var newUsers = d.new_users != null ? d.new_users : 0;
     var newBuyers = d.new_buyers || 0;
@@ -789,6 +790,7 @@
       (starsNetRub > 0 ? '<div class="profit-row"><span class="profit-row-label">⭐ Stars</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--green)">+' + fmt(starsNetRub) + ' ₽</span></div>' : '') +
       '<div class="profit-row"><span class="profit-row-label">📣 Яндекс Директ</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(directTotal) + ' ₽</span></div>' +
       '<div class="profit-row"><span class="profit-row-label">🤖 KIE.ai (~' + (d.usd_rate || 90).toFixed(2) + '₽/$)</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(kieRub) + ' ₽</span></div>' +
+      (fixedDaily > 0 ? '<div class="profit-row"><span class="profit-row-label">⚙️ Фикс. расходы/день</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(fixedDaily) + ' ₽</span></div>' : '') +
       '<div class="profit-result ' + (isPositive ? 'positive' : 'negative') + '">' +
         '<span class="profit-result-label" style="color:' + (isPositive ? 'var(--green)' : 'var(--accent2)') + '">Чистая прибыль</span>' +
         '<span class="profit-result-val" style="color:' + (isPositive ? 'var(--green)' : 'var(--accent2)') + '">' + (isPositive ? '' : '−') + fmt(Math.abs(profit)) + ' ₽</span>' +
