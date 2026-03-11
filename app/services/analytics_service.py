@@ -5,6 +5,7 @@ import calendar
 from datetime import datetime, timedelta
 from app.models import VideoGenerationTask, FixedExpense
 from app import config
+from app.services.currency import get_usd_rate
 
 
 async def get_analytics_report(session: AsyncSession, date_from: datetime, date_to: datetime):
@@ -635,7 +636,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     }
 
 
-def format_report_message(data: dict, date_str: str, is_all_time: bool = False) -> str:
+async def format_report_message(data: dict, date_str: str, is_all_time: bool = False) -> str:
     """
     Форматирует данные аналитики в красивое сообщение по ТЗ
     
@@ -700,7 +701,8 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
 
     income = rev.get('rub_revenue', 0)
     kie_usd = data.get('kie', {}).get('total_usd', 0)
-    kie_rub = round(kie_usd * config.USD_TO_RUB, 2)
+    usd_rate = await get_usd_rate()
+    kie_rub = round(kie_usd * usd_rate, 2)
     fixed_day = float(fixed.get('daily', 0) or 0)
     direct_total = direct.get('total', 0)
     net_profit = round(income - kie_rub - fixed_day - direct_total, 2)

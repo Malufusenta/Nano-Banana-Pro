@@ -1233,7 +1233,7 @@ async def cb_stats_period(callback: types.CallbackQuery, state: FSMContext):
         data = await get_analytics_report(session, date_from, date_to)
     
     # Форматируем сообщение
-    message = format_report_message(data, date_str, is_all_time=(period == "alltime"))
+    message = await format_report_message(data, date_str, is_all_time=(period == "alltime"))
 
     
     # 🔥 УМНАЯ ОТПРАВКА (разбиваем, если длиннее 4096 символов)
@@ -1317,7 +1317,7 @@ async def cb_stats_custom_process(message: types.Message, state: FSMContext):
             data = await get_analytics_report(session, date_from, date_to)
         
 
-        report = format_report_message(data, date_str)
+        report = await format_report_message(data, date_str)
         
         # Удаляем индикатор
         await wait_msg.delete()
@@ -1434,7 +1434,7 @@ async def cb_stats_navigate(callback: types.CallbackQuery):
         data = await get_analytics_report(session, date_from, date_to)
     
     # Форматируем отчёт
-    report = format_report_message(data, date_str_display)
+    report = await format_report_message(data, date_str_display)
     
     # Отправляем новым сообщением с кнопками навигации
     await callback.message.answer(report, parse_mode="HTML")

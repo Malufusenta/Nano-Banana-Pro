@@ -83,7 +83,7 @@ async def send_daily_report(bot):
     
     # Форматируем сообщение
     date_str = yesterday.strftime("%d.%m.%Y") + " (вчера)"
-    message = format_report_message(data, date_str)
+    message = await format_report_message(data, date_str)
     
     # Отправляем всем админам
     for admin_id in ADMIN_IDS:
