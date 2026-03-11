@@ -150,8 +150,6 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
                         
                         url = urls[0]
                         print(f"✨ Kie: Успех! (Task {task_id})")
-                        print(f"🔍 KIE DATA KEYS: {list(data.keys())}")
-                        print(f"🔍 KIE DATA FULL: {data}")
                         
                         download_timeout = aiohttp.ClientTimeout(total=120)
                         async with session.get(url, timeout=download_timeout) as img_resp:
