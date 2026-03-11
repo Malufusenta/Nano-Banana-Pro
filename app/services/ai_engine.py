@@ -7,6 +7,7 @@ import aiohttp
 import json
 import ssl
 import certifi
+import logging
 from PIL import Image
 from dotenv import load_dotenv
 from google import genai
@@ -15,6 +16,8 @@ from aiogram.types import BufferedInputFile
 from aiogram import Bot
 from pathlib import Path
 from app import config
+
+logger = logging.getLogger(__name__)
 
 # 1. Загрузка ключей
 env_path = Path(__file__).parent.parent.parent / '.env'
@@ -44,7 +47,7 @@ def sanitize_prompt(text: str) -> str:
 # 👇 ДОБАВИЛ АРГУМЕНТ resolution
 async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_pro: bool = False, use_nb2: bool = False, history: list = None, resolution: str = "1K"):
     if not config.KIE_API_KEY:
-        print("❌ KIE ключ не настроен")
+        logger.error("KIE ключ не настроен")
         return None
 
     # --- ФОРМИРОВАНИЕ ПРОМПТА С ПАМЯТЬЮ ---
@@ -74,7 +77,7 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
         model = config.KIE_MODEL_GEN
         mode_name = "GEN"
 
-    print(f"💎 [KIE CORE] Mode: {mode_name} | Res: {resolution} | Imgs: {len(image_urls) if image_urls else 0}")
+    logger.info(f"[KIE] Mode: {mode_name} | Res: {resolution} | Imgs: {len(image_urls) if image_urls else 0}")
 
 # --- СБОРКА PARAMETERS ---
     input_data = {
@@ -149,7 +152,7 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
                             raise Exception("No images found in AI response (Possible Soft Filter)")
                         
                         url = urls[0]
-                        print(f"✨ Kie: Успех! (Task {task_id})")
+                        logger.info(f"[KIE] Успех! Task: {task_id}")
                         
                         download_timeout = aiohttp.ClientTimeout(total=120)
                         async with session.get(url, timeout=download_timeout) as img_resp:
@@ -163,7 +166,7 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
                 except Exception as loop_e:
                     if "Kie REJECT" in str(loop_e) or "No images" in str(loop_e):
                         raise loop_e
-                    print(f"⚠️ Loop Warning: {loop_e}")
+                    logger.warning(f"[KIE] Loop Warning: {loop_e}")
                 
                 await asyncio.sleep(5)
             
