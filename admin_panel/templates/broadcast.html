@@ -223,10 +223,11 @@
               <th>Доставлено</th>
               <th>Заблок.</th>
               <th>Доставка %</th>
+              <th>Клики</th>
             </tr>
           </thead>
           <tbody id="broadcastsBody">
-            <tr><td colspan="9" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>
+            <tr><td colspan="10" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>
           </tbody>
         </table>
       </div>
@@ -290,7 +291,7 @@
   }
 
   async function loadBroadcasts() {
-    document.getElementById('broadcastsBody').innerHTML = '<tr><td colspan="9" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>';
+    document.getElementById('broadcastsBody').innerHTML = '<tr><td colspan="10" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>';
     const data = await fetch(`/api/broadcasts?page=${currentPage}&limit=20`).then(r => r.json());
 
     // Summary
@@ -323,8 +324,9 @@
             <span class="delivery-pct" style="color:${deliveryColor(b.delivery_rate)}">${b.delivery_rate}%</span>
           </div>
         </td>
+        <td class="mono" style="color:var(--accent)">${fmt(b.clicks_count)} <span style="font-size:10px;color:var(--text3)">${b.click_rate}%</span></td>
       </tr>
-    `).join('') || '<tr><td colspan="9" style="padding:30px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+    `).join('') || '<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
 
     renderPagination(data.page, data.pages);
   }
@@ -357,6 +359,8 @@
         <div class="stat-box"><div class="stat-box-val" style="color:var(--green)">${fmt(b.delivered_count)}</div><div class="stat-box-lbl">Доставлено</div></div>
         <div class="stat-box"><div class="stat-box-val" style="color:var(--red)">${fmt(b.blocked_count)}</div><div class="stat-box-lbl">Заблокировали</div></div>
         <div class="stat-box"><div class="stat-box-val" style="color:${deliveryColor(deliveredPct)}">${deliveredPct}%</div><div class="stat-box-lbl">Доставка</div></div>
+        <div class="stat-box"><div class="stat-box-val" style="color:var(--accent)">${fmt(b.clicks_count)}</div><div class="stat-box-lbl">Клики</div></div>
+        <div class="stat-box"><div class="stat-box-val" style="color:var(--accent)">${b.click_rate}%</div><div class="stat-box-lbl">CTR</div></div>
       </div>
 
       <div class="big-delivery">
