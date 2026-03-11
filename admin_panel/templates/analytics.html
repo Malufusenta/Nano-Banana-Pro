@@ -310,6 +310,7 @@
   overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
 
   const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
   const fmtDec = n => parseFloat(n||0).toFixed(2);
   let currentPeriod = 'month';
 
@@ -343,13 +344,13 @@
     const d = await fetch(`/api/analytics/funnel?period=${period}`).then(r => r.json());
     const set = (id, val) => { const el = document.getElementById(id); if(el) { el.textContent = val; el.classList.remove('loading'); }};
 
-    set('f-new-users', fmt(d.new_users));
-    set('f-active', fmt(d.active_users));
+    set('f-new-users', fmtInt(d.new_users));
+    set('f-active', fmtInt(d.active_users));
     document.getElementById('f-active-pct').textContent = d.new_users > 0 ? `${((d.active_users/d.new_users)*100).toFixed(1)}% от новых` : '—';
-    set('f-buyers', fmt(d.total_buyers));
+    set('f-buyers', fmtInt(d.total_buyers));
     document.getElementById('f-conv').textContent = `CR: ${fmtDec(d.conversion_rate)}%`;
-    set('f-new-buyers', fmt(d.new_buyers));
-    document.getElementById('f-vet-buyers').textContent = `повторных: ${fmt(d.veteran_buyers)}`;
+    set('f-new-buyers', fmtInt(d.new_buyers));
+    document.getElementById('f-vet-buyers').textContent = `повторных: ${fmtInt(d.veteran_buyers)}`;
     set('f-revenue', fmt(d.revenue) + ' ₽');
     document.getElementById('f-avg').textContent = `avg: ${fmt(d.avg_check)} ₽`;
 
@@ -368,8 +369,8 @@
       <tr>
         <td class="mono" style="color:var(--text3)">${i+1}</td>
         <td style="font-weight:500">${s.source}</td>
-        <td class="mono">${fmt(s.users)}</td>
-        <td class="mono">${fmt(s.buyers)}</td>
+        <td class="mono">${fmtInt(s.users)}</td>
+        <td class="mono">${fmtInt(s.buyers)}</td>
         <td>
           <span class="mono" style="color:${s.conversion>=10?'var(--green)':s.conversion>=5?'var(--accent)':'var(--text2)'}">${fmtDec(s.conversion)}%</span>
         </td>

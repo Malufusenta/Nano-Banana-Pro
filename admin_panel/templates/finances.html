@@ -42,11 +42,11 @@ async function openUserModal(userId) {
         <!-- Балансы -->
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:18px;font-weight:700;color:var(--accent)">${fmt(u.balance_paid)}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--accent)">${fmtInt(u.balance_paid)}</div>
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Платные 🍌</div>
           </div>
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmt(u.balance_free)}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmtInt(u.balance_free)}</div>
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Бесплатные 🍌</div>
           </div>
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
@@ -54,7 +54,7 @@ async function openUserModal(userId) {
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Выручка</div>
           </div>
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:18px;font-weight:700;color:var(--purple)">${fmt(u.total_generations_used)}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--purple)">${fmtInt(u.total_generations_used)}</div>
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Генераций</div>
           </div>
         </div>
@@ -496,6 +496,7 @@ async function openUserModal(userId) {
   overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
 
   const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
   const set = (id, val) => { const el = document.getElementById(id); if (el) { el.textContent = val; el.classList.remove('loading'); } };
 
 
@@ -559,14 +560,14 @@ async function openUserModal(userId) {
 
     // Карточки
     set('s-rub', fmt(d.rub_revenue) + ' ₽');
-    set('s-rub-sub', fmt(d.rub_count) + ' транзакций');
-    set('s-stars', fmt(d.stars_revenue) + ' ⭐');
-    set('s-stars-sub', fmt(d.stars_count) + ' транзакций');
-    set('s-count', fmt(d.total_count));
-    set('s-count-sub', fmt(d.rub_count) + ' руб + ' + fmt(d.stars_count) + ' stars');
+    set('s-rub-sub', fmtInt(d.rub_count) + ' транзакций');
+    set('s-stars', fmtInt(d.stars_revenue) + ' ⭐');
+    set('s-stars-sub', fmtInt(d.stars_count) + ' транзакций');
+    set('s-count', fmtInt(d.total_count));
+    set('s-count-sub', fmtInt(d.rub_count) + ' руб + ' + fmtInt(d.stars_count) + ' stars');
     set('s-avg', fmt(d.avg_check) + ' ₽');
-    set('s-first', fmt(d.first_buyers));
-    set('s-first-sub', 'повторных: ' + fmt(d.repeat_buyers));
+    set('s-first', fmtInt(d.first_buyers));
+    set('s-first-sub', 'повторных: ' + fmtInt(d.repeat_buyers));
 
     // График по дням
     revenueChart.data.labels = d.daily.map(x => x.day.slice(5).replace('-', '.'));
@@ -582,7 +583,7 @@ async function openUserModal(userId) {
         <div class="tariff-bar-wrap">
           <div class="tariff-bar" style="width:${Math.round(t.revenue/maxRev*100)}%;background:${TARIFF_COLORS[t.name]||'var(--accent)'}"></div>
         </div>
-        <div class="tariff-count">${fmt(t.count)} шт</div>
+        <div class="tariff-count">${fmtInt(t.count)} шт</div>
         <div class="tariff-rev">${fmt(t.revenue)} ₽</div>
       </div>
     `).join('');
@@ -598,8 +599,8 @@ async function openUserModal(userId) {
     const newPct = Math.round(d.first_buyers / total * 100);
     document.getElementById('split-new-bar').style.width = newPct + '%';
     document.getElementById('split-repeat-bar').style.width = (100 - newPct) + '%';
-    set('split-new-val', fmt(d.first_buyers) + ' (' + newPct + '%)');
-    set('split-repeat-val', fmt(d.repeat_buyers) + ' (' + (100-newPct) + '%)');
+    set('split-new-val', fmtInt(d.first_buyers) + ' (' + newPct + '%)');
+    set('split-repeat-val', fmtInt(d.repeat_buyers) + ' (' + (100-newPct) + '%)');
 
     // Транзакции
     document.getElementById('transactions-body').innerHTML = d.recent.map(t => `

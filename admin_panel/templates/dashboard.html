@@ -617,6 +617,7 @@
 
   // УТИЛИТЫ
   const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
   const fmtDec = n => parseFloat(n || 0).toFixed(2);
 
   const set = (id, val) => {
@@ -649,7 +650,7 @@
           '<div class="funnel-row-head">' +
             '<span class="funnel-label">' + step.icon + ' ' + step.label + '</span>' +
             '<span class="funnel-meta">' +
-              '<span class="funnel-count">' + fmt(step.val) + '</span>' +
+              '<span class="funnel-count">' + fmtInt(step.val) + '</span>' +
               '<span class="funnel-pct">' + pctLabel + '</span>' +
             '</span>' +
           '</div>' +
@@ -670,7 +671,7 @@
     bananasEl.innerHTML = bRows.map(function(r) {
       return '<div class="bananas-row">' +
         '<span class="bananas-row-left"><span class="bananas-row-icon">' + r.icon + '</span><span class="bananas-row-label">' + r.label + '</span></span>' +
-        '<span style="color:' + r.color + ';font-weight:700;font-family:\'JetBrains Mono\',monospace;font-size:13px">' + fmt(r.val) + '</span>' +
+        '<span style="color:' + r.color + ';font-weight:700;font-family:\'JetBrains Mono\',monospace;font-size:13px">' + fmtInt(r.val) + '</span>' +
       '</div>';
     }).join('');
     bananasEl.classList.remove('loading');
@@ -685,7 +686,7 @@
       '<div class="kie-totals">' +
         '<div class="kie-total-chip">' +
           '<div class="kc-label">Кредиты</div>' +
-          '<div class="kc-value" style="color:var(--accent)">' + fmt(kTotalCredits) + '</div>' +
+          '<div class="kc-value" style="color:var(--accent)">' + fmtInt(kTotalCredits) + '</div>' +
         '</div>' +
         '<div class="kie-total-chip">' +
           '<div class="kc-label">Стоимость</div>' +
@@ -701,8 +702,8 @@
       kieHtml += '<div class="kie-model">' +
         '<span class="kie-model-name">' + kName + '</span>' +
         '<span class="kie-model-stats">' +
-          '<span class="kie-gen">' + fmt(kGens) + ' ген</span>' +
-          '<span class="kie-credits">' + fmt(kCredits) + ' кр</span>' +
+          '<span class="kie-gen">' + fmtInt(kGens) + ' ген</span>' +
+          '<span class="kie-credits">' + fmtInt(kCredits) + ' кр</span>' +
         '</span>' +
       '</div>';
     }
@@ -732,7 +733,7 @@
           '<div class="kie-balance-chips">' +
             '<div class="kie-balance-chip ' + chipClass + '">' +
               '<div class="kbc-label">💳 Кредиты</div>' +
-              '<div class="kbc-val">' + fmt(credits) + '</div>' +
+              '<div class="kbc-val">' + fmtInt(credits) + '</div>' +
             '</div>' +
             '<div class="kie-balance-chip ok">' +
               '<div class="kbc-label">💵 Баланс</div>' +
@@ -807,27 +808,27 @@
   function updateDashboard(d) {
     set('m-revenue', fmt(d.revenue) + ' ₽');
     document.getElementById('m-revenue-sub').textContent = 'рублей';
-    set('m-stars', fmt(d.stars_revenue) + ' ⭐');
-    document.getElementById('m-stars-sub').textContent = `${fmt(d.stars_count)} транзакций`;
-    set('m-transactions', fmt(d.transactions));
-    set('m-new-users', fmt(d.new_users));
-    set('m-active', fmt(d.active_users));
+    set('m-stars', fmtInt(d.stars_revenue) + ' ⭐');
+    document.getElementById('m-stars-sub').textContent = `${fmtInt(d.stars_count)} транзакций`;
+    set('m-transactions', fmtInt(d.transactions));
+    set('m-new-users', fmtInt(d.new_users));
+    set('m-active', fmtInt(d.active_users));
     document.getElementById('m-active-sub').textContent = (d.active_users && d.new_users ? (d.active_users/d.new_users*100).toFixed(1) : 0) + '% от новых';
-    set('m-buyers', fmt(d.total_buyers));
+    set('m-buyers', fmtInt(d.total_buyers));
     document.getElementById('m-buyers-sub').textContent = 'CR: ' + (d.conversion_rate||0).toFixed(2) + '%';
-    set('m-conversion', fmt(d.total_buyers - (d.newbie_buyers||0)));
+    set('m-conversion', fmtInt(d.total_buyers - (d.newbie_buyers||0)));
     set('m-avg-check', fmt(d.avg_check) + ' ₽');
     set('m-retention', (d.retention||0).toFixed(2));
     set('m-ltv', fmt(d.ltv) + ' ₽');
-    set('m-bananas-spent', fmt(d.bananas_spent));
-    set('m-bananas-given', fmt(d.bananas_given));
+    set('m-bananas-spent', fmtInt(d.bananas_spent));
+    set('m-bananas-given', fmtInt(d.bananas_given));
     renderExtras(d);
     // тарифы
     const tariffs = d.purchases_by_tariff || {};
     const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🔥','832 банана':'🔥','Telegram Stars':'⭐'};
     const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
     document.getElementById('tariffs-list').innerHTML = order.map(name =>
-      `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
+      `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmtInt(tariffs[name]||0)} шт.</span></div>`
     ).join('');
     // топ источников
     const sources = d.top_sources || [];
@@ -836,7 +837,7 @@
         <div class="tariff-item">
           <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span>
           <span style="display:flex;gap:12px;align-items:center">
-            <span style="font-size:11px;color:var(--text3)">${fmt(s.count)} покуп.</span>
+            <span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span>
             <span class="tariff-count">${fmt(s.revenue)} ₽</span>
           </span>
         </div>`).join('')
@@ -849,21 +850,21 @@
       const d = await fetch(`/api/dashboard/stats?period=${period}`).then(r => r.json());
       set('m-revenue', fmt(d.revenue) + ' ₽');
       document.getElementById('m-revenue-sub').textContent = 'рублей';
-      set('m-stars', fmt(d.stars_revenue) + ' ⭐');
-      document.getElementById('m-stars-sub').textContent = `${fmt(d.stars_count)} транзакций`;
-      set('m-transactions', fmt(d.transactions));
+      set('m-stars', fmtInt(d.stars_revenue) + ' ⭐');
+      document.getElementById('m-stars-sub').textContent = `${fmtInt(d.stars_count)} транзакций`;
+      set('m-transactions', fmtInt(d.transactions));
       document.getElementById('m-transactions-sub').textContent = 'покупок';
-      set('m-users', fmt(d.new_users));
-      document.getElementById('m-users-sub').textContent = `всего: ${fmt(d.total_users)}`;
+      set('m-users', fmtInt(d.new_users));
+      document.getElementById('m-users-sub').textContent = `всего: ${fmtInt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
-      document.getElementById('m-cr-sub').textContent = `${fmt(d.total_buyers)} покупателей`;
-      set('m-blocked', fmt(d.blocked || 0));
+      document.getElementById('m-cr-sub').textContent = `${fmtInt(d.total_buyers)} покупателей`;
+      set('m-blocked', fmtInt(d.blocked || 0));
       set('m-avgcheck', fmt(d.avg_check) + ' ₽');
-      set('m-dau', fmt(d.active_users));
+      set('m-dau', fmtInt(d.active_users));
       set('m-retention', fmtDec(d.retention));
       set('m-ltv', fmt(d.ltv) + ' ₽');
-    set('m-bananas-spent', fmt(d.bananas_spent));
-    set('m-bananas-given', fmt(d.bananas_given));
+    set('m-bananas-spent', fmtInt(d.bananas_spent));
+    set('m-bananas-given', fmtInt(d.bananas_given));
     renderExtras(d);
 
       // Тарифы
@@ -871,7 +872,7 @@
       const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
       const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🍌','832 банана':'🔥','Telegram Stars':'⭐️'};
       document.getElementById('tariffs-list').innerHTML = order.map(name =>
-        `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
+        `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmtInt(tariffs[name]||0)} шт.</span></div>`
       ).join('');
 
       const sources = d.top_sources || [];
@@ -880,7 +881,7 @@
           <div class="tariff-item">
             <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span>
             <span style="display:flex;gap:12px;align-items:center">
-              <span style="font-size:11px;color:var(--text3)">${fmt(s.count)} покуп.</span>
+              <span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span>
               <span class="tariff-count">${fmt(s.revenue)} ₽</span>
             </span>
           </div>`).join('')
@@ -913,31 +914,31 @@
       const d = await fetch(`/api/dashboard/stats?date_from=${from}&date_to=${to}`).then(r => r.json());
       set('m-revenue', fmt(d.revenue) + ' ₽');
       document.getElementById('m-revenue-sub').textContent = 'рублей';
-      set('m-stars', fmt(d.stars_revenue) + ' ⭐');
-      document.getElementById('m-stars-sub').textContent = `${fmt(d.stars_count)} транзакций`;
-      set('m-transactions', fmt(d.transactions));
+      set('m-stars', fmtInt(d.stars_revenue) + ' ⭐');
+      document.getElementById('m-stars-sub').textContent = `${fmtInt(d.stars_count)} транзакций`;
+      set('m-transactions', fmtInt(d.transactions));
       document.getElementById('m-transactions-sub').textContent = 'покупок';
-      set('m-users', fmt(d.new_users));
-      document.getElementById('m-users-sub').textContent = `всего: ${fmt(d.total_users)}`;
+      set('m-users', fmtInt(d.new_users));
+      document.getElementById('m-users-sub').textContent = `всего: ${fmtInt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
-      document.getElementById('m-cr-sub').textContent = `${fmt(d.total_buyers)} покупателей`;
-      set('m-blocked', fmt(d.blocked || 0));
+      document.getElementById('m-cr-sub').textContent = `${fmtInt(d.total_buyers)} покупателей`;
+      set('m-blocked', fmtInt(d.blocked || 0));
       set('m-avgcheck', fmt(d.avg_check) + ' ₽');
-      set('m-dau', fmt(d.active_users));
+      set('m-dau', fmtInt(d.active_users));
       set('m-retention', fmtDec(d.retention));
       set('m-ltv', fmt(d.ltv) + ' ₽');
-    set('m-bananas-spent', fmt(d.bananas_spent));
-    set('m-bananas-given', fmt(d.bananas_given));
+    set('m-bananas-spent', fmtInt(d.bananas_spent));
+    set('m-bananas-given', fmtInt(d.bananas_given));
     renderExtras(d);
       const tariffs = d.purchases_by_tariff || {};
       const order = ['10 бананов','44 банана','140 бананов','340 бананов','832 банана','Telegram Stars'];
       const emoji = {'10 бананов':'🍌','44 банана':'🍌','140 бананов':'🔥','340 бананов':'🍌','832 банана':'🔥','Telegram Stars':'⭐️'};
       document.getElementById('tariffs-list').innerHTML = order.map(name =>
-        `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmt(tariffs[name]||0)} шт.</span></div>`
+        `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmtInt(tariffs[name]||0)} шт.</span></div>`
       ).join('');
       const sources = d.top_sources || [];
       document.getElementById('sources-list').innerHTML = sources.length
-        ? sources.map((s, i) => `<div class="tariff-item"><span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span><span style="display:flex;gap:12px;align-items:center"><span style="font-size:11px;color:var(--text3)">${fmt(s.count)} покуп.</span><span class="tariff-count">${fmt(s.revenue)} ₽</span></span></div>`).join('')
+        ? sources.map((s, i) => `<div class="tariff-item"><span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span><span style="display:flex;gap:12px;align-items:center"><span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span><span class="tariff-count">${fmt(s.revenue)} ₽</span></span></div>`).join('')
         : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
       document.querySelectorAll('.metric-value').forEach(el => el.classList.remove('loading'));
     } catch(e) { console.error(e); }
