@@ -68,7 +68,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     stars_result = await session.execute(stars_revenue_query)
     stars_data = stars_result.first()
 
-    stars_revenue = stars_data.stars_revenue or 0
+    stars_revenue = float(stars_data.stars_revenue or 0)
     stars_count = stars_data.stars_count or 0
 
     # Конвертация Stars в рубли: 1 звезда = $0.013, минус комиссия Telegram 30%
@@ -570,7 +570,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     fixed_expenses = fixed_result.scalars().all()
     fixed_total_month = sum(e.amount_rub for e in fixed_expenses)
     days_in_month = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
-    fixed_daily = round(fixed_total_month / days_in_month, 2)
+    fixed_daily = float(round(fixed_total_month / days_in_month, 2))
     return {
     'revenue': {
         'total': total_revenue,
@@ -701,7 +701,7 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
     income = rev.get('income_amount', 0)
     kie_usd = data.get('kie', {}).get('total_usd', 0)
     kie_rub = round(kie_usd * config.USD_TO_RUB, 2)
-    fixed_day = fixed.get('daily', 0)
+    fixed_day = float(fixed.get('daily', 0) or 0)
     direct_total = direct.get('total', 0)
     net_profit = round(income - kie_rub - fixed_day - direct_total, 2)
     margin = round((net_profit / rev['rub_revenue']) * 100, 1) if rev['rub_revenue'] > 0 else 0
@@ -712,7 +712,7 @@ def format_report_message(data: dict, date_str: str, is_all_time: bool = False) 
     if direct_total > 0 and new_buyers > 0:
         text += f"CAC: {round(direct_total / new_buyers, 2)} ₽\n"
     else:
-        text += f"CAC: — (подключи Яндекс Директ)\n"
+        text += f"CAC: — (нет расходов в Директ за период)\n"
     text += "\n"
 
     # Показываем звёзды только если они есть
