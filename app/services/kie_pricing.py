@@ -14,7 +14,7 @@ KIE_CREDITS = {
     "video": 56,      # ~$0.28
 }
 
-KIE_CREDIT_TO_USD = 0.00450  # $0.005 с учетом 10% бонусных кредитов (тариф $500)
+KIE_CREDIT_TO_USD = 0.005
 
 def get_kie_credits(model_type: str, resolution: str = "1K") -> int:
     if model_type == "standard":
