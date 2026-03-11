@@ -616,7 +616,7 @@
   }
 
   // УТИЛИТЫ
-  const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0));
+  const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const fmtDec = n => parseFloat(n || 0).toFixed(2);
 
   const set = (id, val) => {

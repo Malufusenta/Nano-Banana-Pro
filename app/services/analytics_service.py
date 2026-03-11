@@ -679,7 +679,7 @@ async def format_report_message(data: dict, date_str: str, is_all_time: bool = F
     
     # ДЕНЬГИ
     text += "💰 ДЕНЬГИ\n"
-    text += f"Выручка (рубли): {rev['rub_revenue']:.0f} ₽\n"
+    text += f"Выручка (рубли): {rev['rub_revenue']:.2f} ₽\n"
     text += f"Чистая выручка: {rev['income_amount']:.2f} ₽\n"
 
     # ПОСЛЕ блока 💰 ДЕНЬГИ, добавить:
@@ -803,10 +803,10 @@ async def format_report_message(data: dict, date_str: str, is_all_time: bool = F
                 old_rev = stats.get('old_revenue', 0)
                 
                 # Первая строка: источник, общая выручка, средний чек
-                text += f"   • {source}: <b>{total_rev:.0f} ₽</b> (ср: {avg_check:.0f} ₽)\n"
+                text += f"   • {source}: <b>{total_rev:.2f} ₽</b> (ср: {avg_check:.2f} ₽)\n"
                 
                 # Вторая строка: детализация New + Old
-                text += f"     ↳ {new_rev:.0f} ₽ (New) + {old_rev:.0f} ₽ (Old)\n"
+                text += f"     ↳ {new_rev:.2f} ₽ (New) + {old_rev:.2f} ₽ (Old)\n"
     
     # ОБОРОТ БАНАНОВ
     total_earned = bananas['earned_ref'] + bananas['earned_sub'] + bananas['earned_welcome']
@@ -1051,7 +1051,7 @@ def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> 
             count_shown += 1
 
             # Заголовок источника
-            text_sources_block += f"📌 <b>Источник: {source}</b> (Выручка: {stat['revenue']:.0f} ₽)\n"
+            text_sources_block += f"📌 <b>Источник: {source}</b> (Выручка: {stat['revenue']:.2f} ₽)\n"
             
             # Строки выводим только если там есть значения
             if stat[1]['count'] > 0:

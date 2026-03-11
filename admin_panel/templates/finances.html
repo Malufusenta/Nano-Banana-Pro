@@ -495,7 +495,7 @@ async function openUserModal(userId) {
   document.getElementById('burgerBtn').addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
   overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
 
-  const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0));
+  const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const set = (id, val) => { const el = document.getElementById(id); if (el) { el.textContent = val; el.classList.remove('loading'); } };
 
 
