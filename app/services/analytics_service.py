@@ -719,19 +719,22 @@ async def format_report_message(data: dict, date_str: str, is_all_time: bool = F
         text += "\n"
 
     income = rev.get('rub_revenue', 0)
+    income_net = rev.get('income_amount', 0)
+    yokassa_fee = round(income - income_net, 2)
     kie_usd = data.get('kie', {}).get('total_usd', 0)
     usd_rate = await get_usd_rate()
     kie_rub = round(kie_usd * usd_rate, 2)
     fixed_day = float(fixed.get('daily', 0) or 0)
     direct_total = direct.get('total', 0)
-    net_profit = round(income - kie_rub - fixed_day - direct_total, 2)
     stars_net_rub = rev.get('stars_net_rub', 0)
-    net_profit = round(income + stars_net_rub - kie_rub - fixed_day - direct_total, 2)
-    margin = round((net_profit / income) * 100, 1) if income > 0 else 0
+    net_profit = round(income_net + stars_net_rub - kie_rub - fixed_day - direct_total, 2)
+    margin = round((net_profit / (income_net + stars_net_rub)) * 100, 1) if (income_net + stars_net_rub) > 0 else 0
     new_buyers = rev.get('cac_buyers', 0)
     text += "📈 ГЛАВНЫЕ МЕТРИКИ\n"
     text += f"Чистая прибыль: {net_profit} ₽\n"
     text += f"Маржинальность: {margin}%\n"
+    if yokassa_fee > 0:
+        text += f"Комиссия ЮКасса: -{yokassa_fee:.2f} ₽\n"
     if direct_total > 0 and new_buyers > 0:
         text += f"CAC: {round(direct_total / new_buyers, 2)} ₽\n"
     else:
