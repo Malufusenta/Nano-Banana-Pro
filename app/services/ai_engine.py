@@ -19,6 +19,8 @@ from app import config
 
 logger = logging.getLogger(__name__)
 
+_generation_semaphore = asyncio.Semaphore(30)
+
 # 1. Загрузка ключей
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -178,4 +180,5 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
 # ==============================================================================
 # 👇 ДОБАВИЛ resolution В АРГУМЕНТЫ
 async def generate_image(bot: Bot, prompt: str, image_urls: list = None, is_premium: bool = False, aspect_ratio: str = "1:1", use_pro_model: bool = False, use_nb2_model: bool = False, history: list = None, resolution: str = "1K"):
-    return await _run_kie(prompt, image_urls, aspect_ratio, use_pro_model, use_nb2_model, history, resolution)
+    async with _generation_semaphore:
+        return await _run_kie(prompt, image_urls, aspect_ratio, use_pro_model, use_nb2_model, history, resolution)
