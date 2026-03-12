@@ -1294,9 +1294,9 @@ async def cb_reroll(callback: types.CallbackQuery, bot: Bot):
             params.get("ratio", "1:1"), 
             params.get("cost", 1), 
             params.get("pro", False), 
+            params.get("nb2", False),
             params.get("resolution", "1K"),
             is_blend_mode=params.get("is_blend_mode", False)
-
         )
     except Exception as e:
         print(f"❌ Ошибка reroll: {e}")
