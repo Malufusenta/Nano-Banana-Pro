@@ -360,8 +360,20 @@
 
     const txnsHtml = data.transactions.length ? `
       <table class="mini-table">
-        <tr><th>Тип</th><th>Кол-во</th><th>Описание</th><th>Дата</th></tr>
-        ${data.transactions.map(t => `<tr><td class="mono" style="font-size:10px">${t.type}</td><td class="mono" style="${t.amount>0?'color:var(--green)':'color:var(--red)'}">${t.amount>0?'+':''}${t.amount}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${t.description}</td><td class="mono" style="color:var(--text3)">${t.created_at}</td></tr>`).join('')}
+        <tr>
+          <th>Тип</th><th>Кол-во</th><th>Описание</th><th>Дата</th><th>Генерация</th>
+        </tr>
+        ${data.transactions.map(t => `
+          <tr>
+            <td class="mono" style="font-size:10px">${t.type}</td>
+            <td class="mono" style="${t.amount>0?'color:var(--green)':'color:var(--red)'}">${t.amount>0?'+':''}${t.amount}</td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${t.description}</td>
+            <td class="mono" style="color:var(--text3)">${t.created_at}</td>
+            <td style="text-align:center">
+              ${t.post_id ? `<span onclick="event.stopPropagation(); openKieModal('${t.post_id}')" style="cursor:pointer;font-size:16px" title="Посмотреть генерацию">🔗</span>` : ''}
+            </td>
+          </tr>
+        `).join('')}
       </table>
     ` : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Транзакций нет</div>';
 
@@ -484,8 +496,95 @@
   document.getElementById('modalClose').addEventListener('click', () => document.getElementById('modalOverlay').classList.remove('open'));
   document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === document.getElementById('modalOverlay')) document.getElementById('modalOverlay').classList.remove('open'); });
 
+  // KIE MODAL
+  function openKieModal(taskId) {
+    const modal = document.getElementById('kie-modal');
+    modal.style.display = 'flex';
+    document.getElementById('kie-modal-content').innerHTML =
+      '<div style="color:var(--text3);text-align:center;padding:40px">Загрузка...</div>';
+
+    fetch(`/api/kie/task/${taskId}`, {credentials: 'include'})
+      .then(r => r.json())
+      .then(data => renderKieModal(data, taskId))
+      .catch(() => {
+        document.getElementById('kie-modal-content').innerHTML =
+          '<div style="color:var(--red);text-align:center;padding:40px">Ошибка загрузки</div>';
+      });
+  }
+
+  function closeKieModal() {
+    document.getElementById('kie-modal').style.display = 'none';
+  }
+
+  // Наш бэкенд возвращает уже разобранный плоский объект (бэкенд парсит param/resultJson)
+  function renderKieModal(data, taskId) {
+    if (data.error) {
+      document.getElementById('kie-modal-content').innerHTML =
+        '<div style="color:var(--red);text-align:center;padding:40px">Данные не найдены</div>';
+      return;
+    }
+
+    const prompt = data.prompt || '—';
+    const refs = data.image_input || [];
+    const resultUrls = data.result_urls || [];
+    const state = data.state || '—';
+    const stateColor = state === 'success' ? 'var(--green)' : state === 'fail' ? 'var(--red)' : 'var(--text3)';
+
+    document.getElementById('kie-modal-content').innerHTML = `
+      <div style="margin-bottom:12px">
+        <span style="font-size:11px;color:var(--text3)">Task ID: </span>
+        <span class="mono" style="font-size:11px;color:var(--text2)">${taskId}</span>
+        <span style="margin-left:12px;font-size:11px;color:${stateColor};font-weight:600">${state}</span>
+      </div>
+
+      ${resultUrls.length ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Результат:</div>
+          ${resultUrls.map(url => `
+            <a href="${url}" target="_blank">
+              <img src="${url}" style="max-width:100%;border-radius:8px;display:block;margin-bottom:8px" />
+            </a>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      ${refs.length ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Референс (image_input):</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${refs.map(url => `
+              <a href="${url}" target="_blank">
+                <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:6px" />
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Промпт:</div>
+        <div style="font-size:12px;color:var(--text1);background:var(--bg3);padding:10px;border-radius:8px;line-height:1.5;word-break:break-word">${prompt}</div>
+      </div>
+    `;
+  }
+
+  document.getElementById('kie-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeKieModal();
+  });
+
   // СТАРТ
   loadUsers();
 </script>
+
+<div id="kie-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border-radius:16px;padding:24px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;position:relative">
+    <button onclick="closeKieModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text1);font-size:20px;cursor:pointer">✕</button>
+    <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:16px">Просмотр генерации</div>
+    <div id="kie-modal-content">
+      <div style="color:var(--text3);text-align:center;padding:40px">Загрузка...</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

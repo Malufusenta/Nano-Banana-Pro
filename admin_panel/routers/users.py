@@ -119,6 +119,8 @@ async def get_user_detail(telegram_id: int, user=Depends(require_auth)):
             "type": t.transaction_type or "—",
             "description": t.description or "—",
             "created_at": t.created_at.strftime("%d.%m.%Y %H:%M") if t.created_at else "—",
+            "post_id": t.post_id,
+            "model_type": t.model_type or "—",
         } for t in txns],
         "generations": [{
             "id": g.id, "cost": g.cost, "status": g.status,
@@ -188,3 +190,45 @@ async def send_message(telegram_id: int, request: Request, user=Depends(require_
             )
             await db.commit()
     return {"ok": data.get("ok", False), "error": data.get("description", "")}
+
+
+@router.get("/api/kie/task/{task_id}")
+async def get_kie_task(task_id: str, user=Depends(require_auth)):
+    import aiohttp, ssl, certifi, json
+    from app import config
+    from fastapi.responses import JSONResponse
+
+    headers = {"Authorization": f"Bearer {config.KIE_API_KEY}"}
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+
+    try:
+        async with aiohttp.ClientSession(connector=connector) as s:
+            async with s.get(
+                f"{config.KIE_URL}/recordInfo",
+                headers=headers,
+                params={"taskId": task_id},
+            ) as resp:
+                raw = await resp.json()
+
+        d = raw.get("data") or {}
+
+        result_json = d.get("resultJson")
+        if isinstance(result_json, str):
+            result_json = json.loads(result_json)
+
+        param = d.get("param")
+        if isinstance(param, str):
+            param = json.loads(param)
+
+        return JSONResponse({
+            "task_id": d.get("taskId"),
+            "state": d.get("state"),
+            "result_urls": (result_json or {}).get("resultUrls", []),
+            "prompt": (param or {}).get("input", {}).get("prompt", ""),
+            "image_input": (param or {}).get("input", {}).get("image_input", []),
+            "created_at": d.get("createTime"),
+            "complete_time": d.get("completeTime"),
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
