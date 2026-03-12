@@ -100,6 +100,26 @@ async def get_funnel(period: str = Query(default="month"), user=Depends(require_
     }
 
 
+@router.get("/api/analytics/direct-campaigns")
+async def get_direct_campaigns(user=Depends(require_auth)):
+    """Возвращает список названий кампаний из Яндекс.Директ"""
+    if not config.YANDEX_DIRECT_TOKEN:
+        return {'campaigns': [], 'error': 'Токен не настроен'}
+
+    from datetime import date, timedelta
+
+    date_to = date.today()
+    date_from = date_to - timedelta(days=90)
+
+    data = await get_direct_spending(config.YANDEX_DIRECT_TOKEN, date_from, date_to)
+
+    if data.get('error'):
+        return {'campaigns': [], 'error': data['error']}
+
+    campaign_names = sorted(data['campaigns'].keys())
+    return {'campaigns': campaign_names, 'error': None}
+
+
 @router.get("/api/analytics/campaigns")
 async def get_campaigns_stats(
     period: str = Query(default="month"),

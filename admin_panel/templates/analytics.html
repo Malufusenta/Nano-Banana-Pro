@@ -99,6 +99,8 @@
   .mapping-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
   .mapping-form input[type="text"] { flex:1; min-width:200px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); }
   .mapping-form input[type="text"]:focus { border-color:var(--accent); }
+  .mapping-form select { flex:1; min-width:200px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); cursor:pointer; }
+  .mapping-form select:focus { border-color:var(--accent); }
   .mapping-form button { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface3); color:var(--text); font-size:13px; font-weight:500; cursor:pointer; transition:all var(--transition); white-space:nowrap; }
   .mapping-form button:hover { border-color:var(--accent); color:var(--accent); }
   tfoot .totals-row td { font-weight:600; background:var(--surface2); border-top:2px solid var(--border); }
@@ -300,7 +302,10 @@
 
       <div class="mapping-form">
         <input type="hidden" id="mapping-id">
-        <input type="text" id="mapping-name" placeholder='Название кампании в Яндексе (например: Rsya_3 от 06-01-2026)'>
+        <select id="mapping-name">
+          <option value="">⏳ Загрузка кампаний...</option>
+        </select>
+        <button onclick="refreshDirectCampaigns()" title="Обновить список">🔄</button>
         <input type="text" id="mapping-sources" placeholder='UTM через запятую: yandex_rsya_3, ad_yandex_rsya_3__cid'>
         <button onclick="saveMapping()">Сохранить</button>
         <button onclick="clearMappingForm()">Очистить</button>
@@ -544,6 +549,40 @@
     }
   }
 
+  async function refreshDirectCampaigns() {
+    const select = document.getElementById('mapping-name');
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">⏳ Загрузка...</option>';
+
+    try {
+      const res = await fetch('/api/analytics/direct-campaigns');
+      const data = await res.json();
+
+      if (data.error) {
+        select.innerHTML = `<option value="">❌ Ошибка: ${data.error}</option>`;
+        return;
+      }
+
+      if (data.campaigns.length === 0) {
+        select.innerHTML = '<option value="">Кампаний не найдено</option>';
+        return;
+      }
+
+      select.innerHTML = '<option value="">— Выберите кампанию —</option>';
+      for (const name of data.campaigns) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+      }
+
+      // Восстанавливаем выбранное значение если было (при редактировании)
+      if (currentVal) select.value = currentVal;
+    } catch (e) {
+      select.innerHTML = '<option value="">❌ Ошибка загрузки</option>';
+    }
+  }
+
   async function saveMapping() {
     const id = document.getElementById('mapping-id').value;
     const name = document.getElementById('mapping-name').value.trim();
@@ -569,7 +608,7 @@
 
   function editMapping(id, name, sources) {
     document.getElementById('mapping-id').value = id;
-    document.getElementById('mapping-name').value = name;
+    document.getElementById('mapping-name').value = name;  // select найдёт option по value
     document.getElementById('mapping-sources').value = sources;
   }
 
@@ -584,6 +623,7 @@
   loadSources(currentPeriod);
   loadCampaigns(currentPeriod);
   loadMappings();
+  refreshDirectCampaigns();
 </script>
 </body>
 </html>
