@@ -159,7 +159,7 @@ async def _run_kie(prompt: str, image_urls=None, aspect_ratio: str = "1:1", use_
                         download_timeout = aiohttp.ClientTimeout(total=120)
                         async with session.get(url, timeout=download_timeout) as img_resp:
                             img_bytes = await img_resp.read()
-                        return BufferedInputFile(img_bytes, filename=f"kie_{model}.png"), url
+                        return BufferedInputFile(img_bytes, filename=f"kie_{model}.png"), url, task_id
                     
                     elif state == "fail":
                         fail_msg = data.get("failMsg", "Unknown error")

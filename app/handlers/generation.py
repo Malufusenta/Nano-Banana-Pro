@@ -10,7 +10,7 @@ from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
 from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban,log_content_filter
-from app.models import User, Broadcast, PostConfig  # ← добавь PostConfig
+from app.models import User, Broadcast, PostConfig, BananaTransaction
 from app.middlewares.content_filter import ContentFilter, FilterMode, get_filter_message, log_nsfw_to_chat
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from app.database import async_session
@@ -1576,7 +1576,7 @@ async def process_generation(
     async with async_session() as session:
         model_type = "pro" if use_pro_model else "nb2" if use_nb2_model else "standard"
         kie_credits = get_kie_credits(model_type, resolution)
-        has_balance = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits)
+        has_balance, transaction_id = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits)
         balance_left = await get_user_balance(session, user_id)
 
         if not has_balance:
@@ -1700,11 +1700,26 @@ async def process_generation(
         # 5. Обработка результата
         result_file = None
         source_url = None
-        
+        kie_task_id = None
+
         if result_data and isinstance(result_data, tuple):
-            result_file, source_url = result_data
-        elif result_data: 
+            if len(result_data) == 3:
+                result_file, source_url, kie_task_id = result_data
+            else:
+                result_file, source_url = result_data
+        elif result_data:
             result_file = result_data
+
+        # Обновляем post_id в транзакции реальным taskId от KieAI
+        if kie_task_id and transaction_id:
+            from sqlalchemy import update as sa_update
+            async with async_session() as upd_session:
+                await upd_session.execute(
+                    sa_update(BananaTransaction)
+                    .where(BananaTransaction.id == transaction_id)
+                    .values(post_id=kie_task_id)
+                )
+                await upd_session.commit()
         
         if result_file:
             # 🔥 УДАЛЯЕМ СООБЩЕНИЕ ТОЛЬКО ДЛЯ ПРОСТОГО СЦЕНАРИЯ
@@ -2189,7 +2204,7 @@ async def process_video_generation(message: types.Message, user_id: int, photo_f
     
     # Проверка баланса
     async with async_session() as session:
-        has_balance = await check_and_deduct_balance(session, user_id, amount=COST)
+        has_balance, _ = await check_and_deduct_balance(session, user_id, amount=COST)
         balance_left = await get_user_balance(session, user_id)
 
         if not has_balance:

@@ -27,10 +27,11 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int, username: 
     
     return user, False
 
-async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1, post_id: str = None, model_type: str = None, kie_credits_cost: int = None) -> bool:
+async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amount: int = 1, post_id: str = None, model_type: str = None, kie_credits_cost: int = None):
     """
     Списывает указанное количество генераций (amount).
     SELECT FOR UPDATE гарантирует атомарность — второй запрос ждёт снятия блокировки.
+    Возвращает (True, transaction_id) или (False, None).
     """
     query = (
         select(User)
@@ -41,11 +42,11 @@ async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amou
     user = result.scalar_one_or_none()
 
     if not user:
-        return False
+        return False, None
 
     total_balance = user.balance_paid + user.balance_free
     if total_balance < amount:
-        return False  # Недостаточно бананов
+        return False, None  # Недостаточно бананов
 
     remaining = amount
 
@@ -62,10 +63,12 @@ async def check_and_deduct_balance(session: AsyncSession, telegram_id: int, amou
     user.total_generations_used += 1
     user.last_generation_at = datetime.now()
 
-    await track_banana_transaction(session, telegram_id, -amount, "spent", "Generation", post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits_cost)
+    transaction = await track_banana_transaction(session, telegram_id, -amount, "spent", "Generation", post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits_cost)
 
+    await session.flush()  # получаем transaction.id до commit
+    transaction_id = transaction.id
     await session.commit()
-    return True
+    return True, transaction_id
 
 
 async def get_user_balance(session: AsyncSession, telegram_id: int) -> int:
@@ -430,6 +433,7 @@ async def track_banana_transaction(
     )
     session.add(transaction)
     # НЕ делаем commit - он будет в родительской функции
+    return transaction
 
 async def get_referral_stats(session: AsyncSession, user_id: int):
     """
