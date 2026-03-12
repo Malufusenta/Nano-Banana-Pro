@@ -310,6 +310,10 @@
         <button onclick="saveMapping()">Сохранить</button>
         <button onclick="clearMappingForm()">Очистить</button>
       </div>
+      <div id="utm-suggestions" style="display:none; margin-top:6px; font-size:13px; color:var(--text2); padding:0 4px;">
+        💡 Найдено в БД:
+        <span id="utm-suggestions-list"></span>
+      </div>
     </div>
 
     <!-- ОКУПАЕМОСТЬ РЕКЛАМНЫХ КАМПАНИЙ -->
@@ -549,6 +553,54 @@
     }
   }
 
+  // Автоподсказка UTM при выборе кампании из dropdown
+  document.getElementById('mapping-name').addEventListener('change', async function() {
+    const campaignName = this.value;
+    const suggestionsDiv = document.getElementById('utm-suggestions');
+    const suggestionsList = document.getElementById('utm-suggestions-list');
+
+    if (!campaignName) {
+      suggestionsDiv.style.display = 'none';
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/analytics/suggest-utm?campaign=${encodeURIComponent(campaignName)}`);
+      const data = await res.json();
+
+      if (data.suggestions.length === 0) {
+        suggestionsDiv.style.display = 'none';
+        return;
+      }
+
+      suggestionsList.innerHTML = data.suggestions.map(s =>
+        `<span
+          onclick="addUtmSuggestion('${s}')"
+          style="cursor:pointer;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin:2px;display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;"
+          title="Нажми чтобы добавить"
+        >+ ${s}</span>`
+      ).join('');
+
+      suggestionsDiv.style.display = 'block';
+
+      // Автоматически подставляем все найденные в поле UTM
+      document.getElementById('mapping-sources').value = data.suggestions.join(', ');
+
+    } catch(e) {
+      suggestionsDiv.style.display = 'none';
+    }
+  });
+
+  // Добавить одну UTM метку в поле (по клику на тег)
+  function addUtmSuggestion(source) {
+    const input = document.getElementById('mapping-sources');
+    const current = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!current.includes(source)) {
+      current.push(source);
+      input.value = current.join(', ');
+    }
+  }
+
   async function refreshDirectCampaigns() {
     const select = document.getElementById('mapping-name');
     const currentVal = select.value;
@@ -616,6 +668,7 @@
     document.getElementById('mapping-id').value = '';
     document.getElementById('mapping-name').value = '';
     document.getElementById('mapping-sources').value = '';
+    document.getElementById('utm-suggestions').style.display = 'none';
   }
 
   applyTheme(currentTheme);
