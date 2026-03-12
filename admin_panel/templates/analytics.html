@@ -124,10 +124,21 @@
     .content { padding:14px 16px; }
     .funnel-grid { grid-template-columns:repeat(2,1fr); }
     .funnel-card::after { display:none; }
+    .funnel-card:last-child { grid-column:1 / -1; }
     .kpi-grid { grid-template-columns:repeat(2,1fr); }
     .charts-row { grid-template-columns:1fr; }
+    .card, .widget { padding:14px; }
+    .period-tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .period-tabs::-webkit-scrollbar { display:none; }
+    .period-tab { padding:5px 8px; font-size:11px; }
+    .table-scroll, .table-wrapper { position:relative; }
+    .table-scroll::after, .table-wrapper::after { content:''; position:absolute; top:0; right:0; bottom:0; width:24px; pointer-events:none; background:linear-gradient(to left, var(--surface) 0%, transparent 100%); z-index:3; border-radius:0 var(--radius) var(--radius) 0; }
+    .table-scroll th:first-child, .table-scroll td:first-child,
+    .table-wrapper th:first-child, .table-wrapper td:first-child { position:sticky; left:0; z-index:2; background:var(--surface); }
+    .table-scroll thead th:first-child, .table-wrapper thead th:first-child { background:var(--surface2); }
     .mapping-form { flex-direction:column; }
-    .mapping-form input[type="text"] { width:100%; }
+    .mapping-form input[type="text"] { min-width:0; width:100%; }
+    .mapping-form button { width:100%; }
   }
 </style>
 </head>
@@ -397,7 +408,7 @@
       responsive: true, maintainAspectRatio: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45 } },
+        x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45, maxTicksLimit: 6 } },
         y: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 } } }
       }
     };
