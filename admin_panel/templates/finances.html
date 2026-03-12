@@ -279,7 +279,11 @@ async function openUserModal(userId) {
     .sidebar-overlay.active { display:block; }
     .main { margin-left:0; }
     .burger-btn { display:flex; }
-    .topbar { padding:10px 16px; }
+    .topbar { padding:10px 16px; flex-wrap:wrap; }
+    .topbar-right { width:100%; order:2; }
+    .period-tabs { overflow-x:auto; flex:1; min-width:0; scrollbar-width:none; }
+    .period-tabs::-webkit-scrollbar { display:none; }
+    .period-tab { padding:5px 8px; font-size:11px; }
     .content { padding:14px 16px; }
     .nav-item { padding:13px 10px; }
     .page-btn { min-width:44px; height:44px; font-size:13px; }

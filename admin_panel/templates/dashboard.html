@@ -369,16 +369,23 @@
     .sidebar { transform: translateX(-100%); }
     .sidebar.open { transform: translateX(0); }
     .sidebar-overlay.active { display: block; }
-    .main { margin-left: 0; }
-    .burger-btn { display: flex; }
-    .topbar { padding: 10px 16px; }
-    .period-tabs { overflow-x: auto; max-width: calc(100vw - 130px); }
-    .content { padding: 14px 16px; }
-    .metrics-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
-    .charts-grid, .bottom-grid { grid-template-columns: 1fr; }
+    .main { margin-left:0; overflow-x:hidden; }
+    .burger-btn { display:flex; }
+    .topbar { padding:10px 16px; flex-wrap:wrap; }
+    .topbar-right { width:100%; order:2; }
+    .period-tabs { overflow-x:auto; flex:1; min-width:0; scrollbar-width:none; }
+    .period-tabs::-webkit-scrollbar { display:none; }
+    .period-tab { padding:5px 8px; font-size:11px; }
+    .topbar-right > div[style] { width:100%; order:2; margin-left:0 !important; margin-top:6px; }
+    .topbar-right > div[style] input[type="date"] { flex:1; min-width:0; }
+    .content { padding:14px 16px; }
+    .metrics-grid { grid-template-columns:repeat(2,1fr); gap:10px; }
+    .metric-card { padding:14px; }
+    .metric-value { font-size:20px; }
+    .metric-icon-wrap { width:30px; height:30px; font-size:14px; }
+    .charts-grid, .bottom-grid { grid-template-columns:1fr; }
     .bottom-grid[style] { grid-template-columns:1fr !important; }
-    .metric-value { font-size: 22px; }
-    .status-bar { bottom: 10px; right: 16px; }
+    .status-bar { bottom:10px; right:16px; }
     .nav-item { padding:13px 10px; }
     .page-btn { min-width:44px; height:44px; font-size:13px; }
     .modal-close { width:44px; height:44px; }
