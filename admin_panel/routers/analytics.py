@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 from app.database import async_session
 from app.services.analytics_service import get_analytics_report, get_campaign_stats
 from app.services.yandex_direct import get_direct_spending
-from app.models import CampaignMapping, User
-from sqlalchemy import select, func
+from app.models import CampaignMapping
+from sqlalchemy import select
 from .auth import require_auth
 from app import config
 import json
@@ -98,55 +98,6 @@ async def get_funnel(period: str = Query(default="month"), user=Depends(require_
         "retention": round(rev.get("retention", 0), 2),
         "ltv": round(rev.get("ltv", 0), 2),
     }
-
-
-@router.get("/api/analytics/direct-campaigns")
-async def get_direct_campaigns(user=Depends(require_auth)):
-    """Возвращает список названий кампаний из Яндекс.Директ"""
-    if not config.YANDEX_DIRECT_TOKEN:
-        return {'campaigns': [], 'error': 'Токен не настроен'}
-
-    from datetime import date, timedelta
-
-    date_to = date.today()
-    date_from = date_to - timedelta(days=90)
-
-    data = await get_direct_spending(config.YANDEX_DIRECT_TOKEN, date_from, date_to)
-
-    if data.get('error'):
-        return {'campaigns': [], 'error': data['error']}
-
-    campaign_names = sorted(data['campaigns'].keys())
-    return {'campaigns': campaign_names, 'error': None}
-
-
-@router.get("/api/analytics/suggest-utm")
-async def suggest_utm(campaign: str = Query(...), user=Depends(require_auth)):
-    """
-    По названию кампании из Директа ищет похожие source в таблице users.
-    """
-    async with async_session() as session:
-        result = await session.execute(
-            select(User.source, func.count(User.id).label('cnt'))
-            .where(User.source.isnot(None))
-            .group_by(User.source)
-            .order_by(func.count(User.id).desc())
-        )
-        all_sources = [(row.source, row.cnt) for row in result]
-
-    campaign_lower = campaign.lower()
-
-    stop_words = {'от', 'копия', 'день', 'валентина', 'святого', 'единая', 'перфоманс', 'кампания', 'валентинов'}
-    words = [w.strip('()№') for w in campaign_lower.replace('-', '_').replace(' ', '_').split('_')]
-    keywords = [w for w in words if w and w not in stop_words and not w.replace('.', '').isdigit() and len(w) > 1]
-
-    matched = []
-    for source, cnt in all_sources:
-        source_lower = source.lower()
-        if any(kw in source_lower for kw in keywords):
-            matched.append(source)
-
-    return {'suggestions': matched, 'keywords': keywords}
 
 
 @router.get("/api/analytics/campaigns")

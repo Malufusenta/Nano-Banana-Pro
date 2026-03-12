@@ -99,8 +99,6 @@
   .mapping-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
   .mapping-form input[type="text"] { flex:1; min-width:200px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); }
   .mapping-form input[type="text"]:focus { border-color:var(--accent); }
-  .mapping-form select { flex:1; min-width:200px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); cursor:pointer; }
-  .mapping-form select:focus { border-color:var(--accent); }
   .mapping-form button { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface3); color:var(--text); font-size:13px; font-weight:500; cursor:pointer; transition:all var(--transition); white-space:nowrap; }
   .mapping-form button:hover { border-color:var(--accent); color:var(--accent); }
   tfoot .totals-row td { font-weight:600; background:var(--surface2); border-top:2px solid var(--border); }
@@ -302,17 +300,10 @@
 
       <div class="mapping-form">
         <input type="hidden" id="mapping-id">
-        <select id="mapping-name">
-          <option value="">⏳ Загрузка кампаний...</option>
-        </select>
-        <button onclick="refreshDirectCampaigns()" title="Обновить список">🔄</button>
+        <input type="text" id="mapping-name" placeholder='Название кампании в Яндексе (например: Rsya_3 от 06-01-2026)'>
         <input type="text" id="mapping-sources" placeholder='UTM через запятую: yandex_rsya_3, ad_yandex_rsya_3__cid'>
         <button onclick="saveMapping()">Сохранить</button>
         <button onclick="clearMappingForm()">Очистить</button>
-      </div>
-      <div id="utm-suggestions" style="display:none; margin-top:6px; font-size:13px; color:var(--text2); padding:0 4px;">
-        💡 Найдено в БД:
-        <span id="utm-suggestions-list"></span>
       </div>
     </div>
 
@@ -553,85 +544,6 @@
     }
   }
 
-  // Автоподсказка UTM при выборе кампании из dropdown
-  document.getElementById('mapping-name').addEventListener('change', async function() {
-    const campaignName = this.value;
-    const suggestionsDiv = document.getElementById('utm-suggestions');
-    const suggestionsList = document.getElementById('utm-suggestions-list');
-
-    if (!campaignName) {
-      suggestionsDiv.style.display = 'none';
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/analytics/suggest-utm?campaign=${encodeURIComponent(campaignName)}`);
-      const data = await res.json();
-
-      if (data.suggestions.length === 0) {
-        suggestionsDiv.style.display = 'none';
-        return;
-      }
-
-      suggestionsList.innerHTML = data.suggestions.map(s =>
-        `<span
-          onclick="addUtmSuggestion('${s}')"
-          style="cursor:pointer;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;margin:2px;display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;"
-          title="Нажми чтобы добавить"
-        >+ ${s}</span>`
-      ).join('');
-
-      suggestionsDiv.style.display = 'block';
-
-    } catch(e) {
-      suggestionsDiv.style.display = 'none';
-    }
-  });
-
-  // Добавить одну UTM метку в поле (по клику на тег)
-  function addUtmSuggestion(source) {
-    const input = document.getElementById('mapping-sources');
-    const current = input.value.split(',').map(s => s.trim()).filter(Boolean);
-    if (!current.includes(source)) {
-      current.push(source);
-      input.value = current.join(', ');
-    }
-  }
-
-  async function refreshDirectCampaigns() {
-    const select = document.getElementById('mapping-name');
-    const currentVal = select.value;
-    select.innerHTML = '<option value="">⏳ Загрузка...</option>';
-
-    try {
-      const res = await fetch('/api/analytics/direct-campaigns');
-      const data = await res.json();
-
-      if (data.error) {
-        select.innerHTML = `<option value="">❌ Ошибка: ${data.error}</option>`;
-        return;
-      }
-
-      if (data.campaigns.length === 0) {
-        select.innerHTML = '<option value="">Кампаний не найдено</option>';
-        return;
-      }
-
-      select.innerHTML = '<option value="">— Выберите кампанию —</option>';
-      for (const name of data.campaigns) {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        select.appendChild(option);
-      }
-
-      // Восстанавливаем выбранное значение если было (при редактировании)
-      if (currentVal) select.value = currentVal;
-    } catch (e) {
-      select.innerHTML = '<option value="">❌ Ошибка загрузки</option>';
-    }
-  }
-
   async function saveMapping() {
     const id = document.getElementById('mapping-id').value;
     const name = document.getElementById('mapping-name').value.trim();
@@ -657,7 +569,7 @@
 
   function editMapping(id, name, sources) {
     document.getElementById('mapping-id').value = id;
-    document.getElementById('mapping-name').value = name;  // select найдёт option по value
+    document.getElementById('mapping-name').value = name;
     document.getElementById('mapping-sources').value = sources;
   }
 
@@ -665,7 +577,6 @@
     document.getElementById('mapping-id').value = '';
     document.getElementById('mapping-name').value = '';
     document.getElementById('mapping-sources').value = '';
-    document.getElementById('utm-suggestions').style.display = 'none';
   }
 
   applyTheme(currentTheme);
@@ -673,7 +584,6 @@
   loadSources(currentPeriod);
   loadCampaigns(currentPeriod);
   loadMappings();
-  refreshDirectCampaigns();
 </script>
 </body>
 </html>

@@ -2,7 +2,6 @@
 Сервис для получения статистики расходов из Яндекс.Директ
 """
 import aiohttp
-import asyncio
 import ssl
 import certifi
 import logging
@@ -48,25 +47,18 @@ async def get_direct_spending(token: str, date_from: date, date_to: date) -> dic
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         async with aiohttp.ClientSession(connector=connector) as session:
-            # Яндекс возвращает 202 пока готовит отчёт — polling до 200
-            for attempt in range(10):
-                async with session.post(
-                    DIRECT_API_URL,
-                    headers=headers,
-                    json=body,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as resp:
-                    if resp.status == 202:
-                        await asyncio.sleep(3)
-                        continue
-                    if resp.status not in (200, 201):
-                        text = await resp.text()
-                        logger.error(f"Директ API ошибка: {resp.status} - {text}")
-                        return {'error': f"HTTP {resp.status}", 'total': 0, 'campaigns': {}}
+            async with session.post(
+                DIRECT_API_URL,
+                headers=headers,
+                json=body,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status not in (200, 201, 202):
                     text = await resp.text()
-                    break
-            else:
-                return {'error': 'Таймаут: отчёт не готов за 30 сек', 'total': 0, 'campaigns': {}}
+                    logger.error(f"Директ API ошибка: {resp.status} - {text}")
+                    return {'error': f"HTTP {resp.status}", 'total': 0, 'campaigns': {}}
+
+                text = await resp.text()
 
         # Парсим TSV
         campaigns = {}

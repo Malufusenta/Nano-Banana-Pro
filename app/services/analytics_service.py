@@ -1081,7 +1081,6 @@ def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> 
 async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to: datetime) -> list[dict]:
     """
     Считает статистику по рекламным кампаниям (когортный метод).
-    Сначала кампании из мэппинга, потом прямые совпадения по source.
     """
     from app.models import CampaignMapping
     import json
@@ -1090,42 +1089,19 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
     mappings_result = await session.execute(select(CampaignMapping))
     mappings = mappings_result.scalars().all()
 
-    # Строим список кампаний: сначала из мэппинга, потом прямые совпадения
-    campaigns = []
-    mapped_names = set()
+    result = []
 
     for mapping in mappings:
         utm_sources = json.loads(mapping.utm_sources)
-        campaigns.append({
-            'campaign': mapping.yandex_campaign_name,
-            'utm_sources': utm_sources
-        })
-        mapped_names.add(mapping.yandex_campaign_name)
 
-    # Прямые совпадения: source которых нет в мэппинге
-    direct_sources_result = await session.execute(
-        select(User.source)
-        .where(User.source.isnot(None))
-        .distinct()
-    )
-    for row in direct_sources_result:
-        if row.source not in mapped_names:
-            campaigns.append({
-                'campaign': row.source,
-                'utm_sources': [row.source]
-            })
-
-    result = []
-
-    for camp in campaigns:
-        utm_sources = camp['utm_sources']
-
+        # --- Когорта: зарегались в периоде с нужным source ---
         cohort_subquery = select(User.telegram_id).where(
             User.created_at >= date_from,
             User.created_at <= date_to,
             User.source.in_(utm_sources)
         ).scalar_subquery()
 
+        # Шаг 1: кол-во /start
         cohort_count = await session.scalar(
             select(func.count(User.id)).where(
                 User.created_at >= date_from,
@@ -1134,10 +1110,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Пропускаем кампании без запусков в периоде
-        if cohort_count == 0:
-            continue
-
+        # Шаг 2: Быстрые новички ⚡️ (first_purchase в тот же день что created_at)
         fast_buyers = await session.scalar(
             select(func.count(User.id)).where(
                 User.telegram_id.in_(cohort_subquery),
@@ -1146,6 +1119,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
+        # Шаг 3: Дозревшие 🐢 (first_purchase позже дня регистрации, дата оплаты может выходить за период)
         slow_buyers = await session.scalar(
             select(func.count(User.id)).where(
                 User.telegram_id.in_(cohort_subquery),
@@ -1154,6 +1128,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
+        # Шаг 4: Выручка с новичков (первые покупки когорты, без Stars)
         new_revenue = await session.scalar(
             select(func.sum(Purchase.price)).where(
                 Purchase.status == 'succeeded',
@@ -1163,6 +1138,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
+        # Шаг 5: Выручка со старичков (покупки В периоде, от пользователей зарегавшихся ДО периода)
         old_revenue = await session.scalar(
             select(func.sum(Purchase.price)).where(
                 Purchase.status == 'succeeded',
@@ -1178,12 +1154,14 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
+        total_buyers = fast_buyers + slow_buyers
+
         result.append({
-            'campaign': camp['campaign'],
+            'campaign': mapping.yandex_campaign_name,
             'starts': cohort_count,
             'fast_buyers': fast_buyers,
             'slow_buyers': slow_buyers,
-            'total_buyers': fast_buyers + slow_buyers,
+            'total_buyers': total_buyers,
             'new_revenue': new_revenue,
             'old_revenue': old_revenue,
         })
