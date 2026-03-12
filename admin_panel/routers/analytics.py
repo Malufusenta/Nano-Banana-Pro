@@ -53,9 +53,22 @@ async def analytics_page(request: Request, user=Depends(require_auth)):
     return templates.TemplateResponse(template, {"request": request, "user": user})
 
 
+def _parse_dates(period: str, date_from: str = None, date_to: str = None):
+    if date_from and date_to:
+        df = datetime.strptime(date_from, "%Y-%m-%d")
+        dt = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        return df, dt
+    return get_date_range(period)
+
+
 @router.get("/api/analytics/sources")
-async def get_sources(period: str = Query(default="month"), user=Depends(require_auth)):
-    date_from, date_to = get_date_range(period)
+async def get_sources(
+    period: str = Query(default="month"),
+    date_from: str = Query(default=None),
+    date_to: str = Query(default=None),
+    user=Depends(require_auth)
+):
+    date_from, date_to = _parse_dates(period, date_from, date_to)
     async with async_session() as session:
         data = await get_analytics_report(session, date_from, date_to)
 
@@ -85,8 +98,13 @@ async def get_sources(period: str = Query(default="month"), user=Depends(require
 
 
 @router.get("/api/analytics/funnel")
-async def get_funnel(period: str = Query(default="month"), user=Depends(require_auth)):
-    date_from, date_to = get_date_range(period)
+async def get_funnel(
+    period: str = Query(default="month"),
+    date_from: str = Query(default=None),
+    date_to: str = Query(default=None),
+    user=Depends(require_auth)
+):
+    date_from, date_to = _parse_dates(period, date_from, date_to)
     async with async_session() as session:
         data = await get_analytics_report(session, date_from, date_to)
 
@@ -109,9 +127,11 @@ async def get_funnel(period: str = Query(default="month"), user=Depends(require_
 @router.get("/api/analytics/campaigns")
 async def get_campaigns_stats(
     period: str = Query(default="month"),
+    date_from: str = Query(default=None),
+    date_to: str = Query(default=None),
     user=Depends(require_auth)
 ):
-    date_from, date_to = get_date_range(period)
+    date_from, date_to = _parse_dates(period, date_from, date_to)
 
     async with async_session() as session:
         campaign_stats = await get_campaign_stats(session, date_from, date_to)

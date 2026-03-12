@@ -55,6 +55,8 @@
   .mobile-layout .period-tabs::-webkit-scrollbar { display:none; }
   .mobile-layout .period-tab { padding:10px 14px; font-size:13px; min-height:44px; flex-shrink:0; }
   .mobile-layout .icon-btn { flex-shrink:0; }
+  .mobile-layout .custom-period-wrap { width:100%; order:3; margin-top:8px; }
+  .mobile-layout .custom-period-wrap input[type="date"] { flex:1; min-width:0; }
 
   .content { padding:20px 24px; flex:1; }
 
@@ -232,6 +234,12 @@
         <button class="period-tab" data-period="week">7д</button>
         <button class="period-tab active" data-period="month">30д</button>
         <button class="period-tab" data-period="alltime">Всё</button>
+      </div>
+      <div class="custom-period-wrap" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <input type="date" id="dateFrom" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;min-height:44px;">
+        <span style="color:var(--text3);font-size:12px;">→</span>
+        <input type="date" id="dateTo" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;min-height:44px;">
+        <button onclick="applyCustomPeriod()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--accent2);color:#fff;font-size:13px;font-weight:600;cursor:pointer;min-height:44px;">▶</button>
       </div>
       <button class="icon-btn" id="themeBtn">☀️</button>
     </div>
@@ -469,6 +477,28 @@
   const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
   const fmtDec = n => parseFloat(n||0).toFixed(2);
   let currentPeriod = 'month';
+  let customDateFrom = null;
+  let customDateTo = null;
+
+  function buildPeriodParams() {
+    if (customDateFrom && customDateTo) {
+      return `date_from=${customDateFrom}&date_to=${customDateTo}`;
+    }
+    return `period=${currentPeriod}`;
+  }
+
+  async function applyCustomPeriod() {
+    const from = document.getElementById('dateFrom').value;
+    const to = document.getElementById('dateTo').value;
+    if (!from || !to) return;
+    document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+    customDateFrom = from;
+    customDateTo = to;
+    document.getElementById('sources-period-label').textContent = `${from} — ${to}`;
+    loadFunnel();
+    loadSources();
+    loadCampaigns();
+  }
 
   function initCharts(labels, revenues, convs) {
     const c = getChartColors();
@@ -496,8 +526,8 @@
     });
   }
 
-  async function loadFunnel(period) {
-    const d = await fetch(`/api/analytics/funnel?period=${period}`).then(r => r.json());
+  async function loadFunnel() {
+    const d = await fetch(`/api/analytics/funnel?${buildPeriodParams()}`).then(r => r.json());
     const set = (id, val) => { const el = document.getElementById(id); if(el) { el.textContent = val; el.classList.remove('loading'); }};
 
     set('f-new-users', fmtInt(d.new_users));
@@ -553,9 +583,9 @@
     renderSourcesPage();
   }
 
-  async function loadSources(period) {
+  async function loadSources() {
     document.getElementById('sourcesBody').innerHTML = '<tr><td colspan="8" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>';
-    sourcesData = await fetch(`/api/analytics/sources?period=${period}`).then(r => r.json());
+    sourcesData = await fetch(`/api/analytics/sources?${buildPeriodParams()}`).then(r => r.json());
     sourcesCurrentPage = 1;
     renderSourcesPage();
 
@@ -648,16 +678,20 @@
       document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentPeriod = tab.dataset.period;
+      customDateFrom = null;
+      customDateTo = null;
+      document.getElementById('dateFrom').value = '';
+      document.getElementById('dateTo').value = '';
       document.getElementById('sources-period-label').textContent = periodLabels[currentPeriod] || '';
-      loadFunnel(currentPeriod);
-      loadSources(currentPeriod);
-      loadCampaigns(currentPeriod);
+      loadFunnel();
+      loadSources();
+      loadCampaigns();
     });
   });
 
   // Загрузка таблицы кампаний
-  async function loadCampaigns(period) {
-    const res = await fetch(`/api/analytics/campaigns?period=${period}`);
+  async function loadCampaigns() {
+    const res = await fetch(`/api/analytics/campaigns?${buildPeriodParams()}`);
     const data = await res.json();
 
     if (data.direct_error) {
@@ -770,9 +804,14 @@
   });
 
   applyTheme(currentTheme);
-  loadFunnel(currentPeriod);
-  loadSources(currentPeriod);
-  loadCampaigns(currentPeriod);
+  const today = new Date();
+  const monthAgo = new Date(today);
+  monthAgo.setDate(monthAgo.getDate() - 30);
+  document.getElementById('dateFrom').value = monthAgo.toISOString().slice(0, 10);
+  document.getElementById('dateTo').value = today.toISOString().slice(0, 10);
+  loadFunnel();
+  loadSources();
+  loadCampaigns();
   loadMappings();
 </script>
 </body>
