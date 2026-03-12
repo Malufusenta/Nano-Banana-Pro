@@ -252,6 +252,13 @@ async function openUserModal(userId) {
   /* ТРАНЗАКЦИИ */
   .table-scroll { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; }
+  .transactions-pager { display:flex; align-items:center; justify-content:center; gap:6px; padding:14px 16px; flex-wrap:wrap; border-top:1px solid var(--border); }
+  .txn-page-btn { min-width:40px; height:40px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:'JetBrains Mono',monospace; display:flex; align-items:center; justify-content:center; }
+  .txn-page-btn:hover, .txn-page-btn:active { border-color:var(--accent); color:var(--accent); background:rgba(245,197,66,0.08); }
+  .txn-page-btn.active { background:var(--accent); color:#000; border-color:var(--accent); }
+  .txn-page-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .txn-page-nav { font-size:18px; padding:0 4px; }
+  .txn-page-info { font-size:12px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-left:8px; }
   th { padding:9px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; background:var(--surface2); border-bottom:1px solid var(--border); white-space:nowrap; }
   td { padding:9px 14px; font-size:13px; border-bottom:1px solid var(--border); }
   tr:last-child td { border-bottom:none; }
@@ -471,12 +478,12 @@ async function openUserModal(userId) {
       </div>
     </div>
 
-    <!-- ПОСЛЕДНИЕ ТРАНЗАКЦИИ -->
+    <!-- ПОСЛЕДНИЕ ТРАНЗАКЦИИ (мобильная: 10 на страницу + пагинация) -->
     <div class="card">
       <div class="card-header">
         <div>
           <div class="card-title">Последние транзакции</div>
-          <div class="card-subtitle">топ-50 за период</div>
+          <div class="card-subtitle" id="transactions-subtitle">10 на странице</div>
         </div>
       </div>
       <div class="table-scroll">
@@ -495,6 +502,7 @@ async function openUserModal(userId) {
           </tbody>
         </table>
       </div>
+      <div class="transactions-pager" id="transactions-pager"></div>
     </div>
 
   </div>
@@ -504,6 +512,9 @@ async function openUserModal(userId) {
   // ПЕРЕМЕННЫЕ
   let revenueChart, pieChart;
   let currentPeriod = 'month';
+  let recentTransactions = [];
+  let transactionsPage = 1;
+  const TRANSACTIONS_PER_PAGE = 10;
 
   // ТЕМА
   const THEME_KEY = 'nb_admin_theme';
@@ -665,8 +676,20 @@ async function openUserModal(userId) {
     set('split-new-val', fmtInt(d.first_buyers) + ' (' + newPct + '%)');
     set('split-repeat-val', fmtInt(d.repeat_buyers) + ' (' + (100-newPct) + '%)');
 
-    // Транзакции
-    document.getElementById('transactions-body').innerHTML = d.recent.map(t => `
+    // Транзакции (мобильная: 10 на страницу + пагинация)
+    recentTransactions = d.recent || [];
+    transactionsPage = 1;
+    document.getElementById('transactions-subtitle').textContent = recentTransactions.length ? `всего ${recentTransactions.length} · 10 на стр.` : 'нет данных';
+    renderTransactionsPage(1);
+    renderTransactionsPager();
+  }
+
+  function renderTransactionsPage(page) {
+    transactionsPage = page;
+    const start = (page - 1) * TRANSACTIONS_PER_PAGE;
+    const slice = recentTransactions.slice(start, start + TRANSACTIONS_PER_PAGE);
+    const tbody = document.getElementById('transactions-body');
+    tbody.innerHTML = slice.length ? slice.map(t => `
       <tr onclick="openUserModal(${t.user_id})" style="cursor:pointer">
         <td class="mono" style="color:var(--text3)">#${t.id}</td>
         <td class="mono" style="color:var(--text3)">${t.time}</td>
@@ -674,7 +697,26 @@ async function openUserModal(userId) {
         <td>${t.tariff}</td>
         <td class="mono" style="color:var(--accent);font-weight:600">${fmt(t.price)} ₽</td>
       </tr>
-    `).join('') || '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+    `).join('') : '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+    renderTransactionsPager();
+  }
+
+  function renderTransactionsPager() {
+    const total = recentTransactions.length;
+    const totalPages = Math.ceil(total / TRANSACTIONS_PER_PAGE);
+    const pager = document.getElementById('transactions-pager');
+    if (totalPages <= 1) { pager.innerHTML = ''; return; }
+    const maxVisible = 5;
+    let from = Math.max(1, transactionsPage - Math.floor(maxVisible / 2));
+    let to = Math.min(totalPages, from + maxVisible - 1);
+    if (to - from < maxVisible - 1) from = Math.max(1, to - maxVisible + 1);
+    let html = `<button class="txn-page-btn txn-page-nav" onclick="renderTransactionsPage(${transactionsPage - 1})" ${transactionsPage === 1 ? 'disabled' : ''}>‹</button>`;
+    for (let i = from; i <= to; i++) {
+      html += `<button class="txn-page-btn${i === transactionsPage ? ' active' : ''}" onclick="renderTransactionsPage(${i})">${i}</button>`;
+    }
+    html += `<button class="txn-page-btn txn-page-nav" onclick="renderTransactionsPage(${transactionsPage + 1})" ${transactionsPage === totalPages ? 'disabled' : ''}>›</button>`;
+    html += `<span class="txn-page-info">стр. ${transactionsPage} / ${totalPages}</span>`;
+    pager.innerHTML = html;
   }
 
   async function applyCustomPeriod() {
