@@ -2,7 +2,7 @@
 <html lang="ru" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Nano Banana — Финансы</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -281,6 +281,30 @@ async function openUserModal(userId) {
     .burger-btn { display:flex; }
     .topbar { padding:10px 16px; }
     .content { padding:14px 16px; }
+    .nav-item { padding:13px 10px; }
+    .page-btn { min-width:44px; height:44px; font-size:13px; }
+    .modal-close { width:44px; height:44px; }
+    .burger-btn { width:44px; height:44px; }
+    .icon-btn { width:44px; height:44px; }
+    * { touch-action:manipulation; }
+    .nav-item:active, .page-btn:active, .search-btn:active, .burger-btn:active, .icon-btn:active { transform:scale(0.96); opacity:0.8; transition:transform 0.08s, opacity 0.08s; }
+    @media (hover:none) { .nav-item:hover { background:none; color:var(--text2); } tr:hover td { background:none; } }
+    .modal-overlay { align-items:flex-end; padding:0; }
+    .modal { max-width:100%; border-radius:20px 20px 0 0; max-height:92dvh; overscroll-behavior:contain; }
+    .table-scroll { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .sidebar-nav { overscroll-behavior:contain; }
+    .topbar-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+    .table-wrap { position:relative; }
+    .table-wrap::after { content:''; position:absolute; top:0; right:0; bottom:0; width:40px; background:linear-gradient(to left, var(--surface), transparent); pointer-events:none; border-radius:0 var(--radius) var(--radius) 0; }
+  }
+  @media (max-height:500px) and (orientation:landscape) {
+    .sidebar-logo { padding:8px 16px; }
+    .nav-item { padding:7px 10px; }
+    .modal { max-height:96dvh; }
+  }
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar { padding-bottom:env(safe-area-inset-bottom); }
+    .topbar { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
   }
 </style>
 </head>
@@ -492,8 +516,43 @@ async function openUserModal(userId) {
   // МОБИЛЬНОЕ МЕНЮ
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
-  document.getElementById('burgerBtn').addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); });
-  overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+
+  function openSidebar() {
+    if (navigator.vibrate) navigator.vibrate(8);
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    history.pushState({ panel: 'sidebar' }, '');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  }
+
+  document.getElementById('burgerBtn').addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+
+  window.addEventListener('popstate', () => {
+    if (sidebar.classList.contains('open')) { closeSidebar(); return; }
+    const openModal = document.querySelector('.modal-overlay.open');
+    if (openModal) { openModal.classList.remove('open'); return; }
+  });
+
+  let _swipeStartX = 0;
+  let _swipeStartY = 0;
+  document.addEventListener('touchstart', (e) => {
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (dx > 60 && _swipeStartX < 30 && !isOpen) { openSidebar(); }
+    if (dx < -60 && isOpen) { closeSidebar(); }
+  }, { passive: true });
 
   const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
