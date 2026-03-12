@@ -229,10 +229,10 @@
     </div>
     <div class="topbar-right">
       <div class="period-tabs">
-        <button class="period-tab" data-period="today">Сегодня</button>
+        <button class="period-tab active" data-period="today">Сегодня</button>
         <button class="period-tab" data-period="yesterday">Вчера</button>
         <button class="period-tab" data-period="week">7д</button>
-        <button class="period-tab active" data-period="month">30д</button>
+        <button class="period-tab" data-period="month">30д</button>
         <button class="period-tab" data-period="alltime">Всё</button>
       </div>
       <div class="custom-period-wrap" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -321,7 +321,7 @@
       <div class="card-header">
         <div>
           <div class="card-title">Детализация по источникам</div>
-          <div class="card-subtitle" id="sources-period-label">за 30 дней</div>
+          <div class="card-subtitle" id="sources-period-label">сегодня</div>
         </div>
       </div>
       <div class="table-scroll">
@@ -476,7 +476,7 @@
   const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
   const fmtDec = n => parseFloat(n||0).toFixed(2);
-  let currentPeriod = 'month';
+  let currentPeriod = 'today';
   let customDateFrom = null;
   let customDateTo = null;
 
@@ -805,10 +805,9 @@
 
   applyTheme(currentTheme);
   const today = new Date();
-  const monthAgo = new Date(today);
-  monthAgo.setDate(monthAgo.getDate() - 30);
-  document.getElementById('dateFrom').value = monthAgo.toISOString().slice(0, 10);
-  document.getElementById('dateTo').value = today.toISOString().slice(0, 10);
+  const todayStr = today.toISOString().slice(0, 10);
+  document.getElementById('dateFrom').value = todayStr;
+  document.getElementById('dateTo').value = todayStr;
   loadFunnel();
   loadSources();
   loadCampaigns();

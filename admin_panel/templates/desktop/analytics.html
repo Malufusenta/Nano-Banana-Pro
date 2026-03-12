@@ -219,10 +219,10 @@
     </div>
     <div class="topbar-right">
       <div class="period-tabs">
-        <button class="period-tab" data-period="today">Сегодня</button>
+        <button class="period-tab active" data-period="today">Сегодня</button>
         <button class="period-tab" data-period="yesterday">Вчера</button>
         <button class="period-tab" data-period="week">7д</button>
-        <button class="period-tab active" data-period="month">30д</button>
+        <button class="period-tab" data-period="month">30д</button>
         <button class="period-tab" data-period="alltime">Всё</button>
       </div>
       <button class="icon-btn" id="themeBtn">☀️</button>
@@ -305,7 +305,7 @@
       <div class="card-header">
         <div>
           <div class="card-title">Детализация по источникам</div>
-          <div class="card-subtitle" id="sources-period-label">за 30 дней</div>
+          <div class="card-subtitle" id="sources-period-label">сегодня</div>
         </div>
       </div>
       <div class="table-scroll">
@@ -460,7 +460,7 @@
   const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
   const fmtDec = n => parseFloat(n||0).toFixed(2);
-  let currentPeriod = 'month';
+  let currentPeriod = 'today';
 
   function initCharts(labels, revenues, convs) {
     const c = getChartColors();

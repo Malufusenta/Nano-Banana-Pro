@@ -369,10 +369,10 @@ async function openUserModal(userId) {
       <button class="burger-btn" id="burgerBtn">☰</button>
       <div class="topbar-title">Финансы</div>
       <div class="period-tabs">
-        <button class="period-tab" data-period="today">Сегодня</button>
+        <button class="period-tab active" data-period="today">Сегодня</button>
         <button class="period-tab" data-period="yesterday">Вчера</button>
         <button class="period-tab" data-period="week">7д</button>
-        <button class="period-tab active" data-period="month">30д</button>
+        <button class="period-tab" data-period="month">30д</button>
         
         <button class="period-tab" data-period="alltime">Всё</button>
       </div>
@@ -511,7 +511,7 @@ async function openUserModal(userId) {
 <script>
   // ПЕРЕМЕННЫЕ
   let revenueChart, pieChart;
-  let currentPeriod = 'month';
+  let currentPeriod = 'today';
   let recentTransactions = [];
   let transactionsPage = 1;
   const TRANSACTIONS_PER_PAGE = 10;
@@ -739,8 +739,7 @@ async function openUserModal(userId) {
 
   // Дефолтные даты
   const todayStr = new Date().toISOString().split('T')[0];
-  const monthAgoStr = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
-  document.getElementById('dateFrom').value = monthAgoStr;
+  document.getElementById('dateFrom').value = todayStr;
   document.getElementById('dateTo').value = todayStr;
 
   initCharts();
