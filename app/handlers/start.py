@@ -53,6 +53,9 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     if args:
         # Убираем суффикс __cid без числа (Яндекс не подставил clientid)
         args = re.sub(r'__cid_?$', '', args) or None
+        # Убираем префикс ad_ (нормализуем все рекламные источники)
+        if args and args.startswith('ad_'):
+            args = args[3:] or None
 
     if args:
         # ===== ФОРМАТ 2: source__cid_123456 (проверяем первым, т.к. тоже содержит '_') =====
@@ -68,7 +71,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             clean_key = re.sub(r'^ad_', '', source_part)
             if clean_key:
                 ad_scenario_key = clean_key
-                source = f"ad_{clean_key}"
+                source = clean_key
 
             args = None
 
@@ -82,7 +85,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             if client_id_part and re.match(r'^\d{15,20}$', client_id_part):
                 yandex_client_id = client_id_part
                 ad_scenario_key = scenario_key
-                source = f"ad_{scenario_key}"
+                source = scenario_key
                 args = None
 
         # ===== ФОРМАТ 3: cid_123456 =====
@@ -155,7 +158,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             
             # Определяем source
             if is_ad_scenario and ad_scenario:
-                user_source = f"ad_{ad_scenario.scenario_key}"
+                user_source = ad_scenario.scenario_key
             elif is_post_link and post_config:
                 user_source = post_config.config_id
             else:
