@@ -220,12 +220,15 @@ async def get_kie_task(task_id: str, user=Depends(require_auth)):
         except Exception:
             pass
 
+        inp = param.get("input", {})
+        ref_images = inp.get("image_input") or inp.get("image_urls") or []
+
         return JSONResponse({
             "task_id": d.get("taskId"),
             "state": d.get("state"),
             "result_urls": result_urls,
-            "prompt": param.get("input", {}).get("prompt", ""),
-            "image_input": param.get("input", {}).get("image_input", []),
+            "prompt": inp.get("prompt", ""),
+            "image_input": ref_images,
             "created_at": d.get("createTime"),
             "complete_time": d.get("completeTime"),
         })
