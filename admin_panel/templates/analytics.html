@@ -103,6 +103,16 @@
   .mapping-form button:hover { border-color:var(--accent); color:var(--accent); }
   tfoot .totals-row td { font-weight:600; background:var(--surface2); border-top:2px solid var(--border); }
 
+  /* ПАГИНАЦИЯ ИСТОЧНИКОВ */
+  .sources-pager { display:flex; gap:4px; margin-top:14px; align-items:center; flex-wrap:wrap; }
+  .pager-btn { height:28px; min-width:28px; padding:0 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-size:12px; font-family:'JetBrains Mono',monospace; font-weight:500; cursor:pointer; transition:all var(--transition); display:inline-flex; align-items:center; justify-content:center; }
+  .pager-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); background:rgba(245,197,66,0.06); }
+  .pager-btn:disabled { opacity:0.35; cursor:not-allowed; }
+  .pager-btn.active { background:rgba(245,197,66,0.12); border-color:var(--accent); color:var(--accent); font-weight:700; cursor:default; }
+  .pager-btn-nav { padding:0 12px; font-family:'Inter',sans-serif; font-size:12px; letter-spacing:0; }
+  .pager-sep { width:1px; height:18px; background:var(--border); margin:0 2px; }
+  .pager-info { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text3); margin-left:6px; }
+
   @media (max-width:1100px) { .funnel-grid { grid-template-columns:repeat(3,1fr); } .funnel-card:nth-child(3)::after { display:none; } }
   @media (max-width:768px) {
     .sidebar { transform:translateX(-100%); }
@@ -263,17 +273,17 @@
         </div>
       </div>
       <div class="table-scroll">
-        <table>
+        <table id="sources-table">
           <thead>
             <tr>
               <th>#</th>
               <th>Источник</th>
-              <th>Юзеров</th>
-              <th>Покупателей</th>
-              <th>CR%</th>
-              <th>Выручка ₽</th>
-              <th>Средний чек</th>
-              <th>Новые / Старые</th>
+              <th data-sort="users" data-label="Юзеров">Юзеров</th>
+              <th data-sort="buyers" data-label="Покупателей">Покупателей</th>
+              <th data-sort="conversion" data-label="CR%">CR%</th>
+              <th data-sort="revenue" data-label="Выручка ₽">Выручка ₽</th>
+              <th data-sort="avg_check" data-label="Средний чек">Средний чек</th>
+              <th data-sort="new_revenue" data-label="Новые / Старые">Новые / Старые</th>
             </tr>
           </thead>
           <tbody id="sourcesBody">
@@ -425,15 +435,69 @@
     document.getElementById('k-ltv').textContent = fmt(d.ltv) + ' ₽';
   }
 
+  const SOURCES_PER_PAGE = 10;
+  let sourcesCurrentPage = 1;
+  let sourcesData = [];
+  let sourcesSortKey = 'revenue';
+  let sourcesSortDir = 'desc';
+
+  function applySourcesSort() {
+    if (!sourcesSortKey) return;
+    sourcesData.sort((a, b) => {
+      const av = a[sourcesSortKey] ?? 0;
+      const bv = b[sourcesSortKey] ?? 0;
+      return sourcesSortDir === 'desc' ? bv - av : av - bv;
+    });
+  }
+
+  function updateSourcesSortHeaders() {
+    document.querySelectorAll('#sources-table th[data-sort]').forEach(th => {
+      const key = th.dataset.sort;
+      const label = th.dataset.label;
+      if (key === sourcesSortKey) {
+        th.innerHTML = `${label} <span style="opacity:0.9">${sourcesSortDir === 'desc' ? '▼' : '▲'}</span>`;
+      } else {
+        th.innerHTML = `${label} <span style="opacity:0.25">↕</span>`;
+      }
+    });
+  }
+
+  function sortSources(key) {
+    if (sourcesSortKey === key) {
+      sourcesSortDir = sourcesSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+      sourcesSortKey = key;
+      sourcesSortDir = 'desc';
+    }
+    sourcesCurrentPage = 1;
+    renderSourcesPage();
+  }
+
   async function loadSources(period) {
     document.getElementById('sourcesBody').innerHTML = '<tr><td colspan="8" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>';
-    const data = await fetch(`/api/analytics/sources?period=${period}`).then(r => r.json());
+    sourcesData = await fetch(`/api/analytics/sources?period=${period}`).then(r => r.json());
+    sourcesCurrentPage = 1;
+    renderSourcesPage();
 
-    const maxRev = Math.max(...data.map(s => s.revenue), 1);
+    // Графики — топ 8 по выручке (из исходных данных до сортировки)
+    const top8 = [...sourcesData].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+    initCharts(top8.map(s => s.source), top8.map(s => s.revenue), top8.map(s => s.conversion));
+  }
 
-    document.getElementById('sourcesBody').innerHTML = data.map((s, i) => `
+  function renderSourcesPage() {
+    applySourcesSort();
+    updateSourcesSortHeaders();
+    const total = sourcesData.length;
+    const totalPages = Math.ceil(total / SOURCES_PER_PAGE);
+    const start = (sourcesCurrentPage - 1) * SOURCES_PER_PAGE;
+    const end = start + SOURCES_PER_PAGE;
+    const pageData = sourcesData.slice(start, end);
+
+    const maxRev = Math.max(...sourcesData.map(s => s.revenue), 1);
+
+    document.getElementById('sourcesBody').innerHTML = pageData.map((s, i) => `
       <tr>
-        <td class="mono" style="color:var(--text3)">${i+1}</td>
+        <td class="mono" style="color:var(--text3)">${start + i + 1}</td>
         <td style="font-weight:500">${s.source}</td>
         <td class="mono">${fmtInt(s.users)}</td>
         <td class="mono">${fmtInt(s.buyers)}</td>
@@ -452,9 +516,49 @@
       </tr>
     `).join('') || '<tr><td colspan="8" style="padding:30px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
 
-    // Графики — топ 8
-    const top8 = data.slice(0, 8);
-    initCharts(top8.map(s => s.source), top8.map(s => s.revenue), top8.map(s => s.conversion));
+    renderSourcesPagination(totalPages);
+  }
+
+  function renderSourcesPagination(totalPages) {
+    let pager = document.getElementById('sources-pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.id = 'sources-pager';
+      pager.className = 'sources-pager';
+      document.getElementById('sourcesBody').closest('table').after(pager);
+    }
+
+    pager.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    const mkBtn = (label, onClick, disabled, extraClass = '') => {
+      const btn = document.createElement('button');
+      btn.className = 'pager-btn' + (extraClass ? ' ' + extraClass : '');
+      btn.innerHTML = label;
+      btn.disabled = disabled;
+      if (!disabled) btn.onclick = onClick;
+      return btn;
+    };
+
+    pager.appendChild(mkBtn('‹', () => { sourcesCurrentPage--; renderSourcesPage(); }, sourcesCurrentPage === 1, 'pager-btn-nav'));
+
+    for (let i = 1; i <= totalPages; i++) {
+      const btn = mkBtn(i, () => { sourcesCurrentPage = i; renderSourcesPage(); }, false);
+      if (i === sourcesCurrentPage) { btn.classList.add('active'); btn.disabled = true; }
+      pager.appendChild(btn);
+    }
+
+    pager.appendChild(mkBtn('›', () => { sourcesCurrentPage++; renderSourcesPage(); }, sourcesCurrentPage === totalPages, 'pager-btn-nav'));
+
+    const sep = document.createElement('div');
+    sep.className = 'pager-sep';
+    pager.appendChild(sep);
+
+    const info = document.createElement('span');
+    info.className = 'pager-info';
+    info.textContent = `стр. ${sourcesCurrentPage} / ${totalPages} · ${sourcesData.length} источников`;
+    pager.appendChild(info);
   }
 
   const periodLabels = { today: 'сегодня', yesterday: 'вчера', week: 'за 7 дней', month: 'за 30 дней', alltime: 'за всё время' };
@@ -578,6 +682,10 @@
     document.getElementById('mapping-name').value = '';
     document.getElementById('mapping-sources').value = '';
   }
+
+  document.querySelectorAll('#sources-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => sortSources(th.dataset.sort));
+  });
 
   applyTheme(currentTheme);
   loadFunnel(currentPeriod);
