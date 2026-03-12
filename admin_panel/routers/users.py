@@ -77,12 +77,12 @@ async def get_user_detail(telegram_id: int, user=Depends(require_auth)):
 
         purchases = (await session.execute(
             select(Purchase).where(Purchase.user_id == telegram_id, Purchase.status == "succeeded")
-            .order_by(desc(Purchase.completed_at)).limit(20)
+            .order_by(desc(Purchase.completed_at)).limit(100)
         )).scalars().all()
 
         txns = (await session.execute(
             select(BananaTransaction).where(BananaTransaction.user_id == telegram_id)
-            .order_by(desc(BananaTransaction.created_at)).limit(30)
+            .order_by(desc(BananaTransaction.created_at)).limit(100)
         )).scalars().all()
 
         gens = (await session.execute(

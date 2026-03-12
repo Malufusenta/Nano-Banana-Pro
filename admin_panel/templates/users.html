@@ -338,32 +338,53 @@
     });
   });
 
-  // ДЕТАЛЬНАЯ КАРТОЧКА ЮЗЕРА
-  async function openUser(tgId) {
-    document.getElementById('modalOverlay').classList.add('open');
-    document.getElementById('modalTitle').textContent = 'Загрузка...';
-    document.getElementById('modalSub').textContent = '—';
-    document.getElementById('modalBody').innerHTML = '<div class="loading" style="padding:40px;text-align:center">Загрузка данных...</div>';
+  // Хранилище данных открытой модалки для пагинации
+  let _modalData = null;
 
-    const data = await fetch(`/api/users/${tgId}`).then(r => r.json());
-    const u = data.user;
+  const PAGE_SIZE = 10;
 
-    document.getElementById('modalTitle').textContent = u.full_name || `User ${u.telegram_id}`;
-    document.getElementById('modalSub').textContent = u.username ? `@${u.username} · ID: ${u.telegram_id}` : `ID: ${u.telegram_id}`;
+  function paginate(items, page) {
+    const total = items.length;
+    const pages = Math.ceil(total / PAGE_SIZE);
+    const slice = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    return { slice, pages, total };
+  }
 
-    const purchasesHtml = data.purchases.length ? `
+  function renderPageButtons(pages, current, onClickFn) {
+    if (pages <= 1) return '';
+    const btns = [];
+    for (let i = 1; i <= pages; i++) {
+      const active = i === current;
+      btns.push(`<button onclick="${onClickFn}(${i})" style="min-width:28px;height:28px;padding:0 6px;border-radius:6px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};background:${active ? 'var(--accent)' : 'transparent'};color:${active ? '#000' : 'var(--text2)'};font-size:12px;font-weight:${active ? '700' : '400'};cursor:pointer;font-family:inherit">${i}</button>`);
+    }
+    return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${btns.join('')}</div>`;
+  }
+
+  function renderPurchasesPage(page) {
+    if (!_modalData) return;
+    const { slice, pages, total } = paginate(_modalData.purchases, page);
+    const container = document.getElementById('purchases-container');
+    if (!container) return;
+    if (!total) { container.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Покупок нет</div>'; return; }
+    container.innerHTML = `
       <table class="mini-table">
         <tr><th>Тариф</th><th>Бананы</th><th>Цена ₽</th><th>Дата</th></tr>
-        ${data.purchases.map(p => `<tr><td>${p.tariff_name}</td><td class="mono">${p.amount}</td><td class="mono">${p.price}</td><td class="mono" style="color:var(--text3)">${p.completed_at}</td></tr>`).join('')}
+        ${slice.map(p => `<tr><td>${p.tariff_name}</td><td class="mono">${p.amount}</td><td class="mono">${p.price}</td><td class="mono" style="color:var(--text3)">${p.completed_at}</td></tr>`).join('')}
       </table>
-    ` : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Покупок нет</div>';
+      ${renderPageButtons(pages, page, 'renderPurchasesPage')}
+    `;
+  }
 
-    const txnsHtml = data.transactions.length ? `
+  function renderTxnsPage(page) {
+    if (!_modalData) return;
+    const { slice, pages, total } = paginate(_modalData.transactions, page);
+    const container = document.getElementById('txns-container');
+    if (!container) return;
+    if (!total) { container.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Транзакций нет</div>'; return; }
+    container.innerHTML = `
       <table class="mini-table">
-        <tr>
-          <th>Тип</th><th>Кол-во</th><th>Описание</th><th>Дата</th><th>Генерация</th>
-        </tr>
-        ${data.transactions.map(t => `
+        <tr><th>Тип</th><th>Кол-во</th><th>Описание</th><th>Дата</th><th>Генерация</th></tr>
+        ${slice.map(t => `
           <tr>
             <td class="mono" style="font-size:10px">${t.type}</td>
             <td class="mono" style="${t.amount>0?'color:var(--green)':'color:var(--red)'}">${t.amount>0?'+':''}${t.amount}</td>
@@ -375,7 +396,23 @@
           </tr>
         `).join('')}
       </table>
-    ` : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Транзакций нет</div>';
+      ${renderPageButtons(pages, page, 'renderTxnsPage')}
+    `;
+  }
+
+  // ДЕТАЛЬНАЯ КАРТОЧКА ЮЗЕРА
+  async function openUser(tgId) {
+    document.getElementById('modalOverlay').classList.add('open');
+    document.getElementById('modalTitle').textContent = 'Загрузка...';
+    document.getElementById('modalSub').textContent = '—';
+    document.getElementById('modalBody').innerHTML = '<div class="loading" style="padding:40px;text-align:center">Загрузка данных...</div>';
+
+    const data = await fetch(`/api/users/${tgId}`).then(r => r.json());
+    _modalData = data;
+    const u = data.user;
+
+    document.getElementById('modalTitle').textContent = u.full_name || `User ${u.telegram_id}`;
+    document.getElementById('modalSub').textContent = u.username ? `@${u.username} · ID: ${u.telegram_id}` : `ID: ${u.telegram_id}`;
 
     const daysAgo = u.created_at ? Math.floor((Date.now() - new Date(u.created_at.split(' ')[0].split('.').reverse().join('-'))) / 86400000) : '?';
 
@@ -438,11 +475,14 @@
       </div>
 
       <div class="section-title">История покупок</div>
-      ${purchasesHtml}
+      <div id="purchases-container"></div>
 
       <div class="section-title">Транзакции бананов</div>
-      ${txnsHtml}
+      <div id="txns-container"></div>
     `;
+
+    renderPurchasesPage(1);
+    renderTxnsPage(1);
   }
 
   function showToast(msg, type='success') {
