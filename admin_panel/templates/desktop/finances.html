@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nano Banana — Финансы</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+async function openUserModal(userId) {
+    const modal = document.getElementById('userModal');
+    modal.style.display = 'flex';
+    document.getElementById('modalUserTitle').textContent = 'Пользователь ' + userId;
+    document.getElementById('modalUserBody').innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px">Загрузка...</div>';
+
+    try {
+      const resp = await fetch('/api/users/' + userId).then(r => r.json());
+      if (resp.error) { document.getElementById('modalUserBody').innerHTML = '<div style="color:var(--red);padding:20px">Пользователь не найден</div>'; return; }
+      const u = resp.user;
+      const txns = resp.transactions || [];
+
+      // Считаем дней с регистрации
+      const regDate = u.created_at ? u.created_at.split(' ')[0] : null;
+      const daysAgo = regDate ? Math.floor((Date.now() - new Date(regDate.split('.').reverse().join('-'))) / 86400000) : '?';
+
+      document.getElementById('modalUserTitle').textContent = u.full_name || u.username || userId;
+
+      document.getElementById('modalUserBody').innerHTML = `
+        <!-- Шапка -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+            ${u.full_name ? u.full_name[0].toUpperCase() : '?'}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:17px;font-weight:700">${u.full_name || '—'}</div>
+            <div style="font-size:12px;color:var(--text3)">${u.username ? '@'+u.username : ''} · 🆔 ${u.telegram_id}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">📅 ${u.created_at} · ${daysAgo} дней с нами</div>
+          </div>
+          <div style="font-size:20px">${u.is_blocked ? '🔴' : '🟢'}</div>
+        </div>
+
+        <!-- Балансы -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--accent)">${fmtInt(u.balance_paid)}</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Платные 🍌</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmtInt(u.balance_free)}</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Бесплатные 🍌</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--green)">${fmt(u.total_revenue)} ₽</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Выручка</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--purple)">${fmtInt(u.total_generations_used)}</div>
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-top:2px">Генераций</div>
+          </div>
+        </div>
+
+        <!-- Инфо -->
+        <div style="margin-bottom:14px">
+          ${[
+            ['🛒 Покупок', u.orders_count + ' шт · первая ' + (u.first_purchase_at || '—')],
+            ['🎨 Последняя генерация', u.last_generation_at || '—'],
+            ['🔗 Источник', u.source || 'organic'],
+            ['🤖 Модель', u.preferred_model || '—'],
+            ['🔒 Статус', u.is_blocked ? '🔴 Заблокирован' : '🟢 Активен'],
+          ].map(([k,v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--text2)">${k}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;text-align:right;max-width:60%">${v}</span></div>`).join('')}
+        </div>
+
+        <!-- Кнопки действий -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button onclick="toggleBlock(${u.telegram_id}, ${u.is_blocked})" style="padding:7px 14px;border-radius:7px;border:1px solid ${u.is_blocked ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'};background:${u.is_blocked ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'};color:${u.is_blocked ? 'var(--green)' : 'var(--red)'};font-size:12px;font-weight:600;cursor:pointer" id="blockBtn_${u.telegram_id}">
+            ${u.is_blocked ? '🔓 Разблокировать' : '🔒 Заблокировать'}
+          </button>
+          <button onclick="showBalanceForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(245,197,66,0.4);background:rgba(245,197,66,0.1);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">
+            🍌 Баланс
+          </button>
+          <button onclick="showMessageForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.1);color:var(--blue);font-size:12px;font-weight:600;cursor:pointer">
+            ✉️ Написать
+          </button>
+        </div>
+
+        <!-- Форма баланса (скрытая) -->
+        <div id="balanceForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">🍌 Изменить баланс</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="balanceAmount_${u.telegram_id}" type="number" placeholder="Кол-во (+/-)" style="width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+            <input id="balanceComment_${u.telegram_id}" type="text" placeholder="Комментарий" style="flex:1;min-width:120px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+            <button onclick="submitBalance(${u.telegram_id})" style="padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#000;font-size:12px;font-weight:600;cursor:pointer">OK</button>
+          </div>
+        </div>
+
+        <!-- Форма сообщения (скрытая) -->
+        <div id="messageForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">✉️ Написать пользователю</div>
+          <textarea id="messageText_${u.telegram_id}" rows="3" placeholder="Текст сообщения (поддерживается HTML)" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:'Inter',sans-serif"></textarea>
+          <button onclick="submitMessage(${u.telegram_id})" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Отправить</button>
+        </div>
+
+        <!-- Транзакции -->
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Транзакции бананов</div>
+        <div style="max-height:180px;overflow-y:auto">
+          ${txns.length ? txns.map(t => `
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+              <span style="color:var(--text3)">${t.created_at}</span>
+              <span style="color:var(--text2)">${t.description}</span>
+              <span style="font-weight:600;color:${t.amount > 0 ? 'var(--green)' : 'var(--red)'};font-family:'JetBrains Mono',monospace">${t.amount > 0 ? '+' : ''}${t.amount} 🍌</span>
+            </div>
+          `).join('') : '<div style="color:var(--text3);padding:10px 0;font-size:12px">Нет транзакций</div>'}
+        </div>
+      `;
+    } catch(e) {
+      document.getElementById('modalUserBody').innerHTML = '<div style="color:var(--red);padding:20px">Ошибка загрузки</div>';
+    }
+  }
+
+  function closeUserModal() {
+    document.getElementById('userModal').style.display = 'none';
+  }
+
+  async function toggleBlock(userId, isBlocked) {
+    const r = await fetch(`/api/users/${userId}/block`, {method: 'POST', credentials: 'include'}).then(r => r.json());
+    if (r.ok) {
+      showToast(r.is_blocked ? '🔴 Пользователь заблокирован' : '🟢 Пользователь разблокирован');
+      openUserModal(userId);
+    }
+  }
+
+  function showBalanceForm(userId) {
+    const f = document.getElementById(`balanceForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function showMessageForm(userId) {
+    const f = document.getElementById(`messageForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function submitBalance(userId) {
+    const amount = parseInt(document.getElementById(`balanceAmount_${userId}`).value);
+    const comment = document.getElementById(`balanceComment_${userId}`).value || 'Admin adjustment';
+    if (!amount) return;
+    const r = await fetch(`/api/users/${userId}/balance`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount, comment})
+    }).then(r => r.json());
+    if (r.ok) {
+      showToast(`✅ Баланс изменён на ${amount > 0 ? '+' : ''}${amount} 🍌`);
+      openUserModal(userId);
+    } else {
+      showToast('❌ Ошибка', 'error');
+    }
+  }
+
+  async function submitMessage(userId) {
+    const text = document.getElementById(`messageText_${userId}`).value;
+    if (!text.trim()) return;
+    const r = await fetch(`/api/users/${userId}/message`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    }).then(r => r.json());
+    if (r.ok) {
+      showToast('✅ Сообщение отправлено');
+      document.getElementById(`messageText_${userId}`).value = '';
+    } else {
+      showToast('❌ ' + (r.error || 'Ошибка'), 'error');
+    }
+  }
+  document.getElementById('userModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('userModal')) closeUserModal();
+  });
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
+  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
+  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+
+  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition); }
+  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
+  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
+  .sidebar-logo-emoji { font-size:26px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+  .nav-section { margin-bottom:20px; }
+  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
+  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-name { font-size:13px; font-weight:600; }
+  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+
+  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .topbar-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .topbar-title { font-size:16px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; }
+  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
+  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+  .content { padding:20px 24px; flex:1; }
+
+  .period-tabs { display:flex; align-items:center; background:var(--surface2); border-radius:10px; padding:3px; gap:2px; border:1px solid var(--border); }
+  .period-tab { padding:6px 14px; border-radius:7px; border:none; background:none; color:var(--text2); font-size:12px; font-weight:500; cursor:pointer; transition:all var(--transition); white-space:nowrap; font-family:'Inter',sans-serif; }
+  .period-tab:hover { color:var(--text); }
+  .period-tab.active { background:var(--surface); color:var(--accent); font-weight:600; box-shadow:var(--shadow); }
+
+  .summary-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+  .summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .summary-card.yellow::before { background:var(--accent); }
+  .summary-card.green::before { background:var(--green); }
+  .summary-card.blue::before { background:var(--blue); }
+  .summary-card.purple::before { background:var(--purple); }
+  .summary-card.orange::before { background:var(--accent2); }
+  .summary-val { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-bottom:4px; }
+  .summary-lbl { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+  .summary-sub { font-size:11px; color:var(--text3); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  .grid-3 { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+  .card-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .card-title { font-size:14px; font-weight:600; }
+  .card-subtitle { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+  .card-body { padding:16px 20px; }
+  .chart-wrap { padding:16px 20px 8px; }
+
+  /* ТАРИФЫ */
+  .tariff-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .tariff-row:last-child { border-bottom:none; }
+  .tariff-name { font-size:13px; font-weight:500; flex:1; }
+  .tariff-bar-wrap { flex:2; height:6px; background:var(--surface3); border-radius:3px; overflow:hidden; }
+  .tariff-bar { height:100%; border-radius:3px; background:var(--accent); }
+  .tariff-count { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text3); min-width:50px; text-align:right; }
+  .tariff-rev { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; color:var(--accent); min-width:80px; text-align:right; }
+
+  /* ТРАНЗАКЦИИ */
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { padding:9px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; background:var(--surface2); border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:9px 14px; font-size:13px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:var(--surface2); }
+  .mono { font-family:'JetBrains Mono',monospace; font-size:11px; }
+
+  /* НОВЫЕ/ПОВТОРНЫЕ */
+  .split-bar { height:10px; border-radius:5px; overflow:hidden; display:flex; margin:10px 0; }
+  .split-new { background:var(--green); }
+  .split-repeat { background:var(--blue); }
+  .split-legend { display:flex; gap:16px; }
+  .split-item { display:flex; align-items:center; gap:6px; font-size:12px; }
+  .split-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  .loading { animation:shimmer 1.5s infinite; color:var(--text3); }
+
+  @media (max-width:900px) {
+    .summary-grid { grid-template-columns:repeat(2,1fr); }
+    .grid-2, .grid-3 { grid-template-columns:1fr; }
+  }
+  @media (max-width:768px) {
+    .sidebar { transform:translateX(-100%); }
+    .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay.active { display:block; }
+    .main { margin-left:0; }
+    .burger-btn { display:flex; }
+    .topbar { padding:10px 16px; flex-wrap:wrap; }
+    .topbar-right { width:100%; order:2; }
+    .period-tabs { overflow-x:auto; flex:1; min-width:0; scrollbar-width:none; }
+    .period-tabs::-webkit-scrollbar { display:none; }
+    .period-tab { padding:5px 8px; font-size:11px; }
+    .content { padding:14px 16px; }
+    .nav-item { padding:13px 10px; }
+    .page-btn { min-width:44px; height:44px; font-size:13px; }
+    .modal-close { width:44px; height:44px; }
+    .burger-btn { width:44px; height:44px; }
+    .icon-btn { width:44px; height:44px; }
+    * { touch-action:manipulation; }
+    .nav-item:active, .page-btn:active, .search-btn:active, .burger-btn:active, .icon-btn:active { transform:scale(0.96); opacity:0.8; transition:transform 0.08s, opacity 0.08s; }
+    @media (hover:none) { .nav-item:hover { background:none; color:var(--text2); } tr:hover td { background:none; } }
+    .modal-overlay { align-items:flex-end; padding:0; }
+    .modal { max-width:100%; border-radius:20px 20px 0 0; max-height:92dvh; overscroll-behavior:contain; }
+    .table-scroll { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .sidebar-nav { overscroll-behavior:contain; }
+    .topbar-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+    .table-wrap { position:relative; }
+    .table-wrap::after { content:''; position:absolute; top:0; right:0; bottom:0; width:40px; background:linear-gradient(to left, var(--surface), transparent); pointer-events:none; border-radius:0 var(--radius) var(--radius) 0; }
+  }
+  @media (max-height:500px) and (orientation:landscape) {
+    .sidebar-logo { padding:8px 16px; }
+    .nav-item { padding:7px 10px; }
+    .modal { max-height:96dvh; }
+  }
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar { padding-bottom:env(safe-area-inset-bottom); }
+    .topbar { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <span class="sidebar-logo-emoji">🍌</span>
+      <div>
+        <div class="sidebar-logo-text">Nano Banana</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">Главное</div>
+      <a href="/" class="nav-item"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item active"><span class="icon">💰</span> Финансы</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Маркетинг</div>
+      <a href="/analytics" class="nav-item"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item"><span class="icon">🔗</span> Ссылки</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Система</div>
+      <a href="/settings" class="nav-item"><span class="icon">⚙️</span> Настройки</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">👑</div>
+      <div>
+        <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-user-role">administrator</div>
+      </div>
+    </div>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Финансы</div>
+      <div class="period-tabs">
+        <button class="period-tab" data-period="today">Сегодня</button>
+        <button class="period-tab" data-period="yesterday">Вчера</button>
+        <button class="period-tab" data-period="week">7д</button>
+        <button class="period-tab active" data-period="month">30д</button>
+        
+        <button class="period-tab" data-period="alltime">Всё</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="date" id="dateFrom" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;">
+        <span style="color:var(--text3);font-size:12px;">→</span>
+        <input type="date" id="dateTo" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;">
+        <button onclick="applyCustomPeriod()" style="padding:6px 10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-size:12px;font-weight:600;cursor:pointer;">▶</button>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="themeBtn">☀️</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- SUMMARY CARDS -->
+    <div class="summary-grid">
+      <div class="summary-card yellow">
+        <div class="summary-val" id="s-rub">—</div>
+        <div class="summary-lbl">Выручка ₽</div>
+        <div class="summary-sub" id="s-rub-sub">—</div>
+      </div>
+      <div class="summary-card purple">
+        <div class="summary-val" id="s-stars">—</div>
+        <div class="summary-lbl">Stars ⭐</div>
+        <div class="summary-sub" id="s-stars-sub">—</div>
+      </div>
+      <div class="summary-card blue">
+        <div class="summary-val" id="s-count">—</div>
+        <div class="summary-lbl">Транзакций</div>
+        <div class="summary-sub" id="s-count-sub">—</div>
+      </div>
+      <div class="summary-card green">
+        <div class="summary-val" id="s-avg">—</div>
+        <div class="summary-lbl">Средний чек</div>
+        <div class="summary-sub">рублей</div>
+      </div>
+      <div class="summary-card orange">
+        <div class="summary-val" id="s-first">—</div>
+        <div class="summary-lbl">Первых покупок</div>
+        <div class="summary-sub" id="s-first-sub">—</div>
+      </div>
+    </div>
+
+    <!-- ГРАФИК + ТАРИФЫ -->
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Выручка по дням</div>
+            <div class="card-subtitle" id="chart-subtitle">за период</div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="revenueChart" style="max-height:240px"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">По тарифам</div>
+            <div class="card-subtitle">доля выручки</div>
+          </div>
+        </div>
+        <div class="card-body" id="tariffs-list">
+          <div class="loading">Загрузка...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- НОВЫЕ vs ПОВТОРНЫЕ -->
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Новые vs Повторные</div>
+        </div>
+        <div class="card-body">
+          <div class="split-bar">
+            <div class="split-new" id="split-new-bar" style="width:50%"></div>
+            <div class="split-repeat" id="split-repeat-bar" style="width:50%"></div>
+          </div>
+          <div class="split-legend">
+            <div class="split-item">
+              <div class="split-dot" style="background:var(--green)"></div>
+              <span>Первые: <strong id="split-new-val">—</strong></span>
+            </div>
+            <div class="split-item">
+              <div class="split-dot" style="background:var(--blue)"></div>
+              <span>Повторные: <strong id="split-repeat-val">—</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Структура выручки</div>
+        </div>
+        <div class="chart-wrap" style="display:flex;align-items:center;justify-content:center;">
+          <canvas id="pieChart" style="max-height:160px;max-width:160px"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ПОСЛЕДНИЕ ТРАНЗАКЦИИ -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Последние транзакции</div>
+          <div class="card-subtitle">топ-50 за период</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Время</th>
+              <th>User ID</th>
+              <th>Тариф</th>
+              <th>Сумма</th>
+            </tr>
+          </thead>
+          <tbody id="transactions-body">
+            <tr><td colspan="5" class="loading" style="padding:24px;text-align:center">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ПЕРЕМЕННЫЕ
+  let revenueChart, pieChart;
+  let currentPeriod = 'month';
+
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t); currentTheme = t;
+    if (typeof revenueChart !== 'undefined' && revenueChart) updateChartColors();
+  }
+  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+  applyTheme(currentTheme);
+
+  // МОБИЛЬНОЕ МЕНЮ
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  function openSidebar() {
+    if (navigator.vibrate) navigator.vibrate(8);
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    history.pushState({ panel: 'sidebar' }, '');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  }
+
+  document.getElementById('burgerBtn').addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+
+  window.addEventListener('popstate', () => {
+    if (sidebar.classList.contains('open')) { closeSidebar(); return; }
+    const openModal = document.querySelector('.modal-overlay.open');
+    if (openModal) { openModal.classList.remove('open'); return; }
+  });
+
+  let _swipeStartX = 0;
+  let _swipeStartY = 0;
+  document.addEventListener('touchstart', (e) => {
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (dx > 60 && _swipeStartX < 30 && !isOpen) { openSidebar(); }
+    if (dx < -60 && isOpen) { closeSidebar(); }
+  }, { passive: true });
+
+  const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const set = (id, val) => { const el = document.getElementById(id); if (el) { el.textContent = val; el.classList.remove('loading'); } };
+
+
+
+  function getColors() {
+    const s = getComputedStyle(document.documentElement);
+    return {
+      grid: s.getPropertyValue('--border').trim(),
+      tick: s.getPropertyValue('--text3').trim(),
+    };
+  }
+
+  function initCharts() {
+    const c = getColors();
+    const base = {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 10 } },
+        y: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, callback: v => fmt(v) + ' ₽' } }
+      }
+    };
+    revenueChart = new Chart(document.getElementById('revenueChart'), {
+      type: 'bar',
+      data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(245,197,66,0.3)', borderColor: '#f5c542', borderWidth: 2, borderRadius: 4 }]},
+      options: base
+    });
+    pieChart = new Chart(document.getElementById('pieChart'), {
+      type: 'doughnut',
+      data: { labels: [], datasets: [{ data: [], backgroundColor: ['#f5c542','#3b82f6','#22c55e','#8b5cf6','#ff6b35','#ef4444'], borderWidth: 0 }]},
+      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)} ₽` } } }, cutout: '65%' }
+    });
+  }
+
+  function updateChartColors() {
+    const c = getColors();
+    if (revenueChart) {
+      revenueChart.options.scales.x.grid.color = c.grid;
+      revenueChart.options.scales.x.ticks.color = c.tick;
+      revenueChart.options.scales.y.grid.color = c.grid;
+      revenueChart.options.scales.y.ticks.color = c.tick;
+      revenueChart.update();
+    }
+  }
+
+  const TARIFF_COLORS = {
+    '10 бананов': '#f5c542',
+    '8 бананов': '#fbbf24',
+    '44 банана': '#ff6b35',
+    '140 бананов': '#ef4444',
+    '340 бананов': '#8b5cf6',
+    '832 банана': '#3b82f6',
+    'Telegram Stars': '#22c55e',
+  };
+
+  async function loadData(period, dfStr, dtStr) {
+    let url = `/api/finances/summary?period=${period}`;
+    if (dfStr && dtStr) url = `/api/finances/summary?date_from=${dfStr}&date_to=${dtStr}`;
+
+    const d = await fetch(url).then(r => r.json());
+
+    // Карточки
+    set('s-rub', fmt(d.rub_revenue) + ' ₽');
+    set('s-rub-sub', fmtInt(d.rub_count) + ' транзакций');
+    set('s-stars', fmtInt(d.stars_revenue) + ' ⭐');
+    set('s-stars-sub', fmtInt(d.stars_count) + ' транзакций');
+    set('s-count', fmtInt(d.total_count));
+    set('s-count-sub', fmtInt(d.rub_count) + ' руб + ' + fmtInt(d.stars_count) + ' stars');
+    set('s-avg', fmt(d.avg_check) + ' ₽');
+    set('s-first', fmtInt(d.first_buyers));
+    set('s-first-sub', 'повторных: ' + fmtInt(d.repeat_buyers));
+
+    // График по дням
+    revenueChart.data.labels = d.daily.map(x => x.day.slice(5).replace('-', '.'));
+    revenueChart.data.datasets[0].data = d.daily.map(x => x.revenue);
+    revenueChart.update();
+    document.getElementById('chart-subtitle').textContent = `${d.daily.length} дней`;
+
+    // Тарифы
+    const maxRev = Math.max(...d.tariffs.map(t => t.revenue), 1);
+    document.getElementById('tariffs-list').innerHTML = d.tariffs.map(t => `
+      <div class="tariff-row">
+        <div class="tariff-name">${t.name}</div>
+        <div class="tariff-bar-wrap">
+          <div class="tariff-bar" style="width:${Math.round(t.revenue/maxRev*100)}%;background:${TARIFF_COLORS[t.name]||'var(--accent)'}"></div>
+        </div>
+        <div class="tariff-count">${fmtInt(t.count)} шт</div>
+        <div class="tariff-rev">${fmt(t.revenue)} ₽</div>
+      </div>
+    `).join('');
+
+    // Пирог
+    const topTariffs = d.tariffs.filter(t => t.name !== 'Telegram Stars').slice(0, 6);
+    pieChart.data.labels = topTariffs.map(t => t.name);
+    pieChart.data.datasets[0].data = topTariffs.map(t => t.revenue);
+    pieChart.update();
+
+    // Новые vs повторные
+    const total = d.first_buyers + d.repeat_buyers || 1;
+    const newPct = Math.round(d.first_buyers / total * 100);
+    document.getElementById('split-new-bar').style.width = newPct + '%';
+    document.getElementById('split-repeat-bar').style.width = (100 - newPct) + '%';
+    set('split-new-val', fmtInt(d.first_buyers) + ' (' + newPct + '%)');
+    set('split-repeat-val', fmtInt(d.repeat_buyers) + ' (' + (100-newPct) + '%)');
+
+    // Транзакции
+    document.getElementById('transactions-body').innerHTML = d.recent.map(t => `
+      <tr onclick="openUserModal(${t.user_id})" style="cursor:pointer">
+        <td class="mono" style="color:var(--text3)">#${t.id}</td>
+        <td class="mono" style="color:var(--text3)">${t.time}</td>
+        <td class="mono" style="color:var(--blue)">${t.user_id}</td>
+        <td>${t.tariff}</td>
+        <td class="mono" style="color:var(--accent);font-weight:600">${fmt(t.price)} ₽</td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+  }
+
+  async function applyCustomPeriod() {
+    const from = document.getElementById('dateFrom').value;
+    const to = document.getElementById('dateTo').value;
+    if (!from || !to) return;
+    document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+    await loadData(null, from, to);
+  }
+
+  // Табы
+  document.querySelectorAll('.period-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentPeriod = tab.dataset.period;
+      loadData(currentPeriod);
+    });
+  });
+
+  // Дефолтные даты
+  const todayStr = new Date().toISOString().split('T')[0];
+  const monthAgoStr = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
+  document.getElementById('dateFrom').value = monthAgoStr;
+  document.getElementById('dateTo').value = todayStr;
+
+  initCharts();
+  loadData(currentPeriod);
+</script>
+<!-- USER MODAL -->
+<div class="modal-overlay" id="userModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <div style="padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:16px;font-weight:700;" id="modalUserTitle">Пользователь</div>
+      <button onclick="closeUserModal()" style="width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="padding:20px 24px;" id="modalUserBody"><div style="text-align:center;color:var(--text3)">Загрузка...</div></div>
+  </div>
+</div>
+</body>
+</html>

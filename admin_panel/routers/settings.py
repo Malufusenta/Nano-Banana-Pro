@@ -14,6 +14,12 @@ from admin_panel.routers.auth import require_auth
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 
+
+def is_mobile(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "").lower()
+    return any(x in ua for x in ["mobile", "android", "iphone", "ipad"])
+
+
 PACKAGES_PATH = "/home/Dianka/Nano-Banana-Pro/app/packages.py"
 CONFIG_PATH = "/home/Dianka/Nano-Banana-Pro/app/config.py"
 BACKUP_DIR = "/var/backups/postgres"
@@ -46,7 +52,8 @@ def read_config():
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, user=Depends(require_auth)):
-    return templates.TemplateResponse("settings.html", {"request": request, "user": user})
+    template = "mobile/settings.html" if is_mobile(request) else "desktop/settings.html"
+    return templates.TemplateResponse(template, {"request": request, "user": user})
 
 
 @router.get("/api/settings/data")

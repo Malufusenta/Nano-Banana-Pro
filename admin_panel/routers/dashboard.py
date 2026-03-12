@@ -32,6 +32,11 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 
 
+def is_mobile(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "").lower()
+    return any(x in ua for x in ["mobile", "android", "iphone", "ipad"])
+
+
 def get_today_start_msk():
     from datetime import timezone
     now_utc = datetime.now(timezone.utc)
@@ -67,7 +72,8 @@ async def dashboard(request: Request):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
-    return templates.TemplateResponse("dashboard.html", {"request": request, "user": user})
+    template = "mobile/dashboard.html" if is_mobile(request) else "desktop/dashboard.html"
+    return templates.TemplateResponse(template, {"request": request, "user": user})
 
 
 @router.get("/api/dashboard/stats")

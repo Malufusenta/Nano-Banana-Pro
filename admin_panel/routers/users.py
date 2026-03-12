@@ -11,9 +11,15 @@ router = APIRouter()
 templates = Jinja2Templates(directory="admin_panel/templates")
 
 
+def is_mobile(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "").lower()
+    return any(x in ua for x in ["mobile", "android", "iphone", "ipad"])
+
+
 @router.get("/users", response_class=HTMLResponse)
 async def users_page(request: Request, user=Depends(require_auth)):
-    return templates.TemplateResponse("users.html", {"request": request, "user": user})
+    template = "mobile/users.html" if is_mobile(request) else "desktop/users.html"
+    return templates.TemplateResponse(template, {"request": request, "user": user})
 
 
 @router.get("/api/users")

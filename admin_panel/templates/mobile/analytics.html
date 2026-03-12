@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nano Banana — Аналитика</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
+  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
+  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+
+  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition),background var(--transition); }
+  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
+  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
+  .sidebar-logo-emoji { font-size:26px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+  .nav-section { margin-bottom:20px; }
+  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
+  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-name { font-size:13px; font-weight:600; }
+  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+
+  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .topbar-left { display:flex; align-items:center; gap:12px; }
+  .topbar-title { font-size:16px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
+  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+
+  .period-tabs { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; }
+  .period-tab { padding:5px 12px; border-radius:6px; font-size:12px; font-weight:500; color:var(--text2); cursor:pointer; transition:all var(--transition); font-family:'JetBrains Mono',monospace; border:none; background:none; white-space:nowrap; }
+  .period-tab:hover { color:var(--text); }
+  .period-tab.active { background:var(--surface); color:var(--accent); font-weight:600; box-shadow:var(--shadow); }
+
+  .content { padding:20px 24px; flex:1; }
+
+  /* ВОРОНКА */
+  .funnel-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+  .funnel-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; text-align:center; box-shadow:var(--shadow); position:relative; }
+  .funnel-card::after { content:'→'; position:absolute; right:-14px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:16px; z-index:1; }
+  .funnel-card:last-child::after { display:none; }
+  .funnel-val { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-bottom:4px; }
+  .funnel-lbl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; }
+  .funnel-sub { font-size:11px; color:var(--text2); font-family:'JetBrains Mono',monospace; margin-top:4px; }
+
+  /* КАРТОЧКИ KPI */
+  .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
+  .kpi-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .kpi-val { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .kpi-sub { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-top:4px; }
+
+  /* ТАБЛИЦА ИСТОЧНИКОВ */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); margin-bottom:16px; }
+  .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .card-title { font-size:14px; font-weight:600; }
+  .card-subtitle { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; background:var(--surface2); border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; }
+  th:hover { color:var(--text2); }
+  td { padding:10px 12px; font-size:13px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:var(--surface2); }
+  .mono { font-family:'JetBrains Mono',monospace; font-size:11px; }
+
+  /* BAR CHART в таблице */
+  .inline-bar { width:80px; height:6px; background:var(--surface3); border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:6px; }
+  .inline-bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:3px; transition:width 0.6s ease; }
+
+  /* CHARTS ROW */
+  .charts-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  .loading { animation:shimmer 1.5s infinite; color:var(--text3); }
+
+  /* ВИДЖЕТЫ КАМПАНИЙ */
+  .widget { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); margin-bottom:16px; }
+  .widget h2 { font-size:14px; font-weight:600; margin-bottom:16px; }
+  .table-wrapper { overflow-x:auto; }
+  .error-banner { background:rgba(239,68,68,0.1); border:1px solid var(--red); color:var(--red); border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:12px; }
+  .mapping-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
+  .mapping-form input[type="text"] { flex:1; min-width:200px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); }
+  .mapping-form input[type="text"]:focus { border-color:var(--accent); }
+  .mapping-form button { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface3); color:var(--text); font-size:13px; font-weight:500; cursor:pointer; transition:all var(--transition); white-space:nowrap; }
+  .mapping-form button:hover { border-color:var(--accent); color:var(--accent); }
+  tfoot .totals-row td { font-weight:600; background:var(--surface2); border-top:2px solid var(--border); }
+
+  /* ПАГИНАЦИЯ ИСТОЧНИКОВ */
+  .sources-pager { display:flex; gap:4px; margin-top:14px; align-items:center; flex-wrap:wrap; }
+  .pager-btn { height:28px; min-width:28px; padding:0 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-size:12px; font-family:'JetBrains Mono',monospace; font-weight:500; cursor:pointer; transition:all var(--transition); display:inline-flex; align-items:center; justify-content:center; }
+  .pager-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); background:rgba(245,197,66,0.06); }
+  .pager-btn:disabled { opacity:0.35; cursor:not-allowed; }
+  .pager-btn.active { background:rgba(245,197,66,0.12); border-color:var(--accent); color:var(--accent); font-weight:700; cursor:default; }
+  .pager-btn-nav { padding:0 12px; font-family:'Inter',sans-serif; font-size:12px; letter-spacing:0; }
+  .pager-sep { width:1px; height:18px; background:var(--border); margin:0 2px; }
+  .pager-info { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text3); margin-left:6px; }
+
+  @media (max-width:1100px) { .funnel-grid { grid-template-columns:repeat(3,1fr); } .funnel-card:nth-child(3)::after { display:none; } }
+  @media (max-width:768px) {
+    .sidebar { transform:translateX(-100%); }
+    .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay.active { display:block; }
+    .main { margin-left:0; }
+    .burger-btn { display:flex; }
+    .topbar { padding:10px 16px; flex-wrap:wrap; }
+    .topbar-right { width:100%; order:2; }
+    .content { padding:14px 16px; }
+    .funnel-grid { grid-template-columns:repeat(2,1fr); }
+    .funnel-card::after { display:none; }
+    .funnel-card:last-child { grid-column:1 / -1; }
+    .kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .charts-row { grid-template-columns:1fr; }
+    .card, .widget { padding:14px; }
+    .period-tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .period-tabs::-webkit-scrollbar { display:none; }
+    .period-tab { padding:5px 8px; font-size:11px; }
+    .table-scroll, .table-wrapper { position:relative; }
+    .table-scroll::after, .table-wrapper::after { content:''; position:absolute; top:0; right:0; bottom:0; width:24px; pointer-events:none; background:linear-gradient(to left, var(--surface) 0%, transparent 100%); z-index:3; border-radius:0 var(--radius) var(--radius) 0; }
+    .table-scroll th:first-child, .table-scroll td:first-child,
+    .table-wrapper th:first-child, .table-wrapper td:first-child { position:sticky; left:0; z-index:2; background:var(--surface); }
+    .table-scroll thead th:first-child, .table-wrapper thead th:first-child { background:var(--surface2); }
+    .mapping-form { flex-direction:column; }
+    .mapping-form input[type="text"] { min-width:0; width:100%; }
+    .mapping-form button { width:100%; }
+    .nav-item { padding:13px 10px; }
+    .page-btn { min-width:44px; height:44px; font-size:13px; }
+    .modal-close { width:44px; height:44px; }
+    .burger-btn { width:44px; height:44px; }
+    .icon-btn { width:44px; height:44px; }
+    * { touch-action:manipulation; }
+    .nav-item:active, .page-btn:active, .search-btn:active, .burger-btn:active, .icon-btn:active { transform:scale(0.96); opacity:0.8; transition:transform 0.08s, opacity 0.08s; }
+    @media (hover:none) { .nav-item:hover { background:none; color:var(--text2); } tr:hover td { background:none; } }
+    .modal-overlay { align-items:flex-end; padding:0; }
+    .modal { max-width:100%; border-radius:20px 20px 0 0; max-height:92dvh; overscroll-behavior:contain; }
+    .table-scroll { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .sidebar-nav { overscroll-behavior:contain; }
+    .topbar-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+    .table-wrap { position:relative; }
+    .table-wrap::after { content:''; position:absolute; top:0; right:0; bottom:0; width:40px; background:linear-gradient(to left, var(--surface), transparent); pointer-events:none; border-radius:0 var(--radius) var(--radius) 0; }
+  }
+  @media (max-height:500px) and (orientation:landscape) {
+    .sidebar-logo { padding:8px 16px; }
+    .nav-item { padding:7px 10px; }
+    .modal { max-height:96dvh; }
+  }
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar { padding-bottom:env(safe-area-inset-bottom); }
+    .topbar { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <span class="sidebar-logo-emoji">🍌</span>
+      <div>
+        <div class="sidebar-logo-text">Nano Banana</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">Главное</div>
+      <a href="/" class="nav-item"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item"><span class="icon">💰</span> Финансы</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Маркетинг</div>
+      <a href="/analytics" class="nav-item active"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item"><span class="icon">🔗</span> Ссылки</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Система</div>
+      <a href="/settings" class="nav-item"><span class="icon">⚙️</span> Настройки</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">👑</div>
+      <div>
+        <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-user-role">administrator</div>
+      </div>
+    </div>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Аналитика</div>
+    </div>
+    <div class="topbar-right">
+      <div class="period-tabs">
+        <button class="period-tab" data-period="today">Сегодня</button>
+        <button class="period-tab" data-period="yesterday">Вчера</button>
+        <button class="period-tab" data-period="week">7д</button>
+        <button class="period-tab active" data-period="month">30д</button>
+        <button class="period-tab" data-period="alltime">Всё</button>
+      </div>
+      <button class="icon-btn" id="themeBtn">☀️</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ВОРОНКА -->
+    <div class="funnel-grid">
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--blue)" id="f-new-users">—</div>
+        <div class="funnel-lbl">Новых юзеров</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--purple)" id="f-active">—</div>
+        <div class="funnel-lbl">Активных</div>
+        <div class="funnel-sub" id="f-active-pct">—</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--accent)" id="f-buyers">—</div>
+        <div class="funnel-lbl">Покупателей</div>
+        <div class="funnel-sub" id="f-conv">CR: —%</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--green)" id="f-new-buyers">—</div>
+        <div class="funnel-lbl">Новых покупат.</div>
+        <div class="funnel-sub" id="f-vet-buyers">повторных: —</div>
+      </div>
+      <div class="funnel-card">
+        <div class="funnel-val" style="color:var(--accent2)" id="f-revenue">—</div>
+        <div class="funnel-lbl">Выручка ₽</div>
+        <div class="funnel-sub" id="f-avg">avg: —</div>
+      </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">💰 Средний чек</div>
+        <div class="kpi-val" id="k-avg-check">—</div>
+        <div class="kpi-sub">рублей за покупку</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">🔄 Retention</div>
+        <div class="kpi-val" id="k-retention">—</div>
+        <div class="kpi-sub">покупок на юзера</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">🏆 LTV</div>
+        <div class="kpi-val" id="k-ltv">—</div>
+        <div class="kpi-sub">выручка с клиента</div>
+      </div>
+    </div>
+
+    <!-- CHART: Revenue by source -->
+    <div class="charts-row">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Выручка по источникам</div>
+            <div class="card-subtitle">топ-8 источников</div>
+          </div>
+        </div>
+        <canvas id="sourceRevenueChart" style="max-height:220px"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Конверсия по источникам</div>
+            <div class="card-subtitle">% юзеров → покупатели</div>
+          </div>
+        </div>
+        <canvas id="sourceConvChart" style="max-height:220px"></canvas>
+      </div>
+    </div>
+
+    <!-- ТАБЛИЦА -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Детализация по источникам</div>
+          <div class="card-subtitle" id="sources-period-label">за 30 дней</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="sources-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Источник</th>
+              <th data-sort="users" data-label="Юзеров">Юзеров</th>
+              <th data-sort="buyers" data-label="Покупателей">Покупателей</th>
+              <th data-sort="conversion" data-label="CR%">CR%</th>
+              <th data-sort="revenue" data-label="Выручка ₽">Выручка ₽</th>
+              <th data-sort="avg_check" data-label="Средний чек">Средний чек</th>
+              <th data-sort="new_revenue" data-label="Новые / Старые">Новые / Старые</th>
+            </tr>
+          </thead>
+          <tbody id="sourcesBody">
+            <tr><td colspan="8" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- МЭППИНГ КАМПАНИЙ -->
+    <div class="widget" id="widget-mappings">
+      <h2>🔗 Мэппинг кампаний (Яндекс → UTM)</h2>
+
+      <table id="mappings-table">
+        <thead>
+          <tr>
+            <th>Название в Яндексе</th>
+            <th>UTM-метки в БД</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="mappings-tbody"></tbody>
+      </table>
+
+      <div class="mapping-form">
+        <input type="hidden" id="mapping-id">
+        <input type="text" id="mapping-name" placeholder='Название кампании в Яндексе (например: Rsya_3 от 06-01-2026)'>
+        <input type="text" id="mapping-sources" placeholder='UTM через запятую: yandex_rsya_3, ad_yandex_rsya_3__cid'>
+        <button onclick="saveMapping()">Сохранить</button>
+        <button onclick="clearMappingForm()">Очистить</button>
+      </div>
+    </div>
+
+    <!-- ОКУПАЕМОСТЬ РЕКЛАМНЫХ КАМПАНИЙ -->
+    <div class="widget" id="widget-campaigns">
+      <h2>📢 Окупаемость рекламных кампаний</h2>
+
+      <div id="campaigns-error" style="display:none" class="error-banner"></div>
+
+      <div class="table-wrapper">
+        <table id="campaigns-table">
+          <thead>
+            <tr>
+              <th>Кампания</th>
+              <th>Расход ₽</th>
+              <th>Запусков</th>
+              <th>⚡️ Day-0</th>
+              <th>🐢 Дозрели</th>
+              <th>👴 Старички (чел.)</th>
+              <th>CAC ₽</th>
+              <th>Выручка новичков ₽</th>
+              <th>ROAS новичков %</th>
+              <th>Выручка старичков ₽</th>
+              <th>ROAS общий %</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-tbody"></tbody>
+          <tfoot id="campaigns-tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  let srcRevChart, srcConvChart;
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t); currentTheme = t;
+    if (srcRevChart) updateChartColors();
+  }
+
+  function getChartColors() {
+    return { grid: currentTheme==='dark'?'#2a2a38':'#e8e8f0', tick: currentTheme==='dark'?'#606078':'#9898b0' };
+  }
+
+  function updateChartColors() {
+    const c = getChartColors();
+    [srcRevChart, srcConvChart].forEach(ch => {
+      if (!ch) return;
+      ch.options.scales.x.grid.color = c.grid;
+      ch.options.scales.y.grid.color = c.grid;
+      ch.options.scales.x.ticks.color = c.tick;
+      ch.options.scales.y.ticks.color = c.tick;
+      ch.update();
+    });
+  }
+
+  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme==='dark'?'light':'dark'));
+
+  // МОБИЛЬНОЕ МЕНЮ
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  function openSidebar() {
+    if (navigator.vibrate) navigator.vibrate(8);
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    history.pushState({ panel: 'sidebar' }, '');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  }
+
+  document.getElementById('burgerBtn').addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+
+  window.addEventListener('popstate', () => {
+    if (sidebar.classList.contains('open')) { closeSidebar(); return; }
+    const openModal = document.querySelector('.modal-overlay.open');
+    if (openModal) { openModal.classList.remove('open'); return; }
+  });
+
+  let _swipeStartX = 0;
+  let _swipeStartY = 0;
+  document.addEventListener('touchstart', (e) => {
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (dx > 60 && _swipeStartX < 30 && !isOpen) { openSidebar(); }
+    if (dx < -60 && isOpen) { closeSidebar(); }
+  }, { passive: true });
+
+  const fmt = n => Number(n || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const fmtInt = n => Math.round(n || 0).toLocaleString('ru-RU');
+  const fmtDec = n => parseFloat(n||0).toFixed(2);
+  let currentPeriod = 'month';
+
+  function initCharts(labels, revenues, convs) {
+    const c = getChartColors();
+    const base = {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 45, maxTicksLimit: 6 } },
+        y: { grid: { color: c.grid }, ticks: { color: c.tick, font: { family: 'JetBrains Mono', size: 10 } } }
+      }
+    };
+
+    if (srcRevChart) srcRevChart.destroy();
+    srcRevChart = new Chart(document.getElementById('sourceRevenueChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data: revenues, backgroundColor: 'rgba(245,197,66,0.3)', borderColor: '#f5c542', borderWidth: 2, borderRadius: 4 }]},
+      options: JSON.parse(JSON.stringify(base))
+    });
+
+    if (srcConvChart) srcConvChart.destroy();
+    srcConvChart = new Chart(document.getElementById('sourceConvChart'), {
+      type: 'bar',
+      data: { labels, datasets: [{ data: convs, backgroundColor: 'rgba(59,130,246,0.3)', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 4 }]},
+      options: JSON.parse(JSON.stringify(base))
+    });
+  }
+
+  async function loadFunnel(period) {
+    const d = await fetch(`/api/analytics/funnel?period=${period}`).then(r => r.json());
+    const set = (id, val) => { const el = document.getElementById(id); if(el) { el.textContent = val; el.classList.remove('loading'); }};
+
+    set('f-new-users', fmtInt(d.new_users));
+    set('f-active', fmtInt(d.active_users));
+    document.getElementById('f-active-pct').textContent = d.new_users > 0 ? `${((d.active_users/d.new_users)*100).toFixed(1)}% от новых` : '—';
+    set('f-buyers', fmtInt(d.total_buyers));
+    document.getElementById('f-conv').textContent = `CR: ${fmtDec(d.conversion_rate)}%`;
+    set('f-new-buyers', fmtInt(d.new_buyers));
+    document.getElementById('f-vet-buyers').textContent = `повторных: ${fmtInt(d.veteran_buyers)}`;
+    set('f-revenue', fmt(d.revenue) + ' ₽');
+    document.getElementById('f-avg').textContent = `avg: ${fmt(d.avg_check)} ₽`;
+
+    document.getElementById('k-avg-check').textContent = fmt(d.avg_check) + ' ₽';
+    document.getElementById('k-retention').textContent = fmtDec(d.retention);
+    document.getElementById('k-ltv').textContent = fmt(d.ltv) + ' ₽';
+  }
+
+  const SOURCES_PER_PAGE = 10;
+  let sourcesCurrentPage = 1;
+  let sourcesData = [];
+  let sourcesSortKey = 'revenue';
+  let sourcesSortDir = 'desc';
+
+  function applySourcesSort() {
+    if (!sourcesSortKey) return;
+    sourcesData.sort((a, b) => {
+      const av = a[sourcesSortKey] ?? 0;
+      const bv = b[sourcesSortKey] ?? 0;
+      return sourcesSortDir === 'desc' ? bv - av : av - bv;
+    });
+  }
+
+  function updateSourcesSortHeaders() {
+    document.querySelectorAll('#sources-table th[data-sort]').forEach(th => {
+      const key = th.dataset.sort;
+      const label = th.dataset.label;
+      if (key === sourcesSortKey) {
+        th.innerHTML = `${label} <span style="opacity:0.9">${sourcesSortDir === 'desc' ? '▼' : '▲'}</span>`;
+      } else {
+        th.innerHTML = `${label} <span style="opacity:0.25">↕</span>`;
+      }
+    });
+  }
+
+  function sortSources(key) {
+    if (sourcesSortKey === key) {
+      sourcesSortDir = sourcesSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+      sourcesSortKey = key;
+      sourcesSortDir = 'desc';
+    }
+    sourcesCurrentPage = 1;
+    renderSourcesPage();
+  }
+
+  async function loadSources(period) {
+    document.getElementById('sourcesBody').innerHTML = '<tr><td colspan="8" class="loading" style="padding:30px;text-align:center">Загрузка...</td></tr>';
+    sourcesData = await fetch(`/api/analytics/sources?period=${period}`).then(r => r.json());
+    sourcesCurrentPage = 1;
+    renderSourcesPage();
+
+    // Графики — топ 8 по выручке (из исходных данных до сортировки)
+    const top8 = [...sourcesData].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+    initCharts(top8.map(s => s.source), top8.map(s => s.revenue), top8.map(s => s.conversion));
+  }
+
+  function renderSourcesPage() {
+    applySourcesSort();
+    updateSourcesSortHeaders();
+    const total = sourcesData.length;
+    const totalPages = Math.ceil(total / SOURCES_PER_PAGE);
+    const start = (sourcesCurrentPage - 1) * SOURCES_PER_PAGE;
+    const end = start + SOURCES_PER_PAGE;
+    const pageData = sourcesData.slice(start, end);
+
+    const maxRev = Math.max(...sourcesData.map(s => s.revenue), 1);
+
+    document.getElementById('sourcesBody').innerHTML = pageData.map((s, i) => `
+      <tr>
+        <td class="mono" style="color:var(--text3)">${start + i + 1}</td>
+        <td style="font-weight:500">${s.source}</td>
+        <td class="mono">${fmtInt(s.users)}</td>
+        <td class="mono">${fmtInt(s.buyers)}</td>
+        <td>
+          <span class="mono" style="color:${s.conversion>=10?'var(--green)':s.conversion>=5?'var(--accent)':'var(--text2)'}">${fmtDec(s.conversion)}%</span>
+        </td>
+        <td>
+          <span class="inline-bar"><span class="inline-bar-fill" style="width:${(s.revenue/maxRev*100).toFixed(1)}%"></span></span>
+          <span class="mono" style="color:var(--accent)">${fmt(s.revenue)} ₽</span>
+        </td>
+        <td class="mono">${fmt(s.avg_check)} ₽</td>
+        <td>
+          <span class="mono" style="color:var(--green);font-size:10px">н: ${fmt(s.new_revenue)} ₽</span>
+          <span class="mono" style="color:var(--text3);font-size:10px"> / ст: ${fmt(s.old_revenue)} ₽</span>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="8" style="padding:30px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+
+    renderSourcesPagination(totalPages);
+  }
+
+  function renderSourcesPagination(totalPages) {
+    let pager = document.getElementById('sources-pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.id = 'sources-pager';
+      pager.className = 'sources-pager';
+      document.getElementById('sourcesBody').closest('table').after(pager);
+    }
+
+    pager.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    const mkBtn = (label, onClick, disabled, extraClass = '') => {
+      const btn = document.createElement('button');
+      btn.className = 'pager-btn' + (extraClass ? ' ' + extraClass : '');
+      btn.innerHTML = label;
+      btn.disabled = disabled;
+      if (!disabled) btn.onclick = onClick;
+      return btn;
+    };
+
+    pager.appendChild(mkBtn('‹', () => { sourcesCurrentPage--; renderSourcesPage(); }, sourcesCurrentPage === 1, 'pager-btn-nav'));
+
+    for (let i = 1; i <= totalPages; i++) {
+      const btn = mkBtn(i, () => { sourcesCurrentPage = i; renderSourcesPage(); }, false);
+      if (i === sourcesCurrentPage) { btn.classList.add('active'); btn.disabled = true; }
+      pager.appendChild(btn);
+    }
+
+    pager.appendChild(mkBtn('›', () => { sourcesCurrentPage++; renderSourcesPage(); }, sourcesCurrentPage === totalPages, 'pager-btn-nav'));
+
+    const sep = document.createElement('div');
+    sep.className = 'pager-sep';
+    pager.appendChild(sep);
+
+    const info = document.createElement('span');
+    info.className = 'pager-info';
+    info.textContent = `стр. ${sourcesCurrentPage} / ${totalPages} · ${sourcesData.length} источников`;
+    pager.appendChild(info);
+  }
+
+  const periodLabels = { today: 'сегодня', yesterday: 'вчера', week: 'за 7 дней', month: 'за 30 дней', alltime: 'за всё время' };
+
+  document.querySelectorAll('.period-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentPeriod = tab.dataset.period;
+      document.getElementById('sources-period-label').textContent = periodLabels[currentPeriod] || '';
+      loadFunnel(currentPeriod);
+      loadSources(currentPeriod);
+      loadCampaigns(currentPeriod);
+    });
+  });
+
+  // Загрузка таблицы кампаний
+  async function loadCampaigns(period) {
+    const res = await fetch(`/api/analytics/campaigns?period=${period}`);
+    const data = await res.json();
+
+    if (data.direct_error) {
+      document.getElementById('campaigns-error').textContent = `Ошибка Директ API: ${data.direct_error}`;
+      document.getElementById('campaigns-error').style.display = 'block';
+    } else {
+      document.getElementById('campaigns-error').style.display = 'none';
+    }
+
+    const tbody = document.getElementById('campaigns-tbody');
+    tbody.innerHTML = '';
+    for (const row of data.rows) {
+      tbody.innerHTML += `
+        <tr>
+          <td>${row.campaign}</td>
+          <td class="mono">${row.spend.toLocaleString()}</td>
+          <td class="mono">${row.starts}</td>
+          <td class="mono">${row.fast_buyers}</td>
+          <td class="mono">${row.slow_buyers}</td>
+          <td class="mono">${row.old_buyers}</td>
+          <td class="mono">${row.cac || '—'}</td>
+          <td class="mono" style="color:var(--green)">${row.new_revenue.toLocaleString()}</td>
+          <td class="mono">${row.roas_new}%</td>
+          <td class="mono" style="color:var(--text2)">${row.old_revenue.toLocaleString()}</td>
+          <td class="mono">${row.roas_total}%</td>
+        </tr>`;
+    }
+
+    if (data.rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--text3)">Нет данных. Добавьте мэппинги кампаний ниже.</td></tr>';
+    }
+
+    // Строка ИТОГО
+    const t = data.totals;
+    document.getElementById('campaigns-tfoot').innerHTML = `
+      <tr class="totals-row">
+        <td><b>ИТОГО</b></td>
+        <td><b>${t.spend.toLocaleString()}</b></td>
+        <td><b>${t.starts}</b></td>
+        <td><b>${t.fast_buyers}</b></td>
+        <td><b>${t.slow_buyers}</b></td>
+        <td><b>${t.old_buyers}</b></td>
+        <td><b>${t.cac || '—'}</b></td>
+        <td><b>${t.new_revenue.toLocaleString()}</b></td>
+        <td><b>${t.roas_new}%</b></td>
+        <td><b>${t.old_revenue.toLocaleString()}</b></td>
+        <td><b>${t.roas_total}%</b></td>
+      </tr>`;
+  }
+
+  // Загрузка мэппингов
+  async function loadMappings() {
+    const res = await fetch('/api/analytics/campaign-mappings');
+    const mappings = await res.json();
+    const tbody = document.getElementById('mappings-tbody');
+    tbody.innerHTML = '';
+    for (const m of mappings) {
+      tbody.innerHTML += `
+        <tr>
+          <td>${m.yandex_campaign_name}</td>
+          <td class="mono" style="font-size:11px;color:var(--text2)">${m.utm_sources.join(', ')}</td>
+          <td style="white-space:nowrap">
+            <button onclick="editMapping(${m.id}, '${m.yandex_campaign_name.replace(/'/g,"\\'")}', '${m.utm_sources.join(',')}')" style="background:none;border:none;cursor:pointer;font-size:14px">✏️</button>
+            <button onclick="deleteMapping(${m.id})" style="background:none;border:none;cursor:pointer;font-size:14px">🗑️</button>
+          </td>
+        </tr>`;
+    }
+    if (mappings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--text3)">Мэппингов пока нет</td></tr>';
+    }
+  }
+
+  async function saveMapping() {
+    const id = document.getElementById('mapping-id').value;
+    const name = document.getElementById('mapping-name').value.trim();
+    const sources = document.getElementById('mapping-sources').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+
+    if (!name || sources.length === 0) return alert('Заполни все поля');
+
+    await fetch('/api/analytics/campaign-mappings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id: id ? parseInt(id) : undefined, yandex_campaign_name: name, utm_sources: sources })
+    });
+    clearMappingForm();
+    loadMappings();
+  }
+
+  async function deleteMapping(id) {
+    if (!confirm('Удалить мэппинг?')) return;
+    await fetch(`/api/analytics/campaign-mappings/${id}`, { method: 'DELETE' });
+    loadMappings();
+  }
+
+  function editMapping(id, name, sources) {
+    document.getElementById('mapping-id').value = id;
+    document.getElementById('mapping-name').value = name;
+    document.getElementById('mapping-sources').value = sources;
+  }
+
+  function clearMappingForm() {
+    document.getElementById('mapping-id').value = '';
+    document.getElementById('mapping-name').value = '';
+    document.getElementById('mapping-sources').value = '';
+  }
+
+  document.querySelectorAll('#sources-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => sortSources(th.dataset.sort));
+  });
+
+  applyTheme(currentTheme);
+  loadFunnel(currentPeriod);
+  loadSources(currentPeriod);
+  loadCampaigns(currentPeriod);
+  loadMappings();
+</script>
+</body>
+</html>

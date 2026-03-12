@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nano Banana — Ссылки</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
+  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
+  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+
+  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition); }
+  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
+  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
+  .sidebar-logo-emoji { font-size:26px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+  .nav-section { margin-bottom:20px; }
+  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
+  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-name { font-size:13px; font-weight:600; }
+  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+
+  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .topbar-left { display:flex; align-items:center; gap:12px; }
+  .topbar-title { font-size:16px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; }
+  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
+  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+  .content { padding:20px 24px; flex:1; }
+
+  /* SUMMARY */
+  .summary-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+  .summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .summary-card.yellow::before { background:var(--accent); }
+  .summary-card.green::before { background:var(--green); }
+  .summary-card.blue::before { background:var(--blue); }
+  .summary-card.purple::before { background:var(--purple); }
+  .summary-card.orange::before { background:var(--accent2); }
+  .summary-val { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-bottom:4px; }
+  .summary-lbl { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+
+  /* TOOLBAR */
+  .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .search-input { padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); width:260px; }
+  .search-input:focus { border-color:var(--accent); }
+  .sort-select { padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'Inter',sans-serif; outline:none; cursor:pointer; }
+  .hint { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-left:auto; }
+
+  /* КАРТОЧКИ ПОСТОВ */
+  .posts-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
+  .post-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; transition:border-color var(--transition), transform var(--transition); cursor:pointer; }
+  .post-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .post-card-header { padding:10px 12px 8px; display:flex; align-items:flex-start; justify-content:space-between; gap:10px; border-bottom:1px solid var(--border); }
+  .post-card-id { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent); font-weight:600; background:rgba(245,197,66,0.1); border:1px solid rgba(245,197,66,0.2); border-radius:6px; padding:2px 8px; flex-shrink:0; }
+  .post-card-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .meta-badge { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:5px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); }
+  .post-card-prompt { padding:8px 12px; font-size:12px; color:var(--text2); line-height:1.6; min-height:52px; }
+  .post-card-stats { padding:8px 12px 10px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .stat-item { text-align:center; }
+  .stat-val { font-size:13px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+  .stat-lbl { font-size:10px; color:var(--text3); text-transform:uppercase; margin-top:1px; }
+  .stat-item.clicks .stat-val { color:var(--text); }
+  .stat-item.users .stat-val { color:var(--blue); }
+  .stat-item.buyers .stat-val { color:var(--green); }
+  .stat-item.revenue .stat-val { color:var(--accent); }
+  .post-card-footer { padding:6px 12px; background:var(--surface2); border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .cr-row { display:flex; gap:12px; }
+  .cr-item { font-size:11px; font-family:'JetBrains Mono',monospace; }
+  .cr-label { color:var(--text3); }
+
+  /* CR BADGE */
+  .cr-badge { display:inline-block; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:600; }
+  .cr-high { background:rgba(34,197,94,0.15); color:var(--green); }
+  .cr-mid { background:rgba(245,197,66,0.15); color:var(--accent); }
+  .cr-low { background:rgba(239,68,68,0.15); color:var(--red); }
+
+  /* МОДАЛКА */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:500; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.open { display:flex; }
+  .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:14px; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+  .modal-header { padding:20px 24px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--surface); z-index:1; }
+  .modal-title { font-size:15px; font-weight:700; }
+  .modal-close { width:30px; height:30px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+  .modal-body { padding:20px 24px; }
+  .modal-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .modal-stat { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+  .modal-stat-val { font-size:18px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+  .modal-stat-lbl { font-size:10px; color:var(--text3); text-transform:uppercase; margin-top:2px; }
+  .prompt-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:16px; font-size:13px; line-height:1.7; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+  .section-label { font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+  .link-copy { display:flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:20px; }
+  .link-text { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--blue); flex:1; word-break:break-all; }
+  .copy-btn { padding:5px 12px; border-radius:6px; border:none; background:var(--accent); color:#000; font-size:11px; font-weight:600; cursor:pointer; flex-shrink:0; }
+
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  .loading { animation:shimmer 1.5s infinite; color:var(--text3); }
+
+  @media (max-width:900px) { .posts-grid { grid-template-columns:1fr; } .summary-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:768px) {
+    .sidebar { transform:translateX(-100%); } .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay.active { display:block; } .main { margin-left:0; }
+    .burger-btn { display:flex; } .topbar { padding:10px 16px; flex-wrap:wrap; } .content { padding:14px 16px; }
+    .nav-item { padding:13px 10px; }
+    .page-btn { min-width:44px; height:44px; font-size:13px; }
+    .modal-close { width:44px; height:44px; }
+    .burger-btn { width:44px; height:44px; }
+    .icon-btn { width:44px; height:44px; }
+    * { touch-action:manipulation; }
+    .nav-item:active, .page-btn:active, .search-btn:active, .burger-btn:active, .icon-btn:active { transform:scale(0.96); opacity:0.8; transition:transform 0.08s, opacity 0.08s; }
+    @media (hover:none) { .nav-item:hover { background:none; color:var(--text2); } tr:hover td { background:none; } }
+    .modal-overlay { align-items:flex-end; padding:0; }
+    .modal { max-width:100%; border-radius:20px 20px 0 0; max-height:92dvh; overscroll-behavior:contain; }
+    .table-scroll { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .sidebar-nav { overscroll-behavior:contain; }
+    .topbar-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+    .table-wrap { position:relative; }
+    .table-wrap::after { content:''; position:absolute; top:0; right:0; bottom:0; width:40px; background:linear-gradient(to left, var(--surface), transparent); pointer-events:none; border-radius:0 var(--radius) var(--radius) 0; }
+  }
+  @media (max-height:500px) and (orientation:landscape) {
+    .sidebar-logo { padding:8px 16px; }
+    .nav-item { padding:7px 10px; }
+    .modal { max-height:96dvh; }
+  }
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar { padding-bottom:env(safe-area-inset-bottom); }
+    .topbar { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <span class="sidebar-logo-emoji">🍌</span>
+      <div>
+        <div class="sidebar-logo-text">Nano Banana</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">Главное</div>
+      <a href="/" class="nav-item"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item"><span class="icon">💰</span> Финансы</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Маркетинг</div>
+      <a href="/analytics" class="nav-item"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item active"><span class="icon">🔗</span> Ссылки</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Система</div>
+      <a href="/settings" class="nav-item"><span class="icon">⚙️</span> Настройки</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">👑</div>
+      <div>
+        <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-user-role">administrator</div>
+      </div>
+    </div>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Ссылки</div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="themeBtn">☀️</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="summary-grid">
+      <div class="summary-card yellow">
+        <div class="summary-val" id="s-posts">—</div>
+        <div class="summary-lbl">Постов</div>
+      </div>
+      <div class="summary-card blue">
+        <div class="summary-val" id="s-clicks">—</div>
+        <div class="summary-lbl">Запусков бота</div>
+      </div>
+      <div class="summary-card purple">
+        <div class="summary-val" id="s-users">—</div>
+        <div class="summary-lbl">Новых юзеров</div>
+      </div>
+      <div class="summary-card green">
+        <div class="summary-val" id="s-buyers">—</div>
+        <div class="summary-lbl">Купили</div>
+      </div>
+      <div class="summary-card orange">
+        <div class="summary-val" id="s-revenue">—</div>
+        <div class="summary-lbl">Выручка ₽</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" class="search-input" id="searchInput" placeholder="🔍 Поиск по промпту или ID...">
+      <select class="sort-select" id="sortSelect">
+        <option value="created_at">Новые сначала</option>
+        <option value="clicks">По кликам</option>
+        <option value="users">По юзерам</option>
+        <option value="revenue">По выручке</option>
+        <option value="cr_clicks">По конверсии</option>
+      </select>
+      <span class="hint" id="postsHint">— постов</span>
+    </div>
+
+    <div class="posts-grid" id="postsGrid">
+      <div class="loading" style="padding:40px;text-align:center;grid-column:1/-1">Загрузка...</div>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА -->
+<div class="modal-overlay" id="postModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Пост</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t); currentTheme = t;
+  }
+  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+  applyTheme(currentTheme);
+
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  function openSidebar() {
+    if (navigator.vibrate) navigator.vibrate(8);
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    history.pushState({ panel: 'sidebar' }, '');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  }
+
+  document.getElementById('burgerBtn').addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+
+  window.addEventListener('popstate', () => {
+    if (sidebar.classList.contains('open')) { closeSidebar(); return; }
+    const openModal = document.querySelector('.modal-overlay.open');
+    if (openModal) { openModal.classList.remove('open'); return; }
+  });
+
+  let _swipeStartX = 0;
+  let _swipeStartY = 0;
+  document.addEventListener('touchstart', (e) => {
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (dx > 60 && _swipeStartX < 30 && !isOpen) { openSidebar(); }
+    if (dx < -60 && isOpen) { closeSidebar(); }
+  }, { passive: true });
+
+  const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0));
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  let allPosts = [];
+
+  function crClass(cr) {
+    if (cr >= 15) return 'cr-high';
+    if (cr >= 7) return 'cr-mid';
+    return 'cr-low';
+  }
+
+  function renderCards(posts) {
+    document.getElementById('postsHint').textContent = `${posts.length} постов`;
+    if (!posts.length) {
+      document.getElementById('postsGrid').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);grid-column:1/-1">Ничего не найдено</div>';
+      return;
+    }
+    document.getElementById('postsGrid').innerHTML = posts.map(p => `
+      <div class="post-card" onclick="openModal(${p.id})">
+        <div class="post-card-header">
+          <span class="post-card-id">${p.config_id}</span>
+          <div class="post-card-meta">
+            <span class="meta-badge">📐 ${p.aspect_ratio}</span>
+            <span class="meta-badge">🤖 ${p.model_type}</span>
+            <span class="meta-badge">📅 ${p.created_at}</span>
+          </div>
+        </div>
+        <div class="post-card-prompt">${p.prompt_preview || '<span style="color:var(--text3);font-style:italic">Промпт отсутствует</span>'}</div>
+        <div class="post-card-stats" style="grid-template-columns:repeat(5,1fr)">
+          <div class="stat-item clicks">
+            <div class="stat-val">${fmt(p.clicks)}</div>
+            <div class="stat-lbl">Запусков</div>
+          </div>
+          <div class="stat-item users">
+            <div class="stat-val">${fmt(p.users)}</div>
+            <div class="stat-lbl">Новых</div>
+          </div>
+          <div class="stat-item" style="--c:var(--purple)">
+            <div class="stat-val" style="color:var(--purple)">${fmt(p.generations)}</div>
+            <div class="stat-lbl">Генераций</div>
+          </div>
+          <div class="stat-item buyers">
+            <div class="stat-val">${fmt(p.buyers)}</div>
+            <div class="stat-lbl">Покупат.</div>
+          </div>
+          <div class="stat-item revenue">
+            <div class="stat-val">${fmt(p.revenue)}</div>
+            <div class="stat-lbl">Выручка ₽</div>
+          </div>
+        </div>
+        <div class="post-card-footer">
+          <div class="cr-row">
+            <span class="cr-item"><span class="cr-label">Новых/Запуски: </span><span class="cr-badge ${crClass(p.cr_clicks)}">${p.cr_clicks}%</span></span>
+            <span class="cr-item"><span class="cr-label">CR купили: </span><span class="cr-badge ${crClass(p.cr_buyers)}">${p.cr_buyers}%</span></span>
+            <span class="cr-item"><span class="cr-label">Ср.чек: </span><span style="font-family:'JetBrains Mono',monospace;font-size:11px">${fmt(p.avg_check)} ₽</span></span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function filterAndSort() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const sort = document.getElementById('sortSelect').value;
+    let filtered = allPosts.filter(p =>
+      p.config_id.toLowerCase().includes(q) ||
+      (p.prompt_full || '').toLowerCase().includes(q)
+    );
+    filtered.sort((a, b) => {
+      if (sort === 'created_at') return b.id - a.id;
+      return b[sort] - a[sort];
+    });
+    renderCards(filtered);
+  }
+
+  document.getElementById('searchInput').addEventListener('input', filterAndSort);
+  document.getElementById('sortSelect').addEventListener('change', filterAndSort);
+
+  function openModal(postId) {
+    const p = allPosts.find(x => x.id === postId);
+    if (!p) return;
+    document.getElementById('modalTitle').textContent = p.config_id;
+    const link = `https://t.me/nan0banana_bot?start=${p.config_id}`;
+    document.getElementById('modalBody').innerHTML = `
+      <div class="section-label">Ссылка</div>
+      <div class="link-copy">
+        <span class="link-text">${link}</span>
+        <button class="copy-btn" onclick="copyLink('${link}')">Копировать</button>
+      </div>
+      <div class="modal-stats">
+        <div class="modal-stat">
+          <div class="modal-stat-val" style="color:var(--text)">${fmt(p.clicks)}</div>
+          <div class="modal-stat-lbl">Запусков бота</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-val" style="color:var(--blue)">${fmt(p.users)}</div>
+          <div class="modal-stat-lbl">Юзеров</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-val" style="color:var(--green)">${fmt(p.buyers)}</div>
+          <div class="modal-stat-lbl">Купили</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-val" style="color:var(--accent)">${fmt(p.revenue)} ₽</div>
+          <div class="modal-stat-lbl">Выручка</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-val" style="color:var(--purple)">${p.cr_clicks}%</div>
+          <div class="modal-stat-lbl">Новых / Запуски</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-val" style="color:var(--accent2)">${p.cr_buyers}%</div>
+          <div class="modal-stat-lbl">CR юзеры→покупки</div>
+        </div>
+      </div>
+      <div class="section-label">Промпт</div>
+      <div class="prompt-box">${p.prompt_full || 'Промпт отсутствует'}</div>
+    `;
+    document.getElementById('postModal').classList.add('open');
+    history.pushState({ panel: 'modal' }, '');
+  }
+
+  function closeModal() {
+    document.getElementById('postModal').classList.remove('open');
+  }
+  document.getElementById('postModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('postModal')) closeModal();
+  });
+
+  function copyLink(link) {
+    navigator.clipboard.writeText(link).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      if (btn) { btn.textContent = '✓ Скопировано'; setTimeout(() => btn.textContent = 'Копировать', 2000); }
+    });
+  }
+
+  async function loadData() {
+    const data = await fetch('/api/links/posts').then(r => r.json());
+    allPosts = data.posts;
+
+    set('s-posts', fmt(data.totals.posts));
+    set('s-clicks', fmt(data.totals.clicks));
+    set('s-users', fmt(data.totals.users));
+    set('s-buyers', fmt(data.totals.buyers));
+    set('s-revenue', fmt(data.totals.revenue) + ' ₽');
+
+    filterAndSort();
+  }
+
+  loadData();
+</script>
+</body>
+</html>
+

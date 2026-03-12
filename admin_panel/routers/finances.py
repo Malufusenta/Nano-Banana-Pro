@@ -17,6 +17,11 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 
 
+def is_mobile(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "").lower()
+    return any(x in ua for x in ["mobile", "android", "iphone", "ipad"])
+
+
 def get_today_start_msk():
     msk_tz = timezone(timedelta(hours=3))
     now_msk = datetime.now(msk_tz)
@@ -44,7 +49,8 @@ def get_period_dates(period: str):
 
 @router.get("/finances", response_class=HTMLResponse)
 async def finances_page(request: Request, user=Depends(require_auth)):
-    return templates.TemplateResponse("finances.html", {"request": request, "user": user})
+    template = "mobile/finances.html" if is_mobile(request) else "desktop/finances.html"
+    return templates.TemplateResponse(template, {"request": request, "user": user})
 
 
 @router.get("/api/finances/summary")

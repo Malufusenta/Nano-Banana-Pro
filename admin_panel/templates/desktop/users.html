@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nano Banana — Пользователи</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
+  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
+  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+
+  /* SIDEBAR */
+  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition),background var(--transition); }
+  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
+  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
+  .sidebar-logo-emoji { font-size:26px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+  .nav-section { margin-bottom:20px; }
+  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
+  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
+  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-name { font-size:13px; font-weight:600; }
+  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+
+  /* MAIN */
+  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .topbar-left { display:flex; align-items:center; gap:12px; }
+  .topbar-title { font-size:16px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; }
+  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; flex-shrink:0; }
+  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
+  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
+  .content { padding:20px 24px; flex:1; }
+
+  /* SEARCH BAR */
+  .search-bar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .search-input-wrap { flex:1; min-width:200px; position:relative; }
+  .search-input { width:100%; padding:9px 14px 9px 36px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:'Inter',sans-serif; font-size:13px; outline:none; transition:border-color var(--transition); }
+  .search-input:focus { border-color:var(--accent); }
+  .search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:14px; }
+  .search-btn { padding:9px 18px; border-radius:8px; background:var(--accent); color:#000; font-family:'Inter',sans-serif; font-size:13px; font-weight:600; border:none; cursor:pointer; transition:opacity var(--transition); white-space:nowrap; }
+  .search-btn:hover { opacity:0.85; }
+
+  /* STATS ROW */
+  .stats-row { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .stat-chip { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 16px; font-size:12px; color:var(--text2); }
+  .stat-chip strong { color:var(--text); font-size:15px; font-weight:700; display:block; font-variant-numeric:tabular-nums; }
+
+  /* TABLE */
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; background:var(--surface2); border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
+  th:hover { color:var(--text2); }
+  td { padding:10px 14px; font-size:13px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:var(--surface2); }
+  .mono { font-family:'JetBrains Mono',monospace; font-size:11px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:600; font-family:'JetBrains Mono',monospace; }
+  .badge-green { background:rgba(34,197,94,0.15); color:var(--green); }
+  .badge-red { background:rgba(239,68,68,0.15); color:var(--red); }
+  .badge-blue { background:rgba(59,130,246,0.15); color:var(--blue); }
+  .badge-yellow { background:rgba(245,197,66,0.15); color:var(--accent); }
+  .user-link { color:var(--accent); text-decoration:none; font-weight:600; cursor:pointer; }
+  .user-link:hover { text-decoration:underline; }
+
+  /* PAGINATION */
+  .pagination { display:flex; align-items:center; gap:6px; padding:14px 16px; justify-content:center; flex-wrap:wrap; }
+  .page-btn { min-width:32px; height:32px; padding:0 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-size:12px; cursor:pointer; transition:all var(--transition); font-family:'JetBrains Mono',monospace; }
+  .page-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .page-btn.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
+  .page-btn:disabled { opacity:0.3; cursor:not-allowed; }
+  .page-info { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; padding:0 8px; }
+
+  /* MODAL */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:500; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); width:100%; max-width:640px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+  .modal-header { padding:20px 24px 0; display:flex; align-items:flex-start; justify-content:space-between; }
+  .modal-title { font-size:16px; font-weight:700; }
+  .modal-sub { font-size:12px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+  .modal-close { width:30px; height:30px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .modal-body { padding:20px 24px; }
+  .user-stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .user-stat { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+  .user-stat-val { font-size:18px; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .user-stat-lbl { font-size:10px; color:var(--text3); margin-top:2px; text-transform:uppercase; letter-spacing:0.5px; }
+  .section-title { font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .mini-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  .mini-table th { font-size:10px; color:var(--text3); text-align:left; padding:5px 8px; text-transform:uppercase; letter-spacing:0.5px; }
+  .mini-table td { font-size:12px; padding:7px 8px; border-top:1px solid var(--border); }
+  .user-info-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .user-info-row:last-child { border-bottom:none; }
+  .user-info-key { color:var(--text2); }
+  .user-info-val { font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .tg-link { color:var(--blue); text-decoration:none; }
+  .tg-link:hover { text-decoration:underline; }
+
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  .loading { animation:shimmer 1.5s infinite; color:var(--text3); }
+
+  @media (max-width:768px) {
+    .sidebar { transform:translateX(-100%); }
+    .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay.active { display:block; }
+    .main { margin-left:0; }
+    .burger-btn { display:flex; }
+    .topbar { padding:10px 16px; flex-wrap:wrap; }
+    .content { padding:14px 16px; }
+    .user-stats-grid { grid-template-columns:repeat(2,1fr); }
+    .nav-item { padding:13px 10px; }
+    .page-btn { min-width:44px; height:44px; font-size:13px; }
+    .modal-close { width:44px; height:44px; }
+    .burger-btn { width:44px; height:44px; }
+    .icon-btn { width:44px; height:44px; }
+    * { touch-action:manipulation; }
+    .nav-item:active, .page-btn:active, .search-btn:active, .burger-btn:active, .icon-btn:active { transform:scale(0.96); opacity:0.8; transition:transform 0.08s, opacity 0.08s; }
+    @media (hover:none) { .nav-item:hover { background:none; color:var(--text2); } tr:hover td { background:none; } }
+    .modal-overlay { align-items:flex-end; padding:0; }
+    .modal { max-width:100%; border-radius:20px 20px 0 0; max-height:92dvh; overscroll-behavior:contain; }
+    .table-scroll { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .sidebar-nav { overscroll-behavior:contain; }
+    .topbar-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+    .table-wrap { position:relative; }
+    .table-wrap::after { content:''; position:absolute; top:0; right:0; bottom:0; width:40px; background:linear-gradient(to left, var(--surface), transparent); pointer-events:none; border-radius:0 var(--radius) var(--radius) 0; }
+  }
+  @media (max-height:500px) and (orientation:landscape) {
+    .sidebar-logo { padding:8px 16px; }
+    .nav-item { padding:7px 10px; }
+    .modal { max-height:96dvh; }
+  }
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar { padding-bottom:env(safe-area-inset-bottom); }
+    .topbar { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <span class="sidebar-logo-emoji">🍌</span>
+      <div>
+        <div class="sidebar-logo-text">Nano Banana</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">Главное</div>
+      <a href="/" class="nav-item"><span class="icon">📊</span> Дашборд</a>
+      <a href="/users" class="nav-item active"><span class="icon">👥</span> Пользователи</a>
+      <a href="/finances" class="nav-item"><span class="icon">💰</span> Финансы</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Маркетинг</div>
+      <a href="/analytics" class="nav-item"><span class="icon">📈</span> Аналитика</a>
+      <a href="/broadcast" class="nav-item"><span class="icon">📣</span> Рассылки</a>
+      <a href="/links" class="nav-item"><span class="icon">🔗</span> Ссылки</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Система</div>
+      <a href="/settings" class="nav-item"><span class="icon">⚙️</span> Настройки</a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">👑</div>
+      <div>
+        <div class="sidebar-user-name">{{ user }}</div>
+        <div class="sidebar-user-role">administrator</div>
+      </div>
+    </div>
+    <a href="/logout" class="nav-item" style="color:var(--accent2)"><span class="icon">🚪</span> Выйти</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="burger-btn" id="burgerBtn">☰</button>
+      <div class="topbar-title">Пользователи</div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="themeBtn">☀️</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="text" placeholder="Поиск по имени, username или Telegram ID..." />
+      </div>
+      <button class="search-btn" id="searchBtn">Найти</button>
+    </div>
+
+    <div class="stats-row" id="statsRow">
+      <div class="stat-chip"><strong id="st-total" class="loading">—</strong>Всего юзеров</div>
+      <div class="stat-chip"><strong id="st-page" class="loading">—</strong>На этой странице</div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table id="usersTable">
+          <thead>
+            <tr>
+              <th data-sort="telegram_id">TG ID</th>
+              <th data-sort="full_name">Имя</th>
+              <th data-sort="balance_paid">💰 Баланс</th>
+              <th data-sort="total_revenue">Выручка</th>
+              <th data-sort="orders_count">Покупок</th>
+              <th data-sort="total_generations_used">Генераций</th>
+              <th data-sort="source">Источник</th>
+              <th data-sort="created_at">Регистрация</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr><td colspan="9" class="loading" style="padding:40px;text-align:center">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">Пользователь</div>
+        <div class="modal-sub" id="modalSub">—</div>
+      </div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody">
+      <div class="loading">Загрузка...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ТЕМА
+  const THEME_KEY = 'nb_admin_theme';
+  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t); currentTheme = t;
+  }
+  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+  applyTheme(currentTheme);
+
+  // МОБИЛЬНОЕ МЕНЮ
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  function openSidebar() {
+    if (navigator.vibrate) navigator.vibrate(8);
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    history.pushState({ panel: 'sidebar' }, '');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+  }
+
+  document.getElementById('burgerBtn').addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+
+  window.addEventListener('popstate', () => {
+    if (sidebar.classList.contains('open')) { closeSidebar(); return; }
+    const openModal = document.querySelector('.modal-overlay.open');
+    if (openModal) { openModal.classList.remove('open'); return; }
+  });
+
+  let _swipeStartX = 0;
+  let _swipeStartY = 0;
+  document.addEventListener('touchstart', (e) => {
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (dx > 60 && _swipeStartX < 30 && !isOpen) { openSidebar(); }
+    if (dx < -60 && isOpen) { closeSidebar(); }
+  }, { passive: true });
+
+  // СОСТОЯНИЕ
+  let currentPage = 1;
+  let currentSort = 'created_at';
+  let currentOrder = 'desc';
+  let currentQ = '';
+  const fmt = n => new Intl.NumberFormat('ru-RU').format(n || 0);
+
+  // ЗАГРУЗКА ЮЗЕРОВ
+  async function loadUsers() {
+    document.getElementById('usersBody').innerHTML = '<tr><td colspan="9" class="loading" style="padding:40px;text-align:center">Загрузка...</td></tr>';
+    const params = new URLSearchParams({ q: currentQ, page: currentPage, sort: currentSort, order: currentOrder, limit: 20 });
+    const data = await fetch(`/api/users?${params}`).then(r => r.json());
+
+    document.getElementById('st-total').textContent = fmt(data.total);
+    document.getElementById('st-total').classList.remove('loading');
+    document.getElementById('st-page').textContent = data.users.length;
+    document.getElementById('st-page').classList.remove('loading');
+
+    const tbody = document.getElementById('usersBody');
+    if (!data.users.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--text3)">Ничего не найдено</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.users.map(u => `
+      <tr>
+        <td><span class="user-link mono" onclick="openUser(${u.telegram_id})">${u.telegram_id}</span></td>
+        <td>
+          <div style="font-weight:500">${u.full_name || '—'}</div>
+          ${u.username ? `<div class="mono" style="color:var(--text3)">@${u.username}</div>` : ''}
+        </td>
+        <td>
+          <span class="mono" style="color:var(--accent)">${fmt(u.balance_paid)} 🍌</span>
+          ${u.balance_free ? `<div class="mono" style="color:var(--text3);font-size:10px">+${u.balance_free} free</div>` : ''}
+        </td>
+        <td class="mono">${u.total_revenue ? fmt(u.total_revenue) + ' ₽' : '—'}</td>
+        <td class="mono">${u.orders_count || 0}</td>
+        <td class="mono">${fmt(u.total_generations_used)}</td>
+        <td><span class="mono" style="color:var(--text3);font-size:11px">${u.source || '—'}</span></td>
+        <td class="mono" style="color:var(--text3)">${u.created_at}</td>
+        <td>
+          ${u.is_blocked
+            ? '<span class="badge badge-red">заблокирован</span>'
+            : u.first_purchase_at
+              ? '<span class="badge badge-yellow">платящий</span>'
+              : '<span class="badge badge-blue">активный</span>'
+          }
+        </td>
+      </tr>
+    `).join('');
+
+    renderPagination(data.page, data.pages);
+  }
+
+  // ПАГИНАЦИЯ
+  function renderPagination(page, pages) {
+    const el = document.getElementById('pagination');
+    if (pages <= 1) { el.innerHTML = ''; return; }
+    let html = `<button class="page-btn" onclick="goPage(${page-1})" ${page===1?'disabled':''}>←</button>`;
+    const range = [];
+    for (let i = Math.max(1,page-2); i <= Math.min(pages,page+2); i++) range.push(i);
+    if (range[0] > 1) html += `<button class="page-btn" onclick="goPage(1)">1</button>${range[0]>2?'<span class="page-info">…</span>':''}`;
+    range.forEach(i => html += `<button class="page-btn ${i===page?'active':''}" onclick="goPage(${i})">${i}</button>`);
+    if (range[range.length-1] < pages) html += `${range[range.length-1]<pages-1?'<span class="page-info">…</span>':''}<button class="page-btn" onclick="goPage(${pages})">${pages}</button>`;
+    html += `<button class="page-btn" onclick="goPage(${page+1})" ${page===pages?'disabled':''}>→</button>`;
+    html += `<span class="page-info">стр. ${page} / ${pages}</span>`;
+    el.innerHTML = html;
+  }
+
+  function goPage(p) { currentPage = p; loadUsers(); }
+
+  // ПОИСК
+  document.getElementById('searchBtn').addEventListener('click', () => { currentQ = document.getElementById('searchInput').value.trim(); currentPage = 1; loadUsers(); });
+  document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') { currentQ = e.target.value.trim(); currentPage = 1; loadUsers(); } });
+
+  // СОРТИРОВКА
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const s = th.dataset.sort;
+      if (currentSort === s) currentOrder = currentOrder === 'desc' ? 'asc' : 'desc';
+      else { currentSort = s; currentOrder = 'desc'; }
+      currentPage = 1; loadUsers();
+    });
+  });
+
+  // Хранилище данных открытой модалки для пагинации
+  let _modalData = null;
+
+  const PAGE_SIZE = 10;
+
+  function paginate(items, page) {
+    const total = items.length;
+    const pages = Math.ceil(total / PAGE_SIZE);
+    const slice = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    return { slice, pages, total };
+  }
+
+  function renderPageButtons(pages, current, onClickFn) {
+    if (pages <= 1) return '';
+    const btns = [];
+    for (let i = 1; i <= pages; i++) {
+      const active = i === current;
+      btns.push(`<button onclick="${onClickFn}(${i})" style="min-width:28px;height:28px;padding:0 6px;border-radius:6px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};background:${active ? 'var(--accent)' : 'transparent'};color:${active ? '#000' : 'var(--text2)'};font-size:12px;font-weight:${active ? '700' : '400'};cursor:pointer;font-family:inherit">${i}</button>`);
+    }
+    return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${btns.join('')}</div>`;
+  }
+
+  function renderPurchasesPage(page) {
+    if (!_modalData) return;
+    const { slice, pages, total } = paginate(_modalData.purchases, page);
+    const container = document.getElementById('purchases-container');
+    if (!container) return;
+    if (!total) { container.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Покупок нет</div>'; return; }
+    container.innerHTML = `
+      <table class="mini-table">
+        <tr><th>Тариф</th><th>Бананы</th><th>Цена ₽</th><th>Дата</th></tr>
+        ${slice.map(p => `<tr><td>${p.tariff_name}</td><td class="mono">${p.amount}</td><td class="mono">${p.price}</td><td class="mono" style="color:var(--text3)">${p.completed_at}</td></tr>`).join('')}
+      </table>
+      ${renderPageButtons(pages, page, 'renderPurchasesPage')}
+    `;
+  }
+
+  function renderTxnsPage(page) {
+    if (!_modalData) return;
+    const { slice, pages, total } = paginate(_modalData.transactions, page);
+    const container = document.getElementById('txns-container');
+    if (!container) return;
+    if (!total) { container.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Транзакций нет</div>'; return; }
+    container.innerHTML = `
+      <table class="mini-table">
+        <tr><th>Тип</th><th>Кол-во</th><th>Описание</th><th>Дата</th><th>Генерация</th></tr>
+        ${slice.map(t => `
+          <tr>
+            <td class="mono" style="font-size:10px">${t.type}</td>
+            <td class="mono" style="${t.amount>0?'color:var(--green)':'color:var(--red)'}">${t.amount>0?'+':''}${t.amount}</td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${t.description}</td>
+            <td class="mono" style="color:var(--text3)">${t.created_at}</td>
+            <td style="text-align:center">
+              ${t.post_id ? `<span onclick="event.stopPropagation(); openKieModal('${t.post_id}')" style="cursor:pointer;font-size:16px" title="Посмотреть генерацию">🔗</span>` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </table>
+      ${renderPageButtons(pages, page, 'renderTxnsPage')}
+    `;
+  }
+
+  // ДЕТАЛЬНАЯ КАРТОЧКА ЮЗЕРА
+  async function openUser(tgId) {
+    document.getElementById('modalOverlay').classList.add('open');
+    history.pushState({ panel: 'modal' }, '');
+    document.getElementById('modalTitle').textContent = 'Загрузка...';
+    document.getElementById('modalSub').textContent = '—';
+    document.getElementById('modalBody').innerHTML = '<div class="loading" style="padding:40px;text-align:center">Загрузка данных...</div>';
+
+    const data = await fetch(`/api/users/${tgId}`).then(r => r.json());
+    _modalData = data;
+    const u = data.user;
+
+    document.getElementById('modalTitle').textContent = u.full_name || `User ${u.telegram_id}`;
+    document.getElementById('modalSub').textContent = u.username ? `@${u.username} · ID: ${u.telegram_id}` : `ID: ${u.telegram_id}`;
+
+    const daysAgo = u.created_at ? Math.floor((Date.now() - new Date(u.created_at.split(' ')[0].split('.').reverse().join('-'))) / 86400000) : '?';
+
+    document.getElementById('modalBody').innerHTML = `
+      <!-- Шапка -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+          ${u.full_name ? u.full_name[0].toUpperCase() : '?'}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700">${u.full_name || '—'}</div>
+          <div style="font-size:12px;color:var(--text3)">${u.username ? '@'+u.username : ''} · 🆔 ${u.telegram_id}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">📅 ${u.created_at} · ${daysAgo} дней с нами</div>
+        </div>
+        <div style="font-size:20px">${u.is_blocked ? '🔴' : '🟢'}</div>
+      </div>
+
+      <!-- Балансы -->
+      <div class="user-stats-grid" style="margin-bottom:14px">
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--accent)">${fmt(u.balance_paid)} 🍌</div><div class="user-stat-lbl">Платные</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--blue)">${fmt(u.balance_free)}</div><div class="user-stat-lbl">Бесплатные</div></div>
+        <div class="user-stat"><div class="user-stat-val">${u.orders_count}</div><div class="user-stat-lbl">Покупок</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--green)">${u.total_revenue ? fmt(u.total_revenue)+' ₽' : '—'}</div><div class="user-stat-lbl">Выручка</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="color:var(--purple)">${fmt(u.total_generations_used)}</div><div class="user-stat-lbl">Генераций</div></div>
+        <div class="user-stat"><div class="user-stat-val" style="font-size:11px">${u.preferred_model}</div><div class="user-stat-lbl">Модель</div></div>
+      </div>
+
+      <!-- Кнопки действий -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button onclick="toggleBlock(${u.telegram_id}, ${u.is_blocked})" style="padding:7px 14px;border-radius:7px;border:1px solid ${u.is_blocked ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'};background:${u.is_blocked ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'};color:${u.is_blocked ? 'var(--green)' : 'var(--red)'};font-size:12px;font-weight:600;cursor:pointer" id="blockBtn_${u.telegram_id}">
+          ${u.is_blocked ? '🔓 Разблокировать' : '🔒 Заблокировать'}
+        </button>
+        <button onclick="showBalanceForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(245,197,66,0.4);background:rgba(245,197,66,0.1);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">🍌 Баланс</button>
+        <button onclick="showMessageForm(${u.telegram_id})" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.1);color:var(--blue);font-size:12px;font-weight:600;cursor:pointer">✉️ Написать</button>
+      </div>
+
+      <!-- Форма баланса -->
+      <div id="balanceForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">🍌 Изменить баланс</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="balanceAmount_${u.telegram_id}" type="number" placeholder="Кол-во (+/-)" style="width:130px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+          <input id="balanceComment_${u.telegram_id}" type="text" placeholder="Комментарий" style="flex:1;min-width:120px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none">
+          <button onclick="submitBalance(${u.telegram_id})" style="padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#000;font-size:12px;font-weight:600;cursor:pointer">OK</button>
+        </div>
+      </div>
+
+      <!-- Форма сообщения -->
+      <div id="messageForm_${u.telegram_id}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">✉️ Написать пользователю</div>
+        <textarea id="messageText_${u.telegram_id}" rows="3" placeholder="Текст сообщения (поддерживается HTML)" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:'Inter',sans-serif"></textarea>
+        <button onclick="submitMessage(${u.telegram_id})" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Отправить</button>
+      </div>
+
+      <div class="section-title" style="margin-top:4px">Информация</div>
+      <div style="margin-bottom:16px">
+        <div class="user-info-row"><span class="user-info-key">Источник</span><span class="user-info-val">${u.source}</span></div>
+        <div class="user-info-row"><span class="user-info-key">Первая покупка</span><span class="user-info-val">${u.first_purchase_at}</span></div>
+        <div class="user-info-row"><span class="user-info-key">Последняя генерация</span><span class="user-info-val">${u.last_generation_at}</span></div>
+        ${u.referrer_id ? `<div class="user-info-row"><span class="user-info-key">Реферер ID</span><span class="user-info-val">${u.referrer_id}</span></div>` : ''}
+      </div>
+
+      <div class="section-title">История покупок</div>
+      <div id="purchases-container"></div>
+
+      <div class="section-title">Транзакции бананов</div>
+      <div id="txns-container"></div>
+    `;
+
+    renderPurchasesPage(1);
+    renderTxnsPage(1);
+  }
+
+  function showToast(msg, type='success') {
+    let t = document.getElementById('toast');
+    if (!t) { t = document.createElement('div'); t.id='toast'; document.body.appendChild(t); t.style.cssText='position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:all 0.3s'; }
+    t.textContent = msg;
+    t.style.background = type === 'success' ? 'var(--green)' : 'var(--red)';
+    t.style.color = type === 'success' ? '#000' : '#fff';
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 3000);
+  }
+
+  async function toggleBlock(userId, isBlocked) {
+    const r = await fetch(`/api/users/${userId}/block`, {method: 'POST', credentials: 'include'}).then(r => r.json());
+    if (r.ok) { showToast(r.is_blocked ? '🔴 Заблокирован' : '🟢 Разблокирован'); openUser(userId); }
+  }
+
+  function showBalanceForm(userId) {
+    const f = document.getElementById(`balanceForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function showMessageForm(userId) {
+    const f = document.getElementById(`messageForm_${userId}`);
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function submitBalance(userId) {
+    const amount = parseInt(document.getElementById(`balanceAmount_${userId}`).value);
+    const comment = document.getElementById(`balanceComment_${userId}`).value || 'Admin adjustment';
+    if (!amount) return;
+    const r = await fetch(`/api/users/${userId}/balance`, {
+      method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount, comment})
+    }).then(r => r.json());
+    if (r.ok) { showToast(`✅ Баланс изменён на ${amount > 0 ? '+' : ''}${amount} 🍌`); openUser(userId); }
+    else showToast('❌ Ошибка', 'error');
+  }
+
+  async function submitMessage(userId) {
+    const text = document.getElementById(`messageText_${userId}`).value;
+    if (!text.trim()) return;
+    const r = await fetch(`/api/users/${userId}/message`, {
+      method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    }).then(r => r.json());
+    if (r.ok) { showToast('✅ Сообщение отправлено'); document.getElementById(`messageText_${userId}`).value = ''; }
+    else showToast('❌ ' + (r.error || 'Ошибка'), 'error');
+  }
+
+  document.getElementById('modalClose').addEventListener('click', () => document.getElementById('modalOverlay').classList.remove('open'));
+  document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === document.getElementById('modalOverlay')) document.getElementById('modalOverlay').classList.remove('open'); });
+
+  // KIE MODAL
+  function openKieModal(taskId) {
+    const modal = document.getElementById('kie-modal');
+    modal.style.display = 'flex';
+    document.getElementById('kie-modal-content').innerHTML =
+      '<div style="color:var(--text3);text-align:center;padding:40px">Загрузка...</div>';
+
+    fetch(`/api/kie/task/${taskId}`, {credentials: 'include'})
+      .then(r => r.json())
+      .then(data => renderKieModal(data, taskId))
+      .catch(() => {
+        document.getElementById('kie-modal-content').innerHTML =
+          '<div style="color:var(--red);text-align:center;padding:40px">Ошибка загрузки</div>';
+      });
+  }
+
+  function closeKieModal() {
+    document.getElementById('kie-modal').style.display = 'none';
+  }
+
+  // Наш бэкенд возвращает уже разобранный плоский объект (бэкенд парсит param/resultJson)
+  function renderKieModal(data, taskId) {
+    if (data.error) {
+      document.getElementById('kie-modal-content').innerHTML =
+        '<div style="color:var(--red);text-align:center;padding:40px">Данные не найдены</div>';
+      return;
+    }
+
+    const prompt = data.prompt || '—';
+    const refs = data.image_input || [];
+    const resultUrls = data.result_urls || [];
+    const state = data.state || '—';
+    const stateColor = state === 'success' ? 'var(--green)' : state === 'fail' ? 'var(--red)' : 'var(--text3)';
+
+    document.getElementById('kie-modal-content').innerHTML = `
+      <div style="margin-bottom:12px">
+        <span style="font-size:11px;color:var(--text3)">Task ID: </span>
+        <span class="mono" style="font-size:11px;color:var(--text2)">${taskId}</span>
+        <span style="margin-left:12px;font-size:11px;color:${stateColor};font-weight:600">${state}</span>
+      </div>
+
+      ${resultUrls.length ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Результат:</div>
+          ${resultUrls.map(url => `
+            <a href="${url}" target="_blank">
+              <img src="${url}" style="max-width:100%;border-radius:8px;display:block;margin-bottom:8px" />
+            </a>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      ${refs.length ? `
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Референс (image_input):</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${refs.map(url => `
+              <a href="${url}" target="_blank">
+                <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:6px" />
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Промпт:</div>
+        <div style="font-size:12px;color:#e0e0e0;background:#1a1a1a;padding:10px;border-radius:8px;line-height:1.5;word-break:break-word">${prompt}</div>
+      </div>
+    `;
+  }
+
+  // СТАРТ
+  loadUsers();
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('kie-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeKieModal();
+    });
+  });
+</script>
+
+<div id="kie-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border-radius:16px;padding:24px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;position:relative">
+    <button onclick="closeKieModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text1);font-size:20px;cursor:pointer">✕</button>
+    <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:16px">Просмотр генерации</div>
+    <div id="kie-modal-content">
+      <div style="color:var(--text3);text-align:center;padding:40px">Загрузка...</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -16,6 +16,11 @@ router = APIRouter()
 templates = Jinja2Templates(directory="admin_panel/templates")
 
 
+def is_mobile(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "").lower()
+    return any(x in ua for x in ["mobile", "android", "iphone", "ipad"])
+
+
 def get_today_start_msk():
     now_utc = datetime.now(timezone.utc)
     msk_tz = timezone(timedelta(hours=3))
@@ -44,7 +49,8 @@ def get_date_range(period: str):
 
 @router.get("/analytics", response_class=HTMLResponse)
 async def analytics_page(request: Request, user=Depends(require_auth)):
-    return templates.TemplateResponse("analytics.html", {"request": request, "user": user})
+    template = "mobile/analytics.html" if is_mobile(request) else "desktop/analytics.html"
+    return templates.TemplateResponse(template, {"request": request, "user": user})
 
 
 @router.get("/api/analytics/sources")
