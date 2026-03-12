@@ -93,6 +93,15 @@ async def cb_main_menu_from_freebies(callback: types.CallbackQuery):
 @router.message(F.text == "🍌 Купить бананы")
 @router.message(Command("buy"))
 async def cmd_shop(message: types.Message):
+    async with async_session() as session:
+        result = await session.execute(
+            select(User).where(User.telegram_id == message.from_user.id)
+        )
+        user = result.scalar_one_or_none()
+        if user and not user.visited_shop_at:
+            user.visited_shop_at = datetime.now()
+            await session.commit()
+
     builder = InlineKeyboardBuilder()
     
     # Рублевые пакеты
