@@ -302,7 +302,11 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             return
         
         # ЕСЛИ СТАРЫЙ ЮЗЕР
-        else:            
+        else:
+            # Заполняем source только если ещё не был установлен (не перезаписываем атрибуцию)
+            if user and not user.source and source:
+                user.source = source
+
             # Обновляем ClientID если пришел новый
             if user and yandex_client_id and user.yandex_client_id != yandex_client_id:
                 user.yandex_client_id = yandex_client_id

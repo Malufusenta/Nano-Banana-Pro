@@ -138,7 +138,22 @@ async def update_purchase_analytics(
     
     if purchase:
         purchase.tariff_name = tariff_name
-        purchase.user_source = user.source or "organic"
+
+        # Берём source из первой успешной покупки чтобы не менять атрибуцию
+        # Если покупок ещё не было — используем текущий user.source
+        first_purchase_result = await session.execute(
+            select(Purchase.user_source)
+            .where(
+                Purchase.user_id == user_id,
+                Purchase.status == "succeeded",
+                Purchase.user_source.isnot(None),
+                Purchase.id != purchase.id
+            )
+            .order_by(Purchase.completed_at)
+            .limit(1)
+        )
+        first_source = first_purchase_result.scalar_one_or_none()
+        purchase.user_source = first_source or user.source or "organic"
         purchase.completed_at = datetime.now()
         if payment_id:
             purchase.payment_id = payment_id
