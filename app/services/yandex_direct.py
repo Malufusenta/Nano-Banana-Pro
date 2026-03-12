@@ -71,7 +71,7 @@ async def get_direct_spending(token: str, date_from: date, date_to: date) -> dic
             parts = line.split("\t")
             if len(parts) < 2:
                 continue
-            name = parts[0].strip()
+            name = parts[0].strip().replace('\xa0', ' ')
             try:
                 cost = float(parts[1].strip()) * VAT
                 cost = round(cost, 2)
