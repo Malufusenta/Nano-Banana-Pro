@@ -583,9 +583,6 @@
 
       suggestionsDiv.style.display = 'block';
 
-      // Автоматически подставляем все найденные в поле UTM
-      document.getElementById('mapping-sources').value = data.suggestions.join(', ');
-
     } catch(e) {
       suggestionsDiv.style.display = 'none';
     }
