@@ -313,13 +313,6 @@
 
       <div id="campaigns-error" style="display:none" class="error-banner"></div>
 
-      <div style="margin-bottom:12px;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:var(--text2);">
-          <input type="checkbox" id="hide-zero-campaigns" checked onchange="loadCampaigns(currentPeriod)">
-          Скрывать кампании с нулевой активностью
-        </label>
-      </div>
-
       <div class="table-wrapper">
         <table id="campaigns-table">
           <thead>
@@ -490,17 +483,9 @@
       document.getElementById('campaigns-error').style.display = 'none';
     }
 
-    const hideZero = document.getElementById('hide-zero-campaigns').checked;
-
     const tbody = document.getElementById('campaigns-tbody');
     tbody.innerHTML = '';
-    let visibleRows = 0;
     for (const row of data.rows) {
-      if (hideZero) {
-        const hasActivity = row.starts > 0 || row.new_revenue > 0 || row.old_revenue > 0;
-        if (!hasActivity) continue;
-      }
-      visibleRows++;
       tbody.innerHTML += `
         <tr>
           <td>${row.campaign}</td>
@@ -516,7 +501,7 @@
         </tr>`;
     }
 
-    if (visibleRows === 0) {
+    if (data.rows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text3)">Нет данных. Добавьте мэппинги кампаний ниже.</td></tr>';
     }
 
