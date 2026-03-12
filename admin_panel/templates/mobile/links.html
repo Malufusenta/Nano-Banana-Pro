@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,31 +7,29 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
-  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
-  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
+  :root { --bg:#f7f5f2; --surface:#ffffff; --surface2:#f0ede8; --surface3:#e8e4de; --border:#e2ddd7; --text:#2d2a26; --text1:#2d2a26; --text2:#6b6560; --text3:#a09990; --accent:#b8a99a; --green:#7cb99a; --red:#e08080; --blue:#7aa8c7; --purple:#a89ac7; --yellow:#d4b87a; --accent2:#8b5e3c; --sidebar-w:240px; --radius:16px; --transition:0.2s ease; --shadow:0 2px 8px rgba(0,0,0,0.06); }
   html,body { height:100%; }
-  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; }
 
   .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition); }
   .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
   .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
-  .sidebar-logo-emoji { font-size:26px; }
-  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .sidebar-logo-emoji { font-size:22px; }
+  .sidebar-logo-text { font-size:15px; font-weight:700; color:var(--accent2); }
   .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
   .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
   .nav-section { margin-bottom:20px; }
   .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
   .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
   .nav-item:hover { background:var(--surface2); color:var(--text); }
-  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
+  .nav-item.active { background:#f0ede8; color:var(--accent2); font-weight:600; }
   .nav-item .icon { font-size:15px; width:18px; text-align:center; }
   .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
   .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
-  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
   .sidebar-user-name { font-size:13px; font-weight:600; }
   .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
-  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:150; }
 
   .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
   .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -65,9 +63,9 @@
   /* КАРТОЧКИ ПОСТОВ */
   .posts-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
   .post-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; transition:border-color var(--transition), transform var(--transition); cursor:pointer; }
-  .post-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .post-card:hover { border-color:var(--accent2); transform:translateY(-1px); }
   .post-card-header { padding:10px 12px 8px; display:flex; align-items:flex-start; justify-content:space-between; gap:10px; border-bottom:1px solid var(--border); }
-  .post-card-id { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent); font-weight:600; background:rgba(245,197,66,0.1); border:1px solid rgba(245,197,66,0.2); border-radius:6px; padding:2px 8px; flex-shrink:0; }
+  .post-card-id { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent2); font-weight:600; background:rgba(139,94,60,0.1); border:1px solid rgba(139,94,60,0.2); border-radius:6px; padding:2px 8px; flex-shrink:0; }
   .post-card-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .meta-badge { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:5px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); }
   .post-card-prompt { padding:8px 12px; font-size:12px; color:var(--text2); line-height:1.6; min-height:52px; }
@@ -78,7 +76,7 @@
   .stat-item.clicks .stat-val { color:var(--text); }
   .stat-item.users .stat-val { color:var(--blue); }
   .stat-item.buyers .stat-val { color:var(--green); }
-  .stat-item.revenue .stat-val { color:var(--accent); }
+  .stat-item.revenue .stat-val { color:var(--accent2); }
   .post-card-footer { padding:6px 12px; background:var(--surface2); border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
   .cr-row { display:flex; gap:12px; }
   .cr-item { font-size:11px; font-family:'JetBrains Mono',monospace; }
@@ -87,7 +85,7 @@
   /* CR BADGE */
   .cr-badge { display:inline-block; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:600; }
   .cr-high { background:rgba(34,197,94,0.15); color:var(--green); }
-  .cr-mid { background:rgba(245,197,66,0.15); color:var(--accent); }
+  .cr-mid { background:rgba(212,184,122,0.15); color:var(--accent); }
   .cr-low { background:rgba(239,68,68,0.15); color:var(--red); }
 
   /* МОДАЛКА */
@@ -194,7 +192,6 @@
       <div class="topbar-title">Ссылки</div>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn" id="themeBtn">☀️</button>
     </div>
   </div>
 
@@ -253,16 +250,6 @@
 
 <script>
   // ТЕМА
-  const THEME_KEY = 'nb_admin_theme';
-  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
-  function applyTheme(t) {
-    document.documentElement.setAttribute('data-theme', t);
-    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
-    localStorage.setItem(THEME_KEY, t); currentTheme = t;
-  }
-  document.getElementById('themeBtn').addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
-  applyTheme(currentTheme);
-
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
 
