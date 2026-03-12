@@ -286,6 +286,13 @@
   .tariff-name { font-size: 13px; font-weight: 500; color: var(--text); }
   .tariff-count { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent2); font-weight: 600; }
 
+  .sources-pager { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 0 2px; flex-wrap: wrap; }
+  .sources-pager .pager-btn { min-width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 14px; font-weight: 600; cursor: pointer; transition: all var(--transition); font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; justify-content: center; }
+  .sources-pager .pager-btn:hover:not(:disabled) { border-color: var(--accent2); color: var(--accent2); background: rgba(139,94,60,0.08); }
+  .sources-pager .pager-btn.active { background: var(--accent2); color: #fff; border-color: var(--accent2); font-weight: 700; cursor: default; box-shadow: 0 2px 6px rgba(139,94,60,0.25); }
+  .sources-pager .pager-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sources-pager .pager-info { font-size: 12px; color: var(--text3); font-family: 'JetBrains Mono', monospace; padding: 0 10px; }
+
   .funnel-row { margin-bottom: 11px; }
   .funnel-row-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
   .funnel-row-head .funnel-label { font-size: 12px; font-weight: 500; color: var(--text2); }
@@ -566,6 +573,7 @@
       <div class="card">
         <div class="card-header"><div><div class="card-title">Топ источников</div><div class="card-subtitle">по выручке за период</div></div></div>
         <div id="sources-list"><div class="metric-sub loading">Загрузка...</div></div>
+        <div id="sources-pager" class="sources-pager" style="display:none"></div>
       </div>
       <div class="card">
         <div class="card-header"><div><div class="card-title">Покупки по тарифам</div><div class="card-subtitle">за выбранный период</div></div></div>
@@ -610,6 +618,59 @@
 <script>
   let usersChart;
   let currentPeriod = 'today';
+  const SOURCES_PER_PAGE = 5;
+  let sourcesData = [];
+  let sourcesCurrentPage = 1;
+
+  function renderSourcesPage() {
+    const listEl = document.getElementById('sources-list');
+    const pagerEl = document.getElementById('sources-pager');
+    if (!listEl || !pagerEl) return;
+    const total = sourcesData.length;
+    if (total === 0) {
+      listEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
+      pagerEl.style.display = 'none';
+      return;
+    }
+    const totalPages = Math.ceil(total / SOURCES_PER_PAGE);
+    const start = (sourcesCurrentPage - 1) * SOURCES_PER_PAGE;
+    const pageData = sourcesData.slice(start, start + SOURCES_PER_PAGE);
+    listEl.innerHTML = pageData.map((s, i) => {
+      const globalIdx = start + i + 1;
+      return `<div class="tariff-item">
+        <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${globalIdx}.</span> ${s.name}</span>
+        <span style="display:flex;gap:12px;align-items:center">
+          <span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span>
+          <span class="tariff-count">${fmt(s.revenue)} ₽</span>
+        </span>
+      </div>`;
+    }).join('');
+    pagerEl.style.display = totalPages <= 1 ? 'none' : 'flex';
+    pagerEl.innerHTML = '';
+    if (totalPages <= 1) return;
+    const mkBtn = (label, onClick, disabled, isActive = false) => {
+      const btn = document.createElement('button');
+      btn.className = 'pager-btn' + (isActive ? ' active' : '');
+      btn.textContent = label;
+      btn.disabled = disabled;
+      if (!disabled) btn.onclick = onClick;
+      return btn;
+    };
+    pagerEl.appendChild(mkBtn('‹', () => { sourcesCurrentPage--; renderSourcesPage(); }, sourcesCurrentPage === 1));
+    const maxVisible = 5;
+    let from = Math.max(1, sourcesCurrentPage - Math.floor(maxVisible / 2));
+    let to = Math.min(totalPages, from + maxVisible - 1);
+    if (to - from + 1 < maxVisible) from = Math.max(1, to - maxVisible + 1);
+    for (let i = from; i <= to; i++) {
+      const btn = mkBtn(i, () => { sourcesCurrentPage = i; renderSourcesPage(); }, false, i === sourcesCurrentPage);
+      pagerEl.appendChild(btn);
+    }
+    pagerEl.appendChild(mkBtn('›', () => { sourcesCurrentPage++; renderSourcesPage(); }, sourcesCurrentPage === totalPages));
+    const info = document.createElement('span');
+    info.className = 'pager-info';
+    info.textContent = `${sourcesCurrentPage} / ${totalPages} · ${total} ист.`;
+    pagerEl.appendChild(info);
+  }
 
   function getChartColors() {
     return {
@@ -894,17 +955,9 @@
       `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmtInt(tariffs[name]||0)} шт.</span></div>`
     ).join('');
     // топ источников
-    const sources = d.top_sources || [];
-    document.getElementById('sources-list').innerHTML = sources.length
-      ? sources.map((s, i) => `
-        <div class="tariff-item">
-          <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span>
-          <span style="display:flex;gap:12px;align-items:center">
-            <span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span>
-            <span class="tariff-count">${fmt(s.revenue)} ₽</span>
-          </span>
-        </div>`).join('')
-      : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
+    sourcesData = d.top_sources || [];
+    sourcesCurrentPage = 1;
+    renderSourcesPage();
   }
 
   async function loadStats(period) {
@@ -938,17 +991,9 @@
         `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmtInt(tariffs[name]||0)} шт.</span></div>`
       ).join('');
 
-      const sources = d.top_sources || [];
-      document.getElementById('sources-list').innerHTML = sources.length
-        ? sources.map((s, i) => `
-          <div class="tariff-item">
-            <span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span>
-            <span style="display:flex;gap:12px;align-items:center">
-              <span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span>
-              <span class="tariff-count">${fmt(s.revenue)} ₽</span>
-            </span>
-          </div>`).join('')
-        : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
+      sourcesData = d.top_sources || [];
+      sourcesCurrentPage = 1;
+      renderSourcesPage();
 
     } catch(e) { console.error(e); }
   }
@@ -999,10 +1044,9 @@
       document.getElementById('tariffs-list').innerHTML = order.map(name =>
         `<div class="tariff-item"><span class="tariff-name">${emoji[name]||'🍌'} ${name}</span><span class="tariff-count">${fmtInt(tariffs[name]||0)} шт.</span></div>`
       ).join('');
-      const sources = d.top_sources || [];
-      document.getElementById('sources-list').innerHTML = sources.length
-        ? sources.map((s, i) => `<div class="tariff-item"><span class="tariff-name"><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;font-size:11px">${i+1}.</span> ${s.name}</span><span style="display:flex;gap:12px;align-items:center"><span style="font-size:11px;color:var(--text3)">${fmtInt(s.count)} покуп.</span><span class="tariff-count">${fmt(s.revenue)} ₽</span></span></div>`).join('')
-        : '<div style="color:var(--text3);font-size:12px;padding:8px 0">Нет данных</div>';
+      sourcesData = d.top_sources || [];
+      sourcesCurrentPage = 1;
+      renderSourcesPage();
       document.querySelectorAll('.metric-value').forEach(el => el.classList.remove('loading'));
     } catch(e) { console.error(e); }
   }
