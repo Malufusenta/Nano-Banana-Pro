@@ -1155,6 +1155,18 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
+        # Количество уникальных старичков-покупателей за период
+        old_buyers = await session.scalar(
+            select(func.count(func.distinct(Purchase.user_id))).where(
+                Purchase.status == 'succeeded',
+                Purchase.completed_at >= date_from,
+                Purchase.completed_at <= date_to,
+                Purchase.user_id.in_(veterans_subquery),
+                Purchase.user_id.notin_(cohort_subquery),
+                or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
+            )
+        ) or 0
+
         if cohort_count == 0 and new_revenue == 0 and old_revenue == 0:
             continue
 
@@ -1166,6 +1178,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             'total_buyers': fast_buyers + slow_buyers,
             'new_revenue': new_revenue,
             'old_revenue': old_revenue,
+            'old_buyers': old_buyers,
         })
 
     # --- Строка "Органика / Рефералы" ---
@@ -1224,6 +1237,17 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
         )
     ) or 0
 
+    organic_old_buyers = await session.scalar(
+        select(func.count(func.distinct(Purchase.user_id))).where(
+            Purchase.status == 'succeeded',
+            Purchase.completed_at >= date_from,
+            Purchase.completed_at <= date_to,
+            Purchase.user_id.in_(organic_veterans_subquery),
+            Purchase.user_id.notin_(organic_cohort_subquery),
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
+        )
+    ) or 0
+
     if organic_count > 0 or organic_new_revenue > 0 or organic_old_revenue > 0:
         result.append({
             'campaign': '🌱 Органика / Рефералы',
@@ -1233,6 +1257,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             'total_buyers': organic_fast + organic_slow,
             'new_revenue': organic_new_revenue,
             'old_revenue': organic_old_revenue,
+            'old_buyers': organic_old_buyers,
         })
 
     return result

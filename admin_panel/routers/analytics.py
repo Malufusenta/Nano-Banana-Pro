@@ -142,6 +142,7 @@ async def get_campaigns_stats(
             'new_revenue': new_revenue,
             'roas_new': roas_new,
             'old_revenue': old_revenue,
+            'old_buyers': stat.get('old_buyers', 0),
             'roas_total': roas_total,
         })
 
@@ -164,6 +165,7 @@ async def get_campaigns_stats(
         'new_revenue': total_new_rev,
         'roas_new': round(total_new_rev / total_spend * 100, 1) if total_spend > 0 else 0,
         'old_revenue': total_old_rev,
+        'old_buyers': sum(r['old_buyers'] for r in rows),
         'roas_total': round(total_rev_all / total_spend * 100, 1) if total_spend > 0 else 0,
     }
 
