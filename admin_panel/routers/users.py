@@ -195,7 +195,7 @@ async def send_message(telegram_id: int, request: Request, user=Depends(require_
 @router.get("/api/kie/task/{task_id}")
 async def get_kie_task(task_id: str, user=Depends(require_auth)):
     try:
-        import aiohttp, traceback
+        import aiohttp, json as _json
         from app.config import KIE_API_KEY
         from fastapi.responses import JSONResponse
         url = f"https://api.kie.ai/api/v1/jobs/recordInfo?taskId={task_id}"
@@ -203,7 +203,30 @@ async def get_kie_task(task_id: str, user=Depends(require_auth)):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as resp:
                 data = await resp.json()
-        return JSONResponse(data)
+
+        d = data.get("data", {})
+
+        param = {}
+        result_urls = []
+        try:
+            param = _json.loads(d.get("param") or "{}")
+        except Exception:
+            pass
+        try:
+            rj = _json.loads(d.get("resultJson") or "{}")
+            result_urls = rj.get("resultUrls", [])
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "task_id": d.get("taskId"),
+            "state": d.get("state"),
+            "result_urls": result_urls,
+            "prompt": param.get("input", {}).get("prompt", ""),
+            "image_input": param.get("input", {}).get("image_input", []),
+            "created_at": d.get("createTime"),
+            "complete_time": d.get("completeTime"),
+        })
     except Exception as e:
         import traceback
         from fastapi.responses import JSONResponse
