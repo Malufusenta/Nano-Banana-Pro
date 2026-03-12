@@ -51,6 +51,10 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
     ad_scenario_key = None
 
     if args:
+        # Убираем суффикс __cid без числа (Яндекс не подставил clientid)
+        args = re.sub(r'__cid_?$', '', args) or None
+
+    if args:
         # ===== ФОРМАТ 2: source__cid_123456 (проверяем первым, т.к. тоже содержит '_') =====
         if '__cid_' in args:
             parts = args.split('__cid_')

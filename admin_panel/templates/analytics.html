@@ -91,6 +91,18 @@
   @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
   .loading { animation:shimmer 1.5s infinite; color:var(--text3); }
 
+  /* ВИДЖЕТЫ КАМПАНИЙ */
+  .widget { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); margin-bottom:16px; }
+  .widget h2 { font-size:14px; font-weight:600; margin-bottom:16px; }
+  .table-wrapper { overflow-x:auto; }
+  .error-banner { background:rgba(239,68,68,0.1); border:1px solid var(--red); color:var(--red); border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:12px; }
+  .mapping-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
+  .mapping-form input[type="text"] { flex:1; min-width:200px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; outline:none; transition:border-color var(--transition); }
+  .mapping-form input[type="text"]:focus { border-color:var(--accent); }
+  .mapping-form button { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface3); color:var(--text); font-size:13px; font-weight:500; cursor:pointer; transition:all var(--transition); white-space:nowrap; }
+  .mapping-form button:hover { border-color:var(--accent); color:var(--accent); }
+  tfoot .totals-row td { font-weight:600; background:var(--surface2); border-top:2px solid var(--border); }
+
   @media (max-width:1100px) { .funnel-grid { grid-template-columns:repeat(3,1fr); } .funnel-card:nth-child(3)::after { display:none; } }
   @media (max-width:768px) {
     .sidebar { transform:translateX(-100%); }
@@ -104,6 +116,8 @@
     .funnel-card::after { display:none; }
     .kpi-grid { grid-template-columns:repeat(2,1fr); }
     .charts-row { grid-template-columns:1fr; }
+    .mapping-form { flex-direction:column; }
+    .mapping-form input[type="text"] { width:100%; }
   }
 </style>
 </head>
@@ -269,6 +283,58 @@
       </div>
     </div>
 
+    <!-- МЭППИНГ КАМПАНИЙ -->
+    <div class="widget" id="widget-mappings">
+      <h2>🔗 Мэппинг кампаний (Яндекс → UTM)</h2>
+
+      <table id="mappings-table">
+        <thead>
+          <tr>
+            <th>Название в Яндексе</th>
+            <th>UTM-метки в БД</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="mappings-tbody"></tbody>
+      </table>
+
+      <div class="mapping-form">
+        <input type="hidden" id="mapping-id">
+        <input type="text" id="mapping-name" placeholder='Название кампании в Яндексе (например: Rsya_3 от 06-01-2026)'>
+        <input type="text" id="mapping-sources" placeholder='UTM через запятую: yandex_rsya_3, ad_yandex_rsya_3__cid'>
+        <button onclick="saveMapping()">Сохранить</button>
+        <button onclick="clearMappingForm()">Очистить</button>
+      </div>
+    </div>
+
+    <!-- ОКУПАЕМОСТЬ РЕКЛАМНЫХ КАМПАНИЙ -->
+    <div class="widget" id="widget-campaigns">
+      <h2>📢 Окупаемость рекламных кампаний</h2>
+
+      <div id="campaigns-error" style="display:none" class="error-banner"></div>
+
+      <div class="table-wrapper">
+        <table id="campaigns-table">
+          <thead>
+            <tr>
+              <th>Кампания</th>
+              <th>Расход ₽</th>
+              <th>Запусков</th>
+              <th>⚡️ Day-0</th>
+              <th>🐢 Дозрели</th>
+              <th>CAC ₽</th>
+              <th>Выручка новичков ₽</th>
+              <th>ROAS новичков %</th>
+              <th>Выручка старичков ₽</th>
+              <th>ROAS общий %</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-tbody"></tbody>
+          <tfoot id="campaigns-tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -401,12 +467,123 @@
       document.getElementById('sources-period-label').textContent = periodLabels[currentPeriod] || '';
       loadFunnel(currentPeriod);
       loadSources(currentPeriod);
+      loadCampaigns(currentPeriod);
     });
   });
+
+  // Загрузка таблицы кампаний
+  async function loadCampaigns(period) {
+    const res = await fetch(`/api/analytics/campaigns?period=${period}`);
+    const data = await res.json();
+
+    if (data.direct_error) {
+      document.getElementById('campaigns-error').textContent = `Ошибка Директ API: ${data.direct_error}`;
+      document.getElementById('campaigns-error').style.display = 'block';
+    } else {
+      document.getElementById('campaigns-error').style.display = 'none';
+    }
+
+    const tbody = document.getElementById('campaigns-tbody');
+    tbody.innerHTML = '';
+    for (const row of data.rows) {
+      tbody.innerHTML += `
+        <tr>
+          <td>${row.campaign}</td>
+          <td class="mono">${row.spend.toLocaleString()}</td>
+          <td class="mono">${row.starts}</td>
+          <td class="mono">${row.fast_buyers}</td>
+          <td class="mono">${row.slow_buyers}</td>
+          <td class="mono">${row.cac || '—'}</td>
+          <td class="mono" style="color:var(--green)">${row.new_revenue.toLocaleString()}</td>
+          <td class="mono">${row.roas_new}%</td>
+          <td class="mono" style="color:var(--text2)">${row.old_revenue.toLocaleString()}</td>
+          <td class="mono">${row.roas_total}%</td>
+        </tr>`;
+    }
+
+    if (data.rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text3)">Нет данных. Добавьте мэппинги кампаний ниже.</td></tr>';
+    }
+
+    // Строка ИТОГО
+    const t = data.totals;
+    document.getElementById('campaigns-tfoot').innerHTML = `
+      <tr class="totals-row">
+        <td><b>ИТОГО</b></td>
+        <td><b>${t.spend.toLocaleString()}</b></td>
+        <td><b>${t.starts}</b></td>
+        <td><b>${t.fast_buyers}</b></td>
+        <td><b>${t.slow_buyers}</b></td>
+        <td><b>${t.cac || '—'}</b></td>
+        <td><b>${t.new_revenue.toLocaleString()}</b></td>
+        <td><b>${t.roas_new}%</b></td>
+        <td><b>${t.old_revenue.toLocaleString()}</b></td>
+        <td><b>${t.roas_total}%</b></td>
+      </tr>`;
+  }
+
+  // Загрузка мэппингов
+  async function loadMappings() {
+    const res = await fetch('/api/analytics/campaign-mappings');
+    const mappings = await res.json();
+    const tbody = document.getElementById('mappings-tbody');
+    tbody.innerHTML = '';
+    for (const m of mappings) {
+      tbody.innerHTML += `
+        <tr>
+          <td>${m.yandex_campaign_name}</td>
+          <td class="mono" style="font-size:11px;color:var(--text2)">${m.utm_sources.join(', ')}</td>
+          <td style="white-space:nowrap">
+            <button onclick="editMapping(${m.id}, '${m.yandex_campaign_name.replace(/'/g,"\\'")}', '${m.utm_sources.join(',')}')" style="background:none;border:none;cursor:pointer;font-size:14px">✏️</button>
+            <button onclick="deleteMapping(${m.id})" style="background:none;border:none;cursor:pointer;font-size:14px">🗑️</button>
+          </td>
+        </tr>`;
+    }
+    if (mappings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--text3)">Мэппингов пока нет</td></tr>';
+    }
+  }
+
+  async function saveMapping() {
+    const id = document.getElementById('mapping-id').value;
+    const name = document.getElementById('mapping-name').value.trim();
+    const sources = document.getElementById('mapping-sources').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+
+    if (!name || sources.length === 0) return alert('Заполни все поля');
+
+    await fetch('/api/analytics/campaign-mappings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id: id ? parseInt(id) : undefined, yandex_campaign_name: name, utm_sources: sources })
+    });
+    clearMappingForm();
+    loadMappings();
+  }
+
+  async function deleteMapping(id) {
+    if (!confirm('Удалить мэппинг?')) return;
+    await fetch(`/api/analytics/campaign-mappings/${id}`, { method: 'DELETE' });
+    loadMappings();
+  }
+
+  function editMapping(id, name, sources) {
+    document.getElementById('mapping-id').value = id;
+    document.getElementById('mapping-name').value = name;
+    document.getElementById('mapping-sources').value = sources;
+  }
+
+  function clearMappingForm() {
+    document.getElementById('mapping-id').value = '';
+    document.getElementById('mapping-name').value = '';
+    document.getElementById('mapping-sources').value = '';
+  }
 
   applyTheme(currentTheme);
   loadFunnel(currentPeriod);
   loadSources(currentPeriod);
+  loadCampaigns(currentPeriod);
+  loadMappings();
 </script>
 </body>
 </html>

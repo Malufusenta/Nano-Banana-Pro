@@ -4,8 +4,13 @@ from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from datetime import datetime, timedelta, timezone
 from app.database import async_session
-from app.services.analytics_service import get_analytics_report
+from app.services.analytics_service import get_analytics_report, get_campaign_stats
+from app.services.yandex_direct import get_direct_spending
+from app.models import CampaignMapping
+from sqlalchemy import select
 from .auth import require_auth
+from app import config
+import json
 
 router = APIRouter()
 templates = Jinja2Templates(directory="admin_panel/templates")
@@ -93,3 +98,127 @@ async def get_funnel(period: str = Query(default="month"), user=Depends(require_
         "retention": round(rev.get("retention", 0), 2),
         "ltv": round(rev.get("ltv", 0), 2),
     }
+
+
+@router.get("/api/analytics/campaigns")
+async def get_campaigns_stats(
+    period: str = Query(default="month"),
+    user=Depends(require_auth)
+):
+    date_from, date_to = get_date_range(period)
+
+    async with async_session() as session:
+        campaign_stats = await get_campaign_stats(session, date_from, date_to)
+
+    direct_data = {'total': 0, 'campaigns': {}, 'error': None}
+    if config.YANDEX_DIRECT_TOKEN:
+        direct_data = await get_direct_spending(
+            config.YANDEX_DIRECT_TOKEN,
+            date_from.date(),
+            date_to.date()
+        )
+
+    rows = []
+    for stat in campaign_stats:
+        campaign_name = stat['campaign']
+        spend = direct_data['campaigns'].get(campaign_name, 0)
+
+        total_buyers = stat['total_buyers']
+        new_revenue = stat['new_revenue']
+        old_revenue = stat['old_revenue']
+        total_revenue = new_revenue + old_revenue
+
+        cac = round(spend / total_buyers, 2) if total_buyers > 0 else 0
+        roas_new = round(new_revenue / spend * 100, 1) if spend > 0 else 0
+        roas_total = round(total_revenue / spend * 100, 1) if spend > 0 else 0
+
+        rows.append({
+            'campaign': campaign_name,
+            'spend': spend,
+            'starts': stat['starts'],
+            'fast_buyers': stat['fast_buyers'],
+            'slow_buyers': stat['slow_buyers'],
+            'cac': cac,
+            'new_revenue': new_revenue,
+            'roas_new': roas_new,
+            'old_revenue': old_revenue,
+            'roas_total': roas_total,
+        })
+
+    total_spend = sum(r['spend'] for r in rows)
+    total_starts = sum(r['starts'] for r in rows)
+    total_fast = sum(r['fast_buyers'] for r in rows)
+    total_slow = sum(r['slow_buyers'] for r in rows)
+    total_buyers_all = total_fast + total_slow
+    total_new_rev = sum(r['new_revenue'] for r in rows)
+    total_old_rev = sum(r['old_revenue'] for r in rows)
+    total_rev_all = total_new_rev + total_old_rev
+
+    totals = {
+        'campaign': 'ИТОГО',
+        'spend': round(total_spend, 2),
+        'starts': total_starts,
+        'fast_buyers': total_fast,
+        'slow_buyers': total_slow,
+        'cac': round(total_spend / total_buyers_all, 2) if total_buyers_all > 0 else 0,
+        'new_revenue': total_new_rev,
+        'roas_new': round(total_new_rev / total_spend * 100, 1) if total_spend > 0 else 0,
+        'old_revenue': total_old_rev,
+        'roas_total': round(total_rev_all / total_spend * 100, 1) if total_spend > 0 else 0,
+    }
+
+    return {'rows': rows, 'totals': totals, 'direct_error': direct_data.get('error')}
+
+
+@router.get("/api/analytics/campaign-mappings")
+async def get_mappings(user=Depends(require_auth)):
+    async with async_session() as session:
+        result = await session.execute(select(CampaignMapping).order_by(CampaignMapping.id))
+        mappings = result.scalars().all()
+    return [
+        {
+            'id': m.id,
+            'yandex_campaign_name': m.yandex_campaign_name,
+            'utm_sources': json.loads(m.utm_sources)
+        }
+        for m in mappings
+    ]
+
+
+@router.post("/api/analytics/campaign-mappings")
+async def save_mapping(data: dict, user=Depends(require_auth)):
+    async with async_session() as session:
+        mapping_id = data.get('id')
+        if mapping_id:
+            result = await session.execute(
+                select(CampaignMapping).where(CampaignMapping.id == mapping_id)
+            )
+            mapping = result.scalar_one_or_none()
+        else:
+            mapping = None
+
+        if mapping:
+            mapping.yandex_campaign_name = data['yandex_campaign_name']
+            mapping.utm_sources = json.dumps(data['utm_sources'], ensure_ascii=False)
+        else:
+            mapping = CampaignMapping(
+                yandex_campaign_name=data['yandex_campaign_name'],
+                utm_sources=json.dumps(data['utm_sources'], ensure_ascii=False)
+            )
+            session.add(mapping)
+
+        await session.commit()
+    return {'ok': True}
+
+
+@router.delete("/api/analytics/campaign-mappings/{mapping_id}")
+async def delete_mapping(mapping_id: int, user=Depends(require_auth)):
+    async with async_session() as session:
+        result = await session.execute(
+            select(CampaignMapping).where(CampaignMapping.id == mapping_id)
+        )
+        mapping = result.scalar_one_or_none()
+        if mapping:
+            await session.delete(mapping)
+            await session.commit()
+    return {'ok': True}

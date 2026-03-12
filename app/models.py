@@ -253,3 +253,14 @@ class FixedExpense(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)  # "Сервер", "Tilda", "Claude"
     amount_rub: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)  # Сумма в рублях за месяц
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CampaignMapping(Base):
+    __tablename__ = "campaign_mappings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    yandex_campaign_name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    # Например: "Rsya_3 от 06-01-2026"
+    utm_sources: Mapped[str] = mapped_column(Text, nullable=False)
+    # JSON-массив: ["yandex_rsya_3", "ad_yandex_rsya_3__cid", "ad_yandex_rsya_3"]
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
