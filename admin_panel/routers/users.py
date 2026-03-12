@@ -194,41 +194,17 @@ async def send_message(telegram_id: int, request: Request, user=Depends(require_
 
 @router.get("/api/kie/task/{task_id}")
 async def get_kie_task(task_id: str, user=Depends(require_auth)):
-    import aiohttp, ssl, certifi, json
-    from app import config
-    from fastapi.responses import JSONResponse
-
-    headers = {"Authorization": f"Bearer {config.KIE_API_KEY}"}
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
-    connector = aiohttp.TCPConnector(ssl=ssl_context)
-
     try:
-        async with aiohttp.ClientSession(connector=connector) as s:
-            async with s.get(
-                f"{config.KIE_URL}/recordInfo",
-                headers=headers,
-                params={"taskId": task_id},
-            ) as resp:
-                raw = await resp.json()
-
-        d = raw.get("data") or {}
-
-        result_json = d.get("resultJson")
-        if isinstance(result_json, str):
-            result_json = json.loads(result_json)
-
-        param = d.get("param")
-        if isinstance(param, str):
-            param = json.loads(param)
-
-        return JSONResponse({
-            "task_id": d.get("taskId"),
-            "state": d.get("state"),
-            "result_urls": (result_json or {}).get("resultUrls", []),
-            "prompt": (param or {}).get("input", {}).get("prompt", ""),
-            "image_input": (param or {}).get("input", {}).get("image_input", []),
-            "created_at": d.get("createTime"),
-            "complete_time": d.get("completeTime"),
-        })
+        import aiohttp, traceback
+        from app.config import KIE_API_KEY
+        from fastapi.responses import JSONResponse
+        url = f"https://api.kie.ai/api/v1/jobs/recordInfo?taskId={task_id}"
+        headers = {"Authorization": f"Bearer {KIE_API_KEY}"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                data = await resp.json()
+        return JSONResponse(data)
     except Exception as e:
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        import traceback
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"error": str(e), "trace": traceback.format_exc()}, status_code=500)
