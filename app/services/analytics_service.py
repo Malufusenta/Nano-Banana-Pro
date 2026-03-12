@@ -376,16 +376,17 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         )
     ) or 0
     
-    # Воронка
-    funnel_spent_1 = await session.scalar(
+    cohort_subquery = select(User.telegram_id).where(
+        User.created_at >= date_from,
+        User.created_at <= date_to
+    ).scalar_subquery()
+
+    funnel_start = new_users
+
+    funnel_gen = await session.scalar(
         select(func.count(func.distinct(BananaTransaction.user_id))).where(
             BananaTransaction.transaction_type == 'spent',
-            BananaTransaction.user_id.in_(
-                select(User.telegram_id).where(
-                    User.created_at >= date_from,
-                    User.created_at <= date_to
-                )
-            )
+            BananaTransaction.user_id.in_(cohort_subquery)
         )
     ) or 0
 
@@ -394,12 +395,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             select(BananaTransaction.user_id)
             .where(
                 BananaTransaction.transaction_type == 'spent',
-                BananaTransaction.user_id.in_(
-                    select(User.telegram_id).where(
-                        User.created_at >= date_from,
-                        User.created_at <= date_to
-                    )
-                )
+                BananaTransaction.user_id.in_(cohort_subquery)
             )
             .group_by(BananaTransaction.user_id)
             .having(func.count(BananaTransaction.id) >= 2)
@@ -409,16 +405,15 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
 
     funnel_shop = await session.scalar(
         select(func.count(User.id)).where(
-            User.visited_shop_at >= date_from,
-            User.visited_shop_at <= date_to
+            User.visited_shop_at.isnot(None),
+            User.telegram_id.in_(cohort_subquery)
         )
     ) or 0
 
     funnel_paid = await session.scalar(
         select(func.count(func.distinct(Purchase.user_id))).where(
             Purchase.status == 'succeeded',
-            Purchase.completed_at >= date_from,
-            Purchase.completed_at <= date_to
+            Purchase.user_id.in_(cohort_subquery)
         )
     ) or 0
 
@@ -634,8 +629,8 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'blocked': blocked
         },
         'funnel': {
-            'start': new_users,
-            'spent_1': funnel_spent_1,
+            'start': funnel_start,
+            'spent_1': funnel_gen,
             'spent_2': funnel_spent_2,
             'shop': funnel_shop,
             'paid': funnel_paid
