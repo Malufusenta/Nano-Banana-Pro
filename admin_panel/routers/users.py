@@ -210,6 +210,8 @@ async def get_kie_task(task_id: str, user=Depends(require_auth)):
         result_urls = []
         try:
             param = _json.loads(d.get("param") or "{}")
+            if isinstance(param.get("input"), str):
+                param["input"] = _json.loads(param["input"])
         except Exception:
             pass
         try:
