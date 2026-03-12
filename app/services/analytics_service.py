@@ -1081,11 +1081,14 @@ def format_payment_depth_message(data: dict, start_date: str, end_date: str) -> 
 async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to: datetime) -> list[dict]:
     """
     Считает статистику по рекламным кампаниям (когортный метод).
+    Правила:
+    - Транзакция попадает ЛИБО в новички ЛИБО в старички — без дублей
+    - Кампания показывается если есть хоть что-то: запуски, новички или выручка старичков
+    - Отдельная строка "Органика / Рефералы" для бесплатного трафика
     """
     from app.models import CampaignMapping
     import json
 
-    # Загружаем все мэппинги
     mappings_result = await session.execute(select(CampaignMapping))
     mappings = mappings_result.scalars().all()
 
@@ -1094,14 +1097,17 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
     for mapping in mappings:
         utm_sources = json.loads(mapping.utm_sources)
 
-        # --- Когорта: зарегались в периоде с нужным source ---
         cohort_subquery = select(User.telegram_id).where(
             User.created_at >= date_from,
             User.created_at <= date_to,
             User.source.in_(utm_sources)
         ).scalar_subquery()
 
-        # Шаг 1: кол-во /start
+        veterans_subquery = select(User.telegram_id).where(
+            User.source.in_(utm_sources),
+            User.created_at < date_from
+        ).scalar_subquery()
+
         cohort_count = await session.scalar(
             select(func.count(User.id)).where(
                 User.created_at >= date_from,
@@ -1110,7 +1116,6 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Шаг 2: Быстрые новички ⚡️ (first_purchase в тот же день что created_at)
         fast_buyers = await session.scalar(
             select(func.count(User.id)).where(
                 User.telegram_id.in_(cohort_subquery),
@@ -1119,7 +1124,6 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Шаг 3: Дозревшие 🐢 (first_purchase позже дня регистрации, дата оплаты может выходить за период)
         slow_buyers = await session.scalar(
             select(func.count(User.id)).where(
                 User.telegram_id.in_(cohort_subquery),
@@ -1128,7 +1132,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Шаг 4: Выручка с новичков (первые покупки когорты, без Stars)
+        # Выручка новичков — только первые покупки когорты (без дублей со старичками)
         new_revenue = await session.scalar(
             select(func.sum(Purchase.price)).where(
                 Purchase.status == 'succeeded',
@@ -1138,32 +1142,97 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Шаг 5: Выручка со старичков (покупки В периоде, от пользователей зарегавшихся ДО периода)
+        # Выручка старичков — покупки В периоде от пользователей зарегавшихся ДО периода
+        # notin_(cohort_subquery) — защита от дублей
         old_revenue = await session.scalar(
             select(func.sum(Purchase.price)).where(
                 Purchase.status == 'succeeded',
                 Purchase.completed_at >= date_from,
                 Purchase.completed_at <= date_to,
-                or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),
-                Purchase.user_id.in_(
-                    select(User.telegram_id).where(
-                        User.source.in_(utm_sources),
-                        User.created_at < date_from
-                    )
-                )
+                Purchase.user_id.in_(veterans_subquery),
+                Purchase.user_id.notin_(cohort_subquery),
+                or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
             )
         ) or 0
 
-        total_buyers = fast_buyers + slow_buyers
+        if cohort_count == 0 and new_revenue == 0 and old_revenue == 0:
+            continue
 
         result.append({
             'campaign': mapping.yandex_campaign_name,
             'starts': cohort_count,
             'fast_buyers': fast_buyers,
             'slow_buyers': slow_buyers,
-            'total_buyers': total_buyers,
+            'total_buyers': fast_buyers + slow_buyers,
             'new_revenue': new_revenue,
             'old_revenue': old_revenue,
+        })
+
+    # --- Строка "Органика / Рефералы" ---
+    organic_cohort_subquery = select(User.telegram_id).where(
+        User.created_at >= date_from,
+        User.created_at <= date_to,
+        or_(User.source.in_(['organic', 'ref_friend']), User.source.is_(None))
+    ).scalar_subquery()
+
+    organic_veterans_subquery = select(User.telegram_id).where(
+        User.created_at < date_from,
+        or_(User.source.in_(['organic', 'ref_friend']), User.source.is_(None))
+    ).scalar_subquery()
+
+    organic_count = await session.scalar(
+        select(func.count(User.id)).where(
+            User.created_at >= date_from,
+            User.created_at <= date_to,
+            or_(User.source.in_(['organic', 'ref_friend']), User.source.is_(None))
+        )
+    ) or 0
+
+    organic_fast = await session.scalar(
+        select(func.count(User.id)).where(
+            User.telegram_id.in_(organic_cohort_subquery),
+            User.first_purchase_at.isnot(None),
+            func.date(User.first_purchase_at) == func.date(User.created_at)
+        )
+    ) or 0
+
+    organic_slow = await session.scalar(
+        select(func.count(User.id)).where(
+            User.telegram_id.in_(organic_cohort_subquery),
+            User.first_purchase_at.isnot(None),
+            func.date(User.first_purchase_at) > func.date(User.created_at)
+        )
+    ) or 0
+
+    organic_new_revenue = await session.scalar(
+        select(func.sum(Purchase.price)).where(
+            Purchase.status == 'succeeded',
+            Purchase.user_id.in_(organic_cohort_subquery),
+            Purchase.is_first_purchase == True,
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
+        )
+    ) or 0
+
+    organic_old_revenue = await session.scalar(
+        select(func.sum(Purchase.price)).where(
+            Purchase.status == 'succeeded',
+            Purchase.completed_at >= date_from,
+            Purchase.completed_at <= date_to,
+            Purchase.user_id.in_(organic_veterans_subquery),
+            Purchase.user_id.notin_(organic_cohort_subquery),
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
+        )
+    ) or 0
+
+    if organic_count > 0 or organic_new_revenue > 0 or organic_old_revenue > 0:
+        result.append({
+            'campaign': '🌱 Органика / Рефералы',
+            'starts': organic_count,
+            'fast_buyers': organic_fast,
+            'slow_buyers': organic_slow,
+            'total_buyers': organic_fast + organic_slow,
+            'new_revenue': organic_new_revenue,
+            'old_revenue': organic_old_revenue,
         })
 
     return result
