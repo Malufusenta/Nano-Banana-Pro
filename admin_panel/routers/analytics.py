@@ -149,12 +149,12 @@ async def get_campaigns_stats(
         campaign_name = stat['campaign']
         spend = direct_data['campaigns'].get(campaign_name, 0)
 
-        total_buyers = stat['total_buyers']
+        fast_b = stat['fast_buyers']
         new_revenue = stat['new_revenue']
         old_revenue = stat['old_revenue']
         total_revenue = new_revenue + old_revenue
 
-        cac = round(spend / total_buyers, 2) if total_buyers > 0 else 0
+        cac = round(spend / fast_b, 2) if fast_b > 0 else 0
         roas_new = round(new_revenue / spend * 100, 1) if spend > 0 else 0
         roas_total = round(total_revenue / spend * 100, 1) if spend > 0 else 0
 
@@ -176,7 +176,7 @@ async def get_campaigns_stats(
     total_starts = sum(r['starts'] for r in rows)
     total_fast = sum(r['fast_buyers'] for r in rows)
     total_slow = sum(r['slow_buyers'] for r in rows)
-    total_buyers_all = total_fast + total_slow
+    total_buyers_all = total_fast
     total_new_rev = sum(r['new_revenue'] for r in rows)
     total_old_rev = sum(r['old_revenue'] for r in rows)
     total_rev_all = total_new_rev + total_old_rev
