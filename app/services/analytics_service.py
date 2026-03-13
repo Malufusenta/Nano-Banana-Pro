@@ -1131,7 +1131,8 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             select(func.count(User.id)).where(
                 User.telegram_id.in_(cohort_subquery),
                 User.first_purchase_at.isnot(None),
-                func.date(User.first_purchase_at) == func.date(User.created_at)
+                User.first_purchase_at >= date_from,
+                User.first_purchase_at <= date_to
             )
         ) or 0
 
