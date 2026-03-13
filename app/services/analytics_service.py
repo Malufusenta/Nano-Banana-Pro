@@ -630,6 +630,7 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
             'bought_immediately': bought_immediately,
             'farmed_first': farmed_first,
             'veteran_buyers': veteran_buyers,
+            'fresh_buyers_total': sum(v['fresh'] for v in conversion_stats.values()),
             'blocked': blocked
         },
         'funnel': {

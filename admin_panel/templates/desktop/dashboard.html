@@ -542,6 +542,16 @@
     </div>
 
     <div class="metrics-grid">
+      <div class="metric-card blue">
+        <div class="metric-top">
+          <div>
+            <div class="metric-label">CR Новичков</div>
+            <div class="metric-value loading" id="m-cr-new">—</div>
+            <div class="metric-sub" id="m-cr-new-sub">загрузка...</div>
+          </div>
+          <div class="metric-icon-wrap">🎯</div>
+        </div>
+      </div>
       <div class="metric-card green">
         <div class="metric-top">
           <div><div class="metric-label">Новых юзеров</div><div class="metric-value loading" id="m-users">—</div><div class="metric-sub" id="m-users-sub">загрузка...</div></div>
@@ -984,6 +994,12 @@
       document.getElementById('m-users-sub').textContent = `всего: ${fmtInt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmtInt(d.total_buyers)} покупателей`;
+      const freshBuyers = d.fresh_buyers_total || 0;
+      const newUsersCount = d.new_users || 0;
+      const crNew = newUsersCount > 0 ? (freshBuyers / newUsersCount * 100) : 0;
+      set('m-cr-new', crNew.toFixed(1) + '%');
+      document.getElementById('m-cr-new-sub').textContent =
+        `${fmtInt(freshBuyers)} из ${fmtInt(newUsersCount)} новых`;
       set('m-buyers-total', fmtInt(d.total_buyers));
       document.getElementById('m-buyers-new-old').textContent =
         `🆕 ${fmtInt(d.newbie_buyers||0)} · 🔄 ${fmtInt(d.veteran_buyers||0)}`;
@@ -1043,6 +1059,12 @@
       document.getElementById('m-users-sub').textContent = `всего: ${fmtInt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmtInt(d.total_buyers)} покупателей`;
+      const freshBuyers = d.fresh_buyers_total || 0;
+      const newUsersCount = d.new_users || 0;
+      const crNew = newUsersCount > 0 ? (freshBuyers / newUsersCount * 100) : 0;
+      set('m-cr-new', crNew.toFixed(1) + '%');
+      document.getElementById('m-cr-new-sub').textContent =
+        `${fmtInt(freshBuyers)} из ${fmtInt(newUsersCount)} новых`;
       set('m-buyers-total', fmtInt(d.total_buyers));
       document.getElementById('m-buyers-new-old').textContent =
         `🆕 ${fmtInt(d.newbie_buyers||0)} · 🔄 ${fmtInt(d.veteran_buyers||0)}`;
