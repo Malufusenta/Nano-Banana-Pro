@@ -928,6 +928,8 @@
     var cacBuyers = d.cac_buyers || 0;
     var cac = cacBuyers > 0 ? (directTotal / cacBuyers) : 0;
     var isPositive = profit >= 0;
+    var totalIncome = incomeAmount + starsNetRub;
+    var totalExpenses = directTotal + kieRub + fixedDaily + yokassaFee;
 
     var profitHtml =
       '<div class="profit-row"><span class="profit-row-label">💰 Выручка</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600">' + fmt(revenue) + ' ₽</span></div>' +
@@ -936,6 +938,16 @@
       '<div class="profit-row"><span class="profit-row-label">📣 Яндекс Директ</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(directTotal) + ' ₽</span></div>' +
       '<div class="profit-row"><span class="profit-row-label">🤖 KIE.ai (~' + (d.usd_rate || 90).toFixed(2) + '₽/$)</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(kieRub) + ' ₽</span></div>' +
       (fixedDaily > 0 ? '<div class="profit-row"><span class="profit-row-label">⚙️ Фикс. расходы/день</span><span style="font-family:\'JetBrains Mono\',monospace;font-weight:600;color:var(--accent2)">−' + fmt(fixedDaily) + ' ₽</span></div>' : '') +
+      '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+        '<div style="flex:1;background:rgba(124,185,154,0.1);border:1px solid rgba(124,185,154,0.25);border-radius:8px;padding:8px 10px">' +
+          '<div style="font-size:10px;color:var(--text3);font-family:\'JetBrains Mono\',monospace;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">💰 Касса</div>' +
+          '<div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:var(--green)">' + fmt(totalIncome) + ' ₽</div>' +
+        '</div>' +
+        '<div style="flex:1;background:rgba(224,128,128,0.1);border:1px solid rgba(224,128,128,0.25);border-radius:8px;padding:8px 10px">' +
+          '<div style="font-size:10px;color:var(--text3);font-family:\'JetBrains Mono\',monospace;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">📤 Расходы</div>' +
+          '<div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:var(--red)">' + fmt(totalExpenses) + ' ₽</div>' +
+        '</div>' +
+      '</div>' +
       '<div class="profit-result ' + (isPositive ? 'positive' : 'negative') + '">' +
         '<span class="profit-result-label" style="color:' + (isPositive ? 'var(--green)' : 'var(--accent2)') + '">Чистая прибыль</span>' +
         '<span class="profit-result-val" style="color:' + (isPositive ? 'var(--green)' : 'var(--accent2)') + '">' + (isPositive ? '' : '−') + fmt(Math.abs(profit)) + ' ₽</span>' +
