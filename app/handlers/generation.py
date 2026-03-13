@@ -409,7 +409,8 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         pf_image_urls=normalized_urls,
         pf_model=pref_model, 
         pf_ratio="1:1", 
-        pf_quality="hd" if pref_model == "nb2" else "2k"
+        pf_quality="hd" if pref_model == "nb2" else "2k",
+        pf_is_edit_mode=is_edit_mode,
     )
     await state.set_state(GenState.preflight_check)
     
@@ -483,6 +484,8 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
         cost = config.COST_STANDARD
 
     is_broadcast = data.get("is_broadcast_gen", False)
+    has_photo = bool(data.get("pf_image_urls"))
+    is_edit_mode = data.get("pf_is_edit_mode", False)
     
     if is_broadcast:
         text = (
@@ -492,11 +495,14 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
     else:
         safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         cost = calc_cost(new_model, quality)
+        warning = ""
+        if (not has_photo) or is_edit_mode:
+            warning = f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
             f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
-            f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
+            f"{warning}"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     
@@ -538,11 +544,16 @@ async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext)
 
     safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     cost = calc_cost(model, new_q)
+    has_photo = bool(data.get("pf_image_urls"))
+    is_edit_mode = data.get("pf_is_edit_mode", False)
+    warning = ""
+    if (not has_photo) or is_edit_mode:
+        warning = f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
     text = (
         f"🎨 <b>Параметры генерации</b>\n\n"
         f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
         f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
-        f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
+        f"{warning}"
         f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
     )
 
@@ -593,11 +604,16 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
     else:
         safe_prompt = data.get('pf_prompt', '')[:100].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         cost = calc_cost(data.get("pf_model"), data.get("pf_quality"))
+        has_photo = bool(data.get("pf_image_urls"))
+        is_edit_mode = data.get("pf_is_edit_mode", False)
+        warning = ""
+        if (not has_photo) or is_edit_mode:
+            warning = f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
         text = (
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
             f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
-            f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
+            f"{warning}"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     
