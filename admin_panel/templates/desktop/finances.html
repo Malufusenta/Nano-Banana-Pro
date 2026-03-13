@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -177,46 +177,107 @@ async function openUserModal(userId) {
 </script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root { --accent:#f5c542; --accent2:#ff6b35; --green:#22c55e; --blue:#3b82f6; --purple:#8b5cf6; --red:#ef4444; --sidebar-w:240px; --radius:12px; --transition:0.2s ease; }
-  [data-theme="dark"] { --bg:#0f0f14; --surface:#17171f; --surface2:#1e1e28; --surface3:#25252f; --border:#2a2a38; --text:#f0f0f8; --text2:#a0a0b8; --text3:#606078; --shadow:0 2px 12px rgba(0,0,0,0.4); }
-  [data-theme="light"] { --bg:#f4f4f8; --surface:#ffffff; --surface2:#f8f8fc; --surface3:#efeff5; --border:#e2e2ec; --text:#1a1a2e; --text2:#5a5a78; --text3:#9898b0; --shadow:0 2px 12px rgba(0,0,0,0.08); }
-  html,body { height:100%; }
-  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; display:flex; overflow:hidden; font-size:14px; line-height:1.5; transition:background var(--transition),color var(--transition); }
 
-  .sidebar { width:var(--sidebar-w); min-height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; z-index:200; transition:transform var(--transition); }
-  .sidebar-logo { padding:20px 16px; border-bottom:1px solid var(--border); }
-  .sidebar-logo-inner { display:flex; align-items:center; gap:10px; }
-  .sidebar-logo-emoji { font-size:26px; }
-  .sidebar-logo-text { font-size:15px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-  .sidebar-logo-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
-  .sidebar-nav { flex:1; padding:12px 8px; overflow-y:auto; }
-  .nav-section { margin-bottom:20px; }
-  .nav-section-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; padding:0 10px; margin-bottom:4px; }
-  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:13px; font-weight:500; transition:all var(--transition); border:none; background:none; width:100%; text-align:left; cursor:pointer; }
-  .nav-item:hover { background:var(--surface2); color:var(--text); }
-  .nav-item.active { background:rgba(245,197,66,0.12); color:var(--accent); font-weight:600; }
-  .nav-item .icon { font-size:15px; width:18px; text-align:center; }
-  .sidebar-footer { padding:12px 8px; border-top:1px solid var(--border); }
-  .sidebar-user { display:flex; align-items:center; gap:9px; padding:10px; border-radius:8px; background:var(--surface2); margin-bottom:6px; }
-  .sidebar-user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
-  .sidebar-user-name { font-size:13px; font-weight:600; }
-  .sidebar-user-role { font-size:11px; color:var(--text3); font-family:'JetBrains Mono',monospace; }
-  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:150; }
+  :root {
+    --bg: #f4f2ff;
+    --surface: #ffffff;
+    --surface2: #f4f4fb;
+    --surface3: #e4e4f4;
+    --border: #dedeee;
+    --text1: #26263a;
+    --text:  #26263a;
+    --text2: #6b6b86;
+    --text3: #a0a0bc;
+    --accent:  #8f7bff;
+    --accent2: #ff9f66;
+    --blue:    #4f8cff;
+    --purple:  #c66bff;
+    --green:   #32c197;
+    --red:     #ff6b81;
+    --yellow:  #ffd66b;
+    --sidebar-w: 260px;
+    --radius: 20px;
+    --transition: 0.2s ease;
+    --shadow: 0 18px 40px rgba(32, 26, 90, 0.12);
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; display: flex; overflow: hidden; font-size: 14px; line-height: 1.5; }
 
-  .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
-  .topbar { position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-  .topbar-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-  .topbar-title { font-size:16px; font-weight:700; }
-  .topbar-right { display:flex; align-items:center; gap:8px; }
-  .burger-btn { display:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
-  .icon-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; transition:all var(--transition); }
-  .icon-btn:hover { color:var(--text); border-color:var(--accent); }
-  .content { padding:20px 24px; flex:1; }
+  .sidebar {
+    width: var(--sidebar-w);
+    min-height: 100vh;
+    background: rgba(255,255,255,0.96);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 200;
+    box-shadow: 0 18px 40px rgba(32,26,90,0.08);
+    backdrop-filter: blur(16px);
+    transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+  }
+  .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo-inner { display: flex; align-items: center; gap: 10px; }
+  .sidebar-logo-emoji { font-size: 22px; }
+  .sidebar-logo-text { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; }
+  .sidebar-logo-sub { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; }
+  .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+  .nav-section { margin-bottom: 20px; }
+  .nav-section-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; padding: 0 10px; margin-bottom: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; color: var(--text2); text-decoration: none; font-size: 13px; font-weight: 500; transition: all var(--transition); border: none; background: none; width: 100%; text-align: left; cursor: pointer; }
+  .nav-item:hover { background: var(--surface2); color: var(--text1); }
+  .nav-item.active { background: linear-gradient(135deg, rgba(143,123,255,0.16), rgba(79,140,255,0.18)); color: var(--accent); font-weight: 600; box-shadow: 0 10px 24px rgba(79,140,255,0.15); }
+  .nav-item .icon { font-size: 15px; width: 18px; text-align: center; }
+  .sidebar-footer { padding: 12px 8px; border-top: 1px solid var(--border); }
+  .sidebar-user { display: flex; align-items: center; gap: 9px; padding: 10px; border-radius: 8px; background: var(--surface2); margin-bottom: 6px; }
+  .sidebar-user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--surface3); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .sidebar-user-name { font-size: 13px; font-weight: 600; }
+  .sidebar-user-role { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 150; }
 
-  .period-tabs { display:flex; align-items:center; background:var(--surface2); border-radius:10px; padding:3px; gap:2px; border:1px solid var(--border); }
-  .period-tab { padding:6px 14px; border-radius:7px; border:none; background:none; color:var(--text2); font-size:12px; font-weight:500; cursor:pointer; transition:all var(--transition); white-space:nowrap; font-family:'Inter',sans-serif; }
-  .period-tab:hover { color:var(--text); }
-  .period-tab.active { background:var(--surface); color:var(--accent); font-weight:600; box-shadow:var(--shadow); }
+  .main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,0.96);
+    border-bottom: 1px solid rgba(222,222,238,0.6);
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    backdrop-filter: blur(18px);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .topbar-title { font-size: 18px; font-weight: 700; color: var(--text1); letter-spacing: 0.02em; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .burger-btn { display: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); align-items: center; justify-content: center; cursor: pointer; font-size: 16px; }
+  .icon-btn {
+    width: 34px; height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(222,222,238,0.9);
+    background: #ffffff;
+    color: var(--text2);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 15px;
+    transition: all var(--transition);
+    box-shadow: 0 8px 22px rgba(32,26,90,0.12);
+  }
+  .icon-btn:hover { color: var(--accent); border-color: var(--accent); box-shadow: 0 12px 28px rgba(143,123,255,0.32); }
+  .content {
+    padding: 24px 28px;
+    flex: 1;
+    background: radial-gradient(circle at top left, rgba(143,123,255,0.16), transparent 55%),
+                radial-gradient(circle at bottom right, rgba(255,159,102,0.18), transparent 55%),
+                var(--bg);
+  }
+
+  .period-tabs { display: flex; background: var(--surface2); border: 1px solid rgba(222,222,238,0.8); border-radius: 999px; padding: 4px; gap: 4px; box-shadow: 0 10px 24px rgba(32,26,90,0.06); }
+  .period-tab { padding: 6px 16px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all var(--transition); font-family: 'JetBrains Mono', monospace; border: none; background: transparent; white-space: nowrap; }
+  .period-tab:hover { color: var(--text1); background: rgba(244,244,251,0.8); }
+  .period-tab.active { background: #ffffff; color: var(--accent); font-weight: 600; box-shadow: 0 12px 30px rgba(32,26,90,0.16); }
 
   .summary-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
   .summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
@@ -257,6 +318,43 @@ async function openUserModal(userId) {
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:var(--surface2); }
   .mono { font-family:'JetBrains Mono',monospace; font-size:11px; }
+  .transactions-pager {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:10px 14px 6px;
+    border-top:1px solid var(--border);
+    font-size:12px;
+    color:var(--text3);
+    font-family:'JetBrains Mono',monospace;
+  }
+  .transactions-pager-left { display:flex; align-items:center; gap:6px; }
+  .transactions-pager-right { display:flex; align-items:center; gap:4px; }
+  .tx-page-btn {
+    min-width:28px;
+    height:28px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--surface2);
+    color:var(--text2);
+    font-size:11px;
+    font-family:'JetBrains Mono',monospace;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:all 0.15s ease;
+  }
+  .tx-page-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); background:var(--surface); }
+  .tx-page-btn[disabled] { opacity:0.4; cursor:default; }
+  .tx-page-btn.active {
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+    box-shadow:0 6px 16px rgba(143,123,255,0.35);
+    cursor:default;
+  }
 
   /* НОВЫЕ/ПОВТОРНЫЕ */
   .split-bar { height:10px; border-radius:5px; overflow:hidden; display:flex; margin:10px 0; }
@@ -495,6 +593,13 @@ async function openUserModal(userId) {
           </tbody>
         </table>
       </div>
+      <div class="transactions-pager" id="transactions-pager" style="display:none">
+        <div class="transactions-pager-left">
+          <span>Стр.</span>
+          <span id="transactions-page-info">1 / 1</span>
+        </div>
+        <div class="transactions-pager-right" id="transactions-pager-buttons"></div>
+      </div>
     </div>
 
   </div>
@@ -504,6 +609,9 @@ async function openUserModal(userId) {
   // ПЕРЕМЕННЫЕ
   let revenueChart, pieChart;
   let currentPeriod = 'today';
+  const TX_PAGE_SIZE = 10;
+  let recentTransactions = [];
+  let transactionsPage = 1;
 
   // ТЕМА
   const THEME_KEY = 'nb_admin_theme';
@@ -594,6 +702,72 @@ async function openUserModal(userId) {
     });
   }
 
+  function renderTransactionsPage() {
+    const body = document.getElementById('transactions-body');
+    const pager = document.getElementById('transactions-pager');
+    const pagerBtns = document.getElementById('transactions-pager-buttons');
+    const pagerInfo = document.getElementById('transactions-page-info');
+    if (!body || !pager || !pagerBtns || !pagerInfo) return;
+
+    const total = recentTransactions.length;
+    if (!total) {
+      body.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+      pager.style.display = 'none';
+      return;
+    }
+
+    const totalPages = Math.ceil(total / TX_PAGE_SIZE);
+    if (transactionsPage > totalPages) transactionsPage = totalPages;
+    if (transactionsPage < 1) transactionsPage = 1;
+
+    const start = (transactionsPage - 1) * TX_PAGE_SIZE;
+    const pageData = recentTransactions.slice(start, start + TX_PAGE_SIZE);
+
+    body.innerHTML = pageData.map(t => `
+      <tr onclick="openUserModal(${t.user_id})" style="cursor:pointer">
+        <td class="mono" style="color:var(--text3)">#${t.id}</td>
+        <td class="mono" style="color:var(--text3)">${t.time}</td>
+        <td class="mono" style="color:var(--blue)">${t.user_id}</td>
+        <td>${t.tariff}</td>
+        <td class="mono" style="color:var(--accent);font-weight:600">${fmt(t.price)} ₽</td>
+      </tr>
+    `).join('');
+
+    pager.style.display = totalPages > 1 ? 'flex' : 'none';
+    pagerInfo.textContent = transactionsPage + ' / ' + totalPages;
+
+    pagerBtns.innerHTML = '';
+    const mkBtn = (label, page, disabled = false, isActive = false) => {
+      const btn = document.createElement('button');
+      btn.className = 'tx-page-btn' + (isActive ? ' active' : '');
+      btn.textContent = label;
+      btn.disabled = disabled;
+      if (!disabled && !isActive) {
+        btn.addEventListener('click', () => {
+          transactionsPage = page;
+          renderTransactionsPage();
+        });
+      }
+      return btn;
+    };
+
+    const prevBtn = mkBtn('‹', transactionsPage - 1, transactionsPage === 1);
+    pagerBtns.appendChild(prevBtn);
+
+    const maxVisible = 5;
+    let fromPage = Math.max(1, transactionsPage - Math.floor(maxVisible / 2));
+    let toPage = Math.min(totalPages, fromPage + maxVisible - 1);
+    if (toPage - fromPage + 1 < maxVisible) {
+      fromPage = Math.max(1, toPage - maxVisible + 1);
+    }
+    for (let p = fromPage; p <= toPage; p++) {
+      pagerBtns.appendChild(mkBtn(String(p), p, false, p === transactionsPage));
+    }
+
+    const nextBtn = mkBtn('›', transactionsPage + 1, transactionsPage === totalPages);
+    pagerBtns.appendChild(nextBtn);
+  }
+
   function updateChartColors() {
     const c = getColors();
     if (revenueChart) {
@@ -665,16 +839,10 @@ async function openUserModal(userId) {
     set('split-new-val', fmtInt(d.first_buyers) + ' (' + newPct + '%)');
     set('split-repeat-val', fmtInt(d.repeat_buyers) + ' (' + (100-newPct) + '%)');
 
-    // Транзакции
-    document.getElementById('transactions-body').innerHTML = d.recent.map(t => `
-      <tr onclick="openUserModal(${t.user_id})" style="cursor:pointer">
-        <td class="mono" style="color:var(--text3)">#${t.id}</td>
-        <td class="mono" style="color:var(--text3)">${t.time}</td>
-        <td class="mono" style="color:var(--blue)">${t.user_id}</td>
-        <td>${t.tariff}</td>
-        <td class="mono" style="color:var(--accent);font-weight:600">${fmt(t.price)} ₽</td>
-      </tr>
-    `).join('') || '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Нет данных</td></tr>';
+    // Транзакции + пагинация по 10
+    recentTransactions = Array.isArray(d.recent) ? d.recent : [];
+    transactionsPage = 1;
+    renderTransactionsPage();
   }
 
   async function applyCustomPeriod() {
