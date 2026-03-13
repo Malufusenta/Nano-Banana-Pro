@@ -496,6 +496,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
             f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+            f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     
@@ -541,6 +542,7 @@ async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext)
         f"🎨 <b>Параметры генерации</b>\n\n"
         f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
         f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+        f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
         f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
     )
 
@@ -595,6 +597,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
             f"🎨 <b>Параметры генерации</b>\n\n"
             f"📝 <b>Запрос:</b> {safe_prompt}...\n\n"
             f"💰 <b>Стоимость:</b> {cost} банан(а)\n\n"
+            f"⚠️ <i>Внимание:</i> Нейросеть будет рисовать ИМЕННО ЭТОТ текст.\n\n"
             f"<b>Настрой параметры и жми \"🚀 Запуск\"</b> 👇"
         )
     
