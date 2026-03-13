@@ -413,7 +413,13 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     funnel_paid = await session.scalar(
         select(func.count(func.distinct(Purchase.user_id))).where(
             Purchase.status == 'succeeded',
-            Purchase.user_id.in_(cohort_subquery)
+            Purchase.user_id.in_(cohort_subquery),
+            Purchase.user_id.in_(
+                select(User.telegram_id).where(
+                    User.first_purchase_at >= date_from,
+                    User.first_purchase_at <= date_to
+                )
+            )
         )
     ) or 0
 

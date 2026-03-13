@@ -80,7 +80,7 @@ async def get_sources(
     for source in all_sources:
         stats = source_stats.get(source, {})
         rev = revenue_by_source.get(source, {})
-        buyers = stats.get("fresh_buyers", 0) + stats.get("delayed_buyers", 0)
+        buyers = stats.get("fresh_buyers", 0)
         revenue = rev.get("revenue", 0)
         avg_check = round(revenue / rev.get("count", 1), 2) if rev.get("count", 0) > 0 else 0
         result.append({
