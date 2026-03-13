@@ -1139,11 +1139,15 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Выручка новичков — все покупки когорты (без дублей со старичками)
+        # Выручка новичков — Day-0: оплатил в день регистрации (по дате оплаты)
         new_revenue = await session.scalar(
-            select(func.sum(Purchase.price)).where(
+            select(func.sum(Purchase.price))
+            .select_from(Purchase)
+            .join(User, User.telegram_id == Purchase.user_id)
+            .where(
                 Purchase.status == 'succeeded',
                 Purchase.user_id.in_(cohort_subquery),
+                func.date(Purchase.completed_at) == func.date(User.created_at),
                 or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
             )
         ) or 0
@@ -1224,10 +1228,13 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
     ) or 0
 
     organic_new_revenue = await session.scalar(
-        select(func.sum(Purchase.price)).where(
+        select(func.sum(Purchase.price))
+        .select_from(Purchase)
+        .join(User, User.telegram_id == Purchase.user_id)
+        .where(
             Purchase.status == 'succeeded',
             Purchase.user_id.in_(organic_cohort_subquery),
-            Purchase.is_first_purchase == True,
+            func.date(Purchase.completed_at) == func.date(User.created_at),
             or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
         )
     ) or 0
