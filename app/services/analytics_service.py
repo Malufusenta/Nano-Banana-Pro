@@ -1139,12 +1139,11 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Выручка новичков — только первые покупки когорты (без дублей со старичками)
+        # Выручка новичков — все покупки когорты (без дублей со старичками)
         new_revenue = await session.scalar(
             select(func.sum(Purchase.price)).where(
                 Purchase.status == 'succeeded',
                 Purchase.user_id.in_(cohort_subquery),
-                Purchase.is_first_purchase == True,
                 or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
             )
         ) or 0
