@@ -111,6 +111,13 @@
   .mapping-form button:hover { border-color:var(--accent); color:var(--accent); }
   tfoot .totals-row td { font-weight:600; background:var(--surface2); border-top:2px solid var(--border); }
 
+  /* Колонка с действиями (✏️, 🗑️) в таблице мэппингов на мобилке не нужна —
+     прячем её целиком, редактирование/удаление делаем с десктопа. */
+  #mappings-table th:last-child,
+  #mappings-table td:last-child {
+    display: none;
+  }
+
   /* ПАГИНАЦИЯ ИСТОЧНИКОВ */
   .sources-pager { display:flex; gap:4px; margin-top:14px; align-items:center; flex-wrap:wrap; }
   .pager-btn { height:28px; min-width:28px; padding:0 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); font-size:12px; font-family:'JetBrains Mono',monospace; font-weight:500; cursor:pointer; transition:all var(--transition); display:inline-flex; align-items:center; justify-content:center; }
