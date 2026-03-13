@@ -468,19 +468,15 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     
     farmed_first = newbie_buyers - bought_immediately
 
-    # CAC знаменатель: зарегался И купил впервые - оба в периоде
+    # CAC знаменатель: все из когорты (зарегистрировались в периоде), у кого была хотя бы одна оплата
     cac_buyers = await session.scalar(
         select(func.count(func.distinct(Purchase.user_id))).where(
             Purchase.status == 'succeeded',
-            Purchase.completed_at >= date_from,
-            Purchase.completed_at <= date_to,
             or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),
             Purchase.user_id.in_(
                 select(User.telegram_id).where(
                     User.created_at >= date_from,
-                    User.created_at <= date_to,
-                    User.first_purchase_at >= date_from,
-                    User.first_purchase_at <= date_to
+                    User.created_at <= date_to
                 )
             )
         )
