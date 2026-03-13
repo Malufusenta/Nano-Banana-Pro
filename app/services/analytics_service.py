@@ -480,16 +480,20 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
         )
     ) or 0
     
-    # Старички (юзеры с повторными покупками — более 1 покупки всего)
-    veteran_buyers_query = select(func.count()).select_from(
-        select(Purchase.user_id).where(
+    # Старички (купил в периоде, но первая покупка была до периода)
+    veteran_buyers = await session.scalar(
+        select(func.count(func.distinct(Purchase.user_id))).where(
             Purchase.status == 'succeeded',
             Purchase.completed_at >= date_from,
             Purchase.completed_at <= date_to,
             or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None)),
-        ).group_by(Purchase.user_id).having(func.count(Purchase.id) > 1).subquery()
-    )
-    veteran_buyers = await session.scalar(veteran_buyers_query) or 0
+            Purchase.user_id.in_(
+                select(User.telegram_id).where(
+                    User.first_purchase_at < date_from
+                )
+            )
+        )
+    ) or 0
     
     blocked = await session.scalar(
         select(func.count(User.id)).where(
