@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from app.database import async_session
 from app.services.analytics_service import get_analytics_report, get_campaign_stats
 from app.services.yandex_direct import get_direct_spending
@@ -138,9 +138,11 @@ async def get_campaigns_stats(
 
     direct_data = {'total': 0, 'campaigns': {}, 'error': None}
     if config.YANDEX_DIRECT_TOKEN:
+        # Для "alltime" ограничиваем дату запуска бота (Директ не принимает древние даты)
+        direct_date_from = max(date_from.date(), date(2025, 12, 1))
         direct_data = await get_direct_spending(
             config.YANDEX_DIRECT_TOKEN,
-            date_from.date(),
+            direct_date_from,
             date_to.date()
         )
 
