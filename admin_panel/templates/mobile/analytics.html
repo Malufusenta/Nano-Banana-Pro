@@ -383,7 +383,8 @@
               <th>🐢 Дозрели</th>
               <th>👴 Старички (чел.)</th>
               <th>CAC ₽</th>
-              <th>Выручка новичков ₽</th>
+              <th>Выручка Day-0 ₽</th>
+              <th>Выручка 🐢</th>
               <th>ROAS новичков %</th>
               <th>Выручка старичков ₽</th>
               <th>ROAS общий %</th>
@@ -687,6 +688,7 @@
           <td class="mono">${row.old_buyers}</td>
           <td class="mono">${row.cac || '—'}</td>
           <td class="mono" style="color:var(--green)">${row.new_revenue.toLocaleString()}</td>
+          <td class="mono">${row.delayed_revenue.toLocaleString()} ₽</td>
           <td class="mono">${row.roas_new}%</td>
           <td class="mono" style="color:var(--text2)">${row.old_revenue.toLocaleString()}</td>
           <td class="mono">${row.roas_total}%</td>
@@ -694,7 +696,7 @@
     }
 
     if (data.rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--text3)">Нет данных. Добавьте мэппинги кампаний ниже.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:var(--text3)">Нет данных. Добавьте мэппинги кампаний ниже.</td></tr>';
     }
 
     // Строка ИТОГО
@@ -709,6 +711,7 @@
         <td><b>${t.old_buyers}</b></td>
         <td><b>${t.cac || '—'}</b></td>
         <td><b>${t.new_revenue.toLocaleString()}</b></td>
+        <td><b>${t.delayed_revenue.toLocaleString()} ₽</b></td>
         <td><b>${t.roas_new}%</b></td>
         <td><b>${t.old_revenue.toLocaleString()}</b></td>
         <td><b>${t.roas_total}%</b></td>

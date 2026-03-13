@@ -1152,6 +1152,19 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
+        # Выручка дозревших — когорта купила позже дня регистрации
+        delayed_revenue = await session.scalar(
+            select(func.sum(Purchase.price))
+            .select_from(Purchase)
+            .join(User, User.telegram_id == Purchase.user_id)
+            .where(
+                Purchase.status == 'succeeded',
+                Purchase.user_id.in_(cohort_subquery),
+                func.date(Purchase.completed_at) > func.date(User.created_at),
+                or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
+            )
+        ) or 0
+
         # Выручка старичков — покупки В периоде от пользователей зарегавшихся ДО периода
         # notin_(cohort_subquery) — защита от дублей
         old_revenue = await session.scalar(
@@ -1187,6 +1200,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             'slow_buyers': slow_buyers,
             'total_buyers': fast_buyers + slow_buyers,
             'new_revenue': new_revenue,
+            'delayed_revenue': delayed_revenue,
             'old_revenue': old_revenue,
             'old_buyers': old_buyers,
         })
@@ -1239,6 +1253,18 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
         )
     ) or 0
 
+    organic_delayed_revenue = await session.scalar(
+        select(func.sum(Purchase.price))
+        .select_from(Purchase)
+        .join(User, User.telegram_id == Purchase.user_id)
+        .where(
+            Purchase.status == 'succeeded',
+            Purchase.user_id.in_(organic_cohort_subquery),
+            func.date(Purchase.completed_at) > func.date(User.created_at),
+            or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
+        )
+    ) or 0
+
     organic_old_revenue = await session.scalar(
         select(func.sum(Purchase.price)).where(
             Purchase.status == 'succeeded',
@@ -1261,7 +1287,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
         )
     ) or 0
 
-    if organic_count > 0 or organic_new_revenue > 0 or organic_old_revenue > 0:
+    if organic_count > 0 or organic_new_revenue > 0 or organic_delayed_revenue > 0 or organic_old_revenue > 0:
         result.append({
             'campaign': '🌱 Органика / Рефералы',
             'starts': organic_count,
@@ -1269,6 +1295,7 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             'slow_buyers': organic_slow,
             'total_buyers': organic_fast + organic_slow,
             'new_revenue': organic_new_revenue,
+            'delayed_revenue': organic_delayed_revenue,
             'old_revenue': organic_old_revenue,
             'old_buyers': organic_old_buyers,
         })

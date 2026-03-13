@@ -151,12 +151,13 @@ async def get_campaigns_stats(
 
         fast_b = stat['fast_buyers']
         new_revenue = stat['new_revenue']
+        delayed_revenue = stat.get('delayed_revenue', 0)
         old_revenue = stat['old_revenue']
-        total_revenue = new_revenue + old_revenue
+        total_revenue_full = new_revenue + delayed_revenue + old_revenue
 
         cac = round(spend / fast_b, 2) if fast_b > 0 else 0
         roas_new = round(new_revenue / spend * 100, 1) if spend > 0 else 0
-        roas_total = round(total_revenue / spend * 100, 1) if spend > 0 else 0
+        roas_total = round(total_revenue_full / spend * 100, 1) if spend > 0 else 0
 
         rows.append({
             'campaign': campaign_name,
@@ -166,6 +167,7 @@ async def get_campaigns_stats(
             'slow_buyers': stat['slow_buyers'],
             'cac': cac,
             'new_revenue': new_revenue,
+            'delayed_revenue': delayed_revenue,
             'roas_new': roas_new,
             'old_revenue': old_revenue,
             'old_buyers': stat.get('old_buyers', 0),
@@ -178,8 +180,9 @@ async def get_campaigns_stats(
     total_slow = sum(r['slow_buyers'] for r in rows)
     total_buyers_all = total_fast
     total_new_rev = sum(r['new_revenue'] for r in rows)
+    total_delayed_rev = sum(r.get('delayed_revenue', 0) for r in rows)
     total_old_rev = sum(r['old_revenue'] for r in rows)
-    total_rev_all = total_new_rev + total_old_rev
+    total_rev_all = total_new_rev + total_delayed_rev + total_old_rev
 
     totals = {
         'campaign': 'ИТОГО',
@@ -189,6 +192,7 @@ async def get_campaigns_stats(
         'slow_buyers': total_slow,
         'cac': round(total_spend / total_buyers_all, 2) if total_buyers_all > 0 else 0,
         'new_revenue': total_new_rev,
+        'delayed_revenue': total_delayed_rev,
         'roas_new': round(total_new_rev / total_spend * 100, 1) if total_spend > 0 else 0,
         'old_revenue': total_old_rev,
         'old_buyers': sum(r['old_buyers'] for r in rows),
