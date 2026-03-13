@@ -522,6 +522,16 @@
           <div class="metric-icon-wrap">📈</div>
         </div>
       </div>
+      <div class="metric-card green">
+        <div class="metric-top">
+          <div>
+            <div class="metric-label">Покупатели</div>
+            <div class="metric-value loading" id="m-buyers-total">—</div>
+            <div class="metric-sub" id="m-buyers-new-old">загрузка...</div>
+          </div>
+          <div class="metric-icon-wrap">🛍️</div>
+        </div>
+      </div>
     </div>
 
     <div class="metrics-grid">
@@ -921,6 +931,9 @@
       document.getElementById('m-users-sub').textContent = `всего: ${fmtInt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmtInt(d.total_buyers)} покупателей`;
+      set('m-buyers-total', fmtInt(d.total_buyers));
+      document.getElementById('m-buyers-new-old').textContent =
+        `🆕 ${fmtInt(d.newbie_buyers||0)} · 🔄 ${fmtInt(d.veteran_buyers||0)}`;
       set('m-blocked', fmtInt(d.blocked || 0));
       set('m-avgcheck', fmt(d.avg_check) + ' ₽');
       set('m-dau', fmtInt(d.active_users));
@@ -985,6 +998,9 @@
       document.getElementById('m-users-sub').textContent = `всего: ${fmtInt(d.total_users)}`;
       set('m-cr', fmtDec(d.conversion_rate) + '%');
       document.getElementById('m-cr-sub').textContent = `${fmtInt(d.total_buyers)} покупателей`;
+      set('m-buyers-total', fmtInt(d.total_buyers));
+      document.getElementById('m-buyers-new-old').textContent =
+        `🆕 ${fmtInt(d.newbie_buyers||0)} · 🔄 ${fmtInt(d.veteran_buyers||0)}`;
       set('m-blocked', fmtInt(d.blocked || 0));
       set('m-avgcheck', fmt(d.avg_check) + ' ₽');
       set('m-dau', fmtInt(d.active_users));
