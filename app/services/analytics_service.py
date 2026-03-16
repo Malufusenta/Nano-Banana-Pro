@@ -1152,40 +1152,48 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
             )
         ) or 0
 
-        # Выручка дозревших — когорта купила позже дня регистрации
+        # Выручка черепашек — зарегались ДО периода, первая покупка В периоде
         delayed_revenue = await session.scalar(
             select(func.sum(Purchase.price))
             .select_from(Purchase)
             .join(User, User.telegram_id == Purchase.user_id)
             .where(
                 Purchase.status == 'succeeded',
-                Purchase.user_id.in_(cohort_subquery),
-                func.date(Purchase.completed_at) > func.date(User.created_at),
+                Purchase.completed_at >= date_from,
+                Purchase.completed_at <= date_to,
+                Purchase.user_id.in_(veterans_subquery),
+                User.first_purchase_at >= date_from,
+                User.first_purchase_at <= date_to,
                 or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
             )
         ) or 0
 
-        # Выручка старичков — покупки В периоде от пользователей зарегавшихся ДО периода
-        # notin_(cohort_subquery) — защита от дублей
+        # Выручка старичков — повторные покупки (первая покупка была ДО периода)
         old_revenue = await session.scalar(
-            select(func.sum(Purchase.price)).where(
+            select(func.sum(Purchase.price))
+            .select_from(Purchase)
+            .join(User, User.telegram_id == Purchase.user_id)
+            .where(
                 Purchase.status == 'succeeded',
                 Purchase.completed_at >= date_from,
                 Purchase.completed_at <= date_to,
                 Purchase.user_id.in_(veterans_subquery),
-                Purchase.user_id.notin_(cohort_subquery),
+                User.first_purchase_at < date_from,
                 or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
             )
         ) or 0
 
-        # Количество уникальных старичков-покупателей за период
+        # Количество уникальных старичков-покупателей за период (первая покупка была ДО периода)
         old_buyers = await session.scalar(
-            select(func.count(func.distinct(Purchase.user_id))).where(
+            select(func.count(func.distinct(Purchase.user_id)))
+            .select_from(Purchase)
+            .join(User, User.telegram_id == Purchase.user_id)
+            .where(
                 Purchase.status == 'succeeded',
                 Purchase.completed_at >= date_from,
                 Purchase.completed_at <= date_to,
                 Purchase.user_id.in_(veterans_subquery),
-                Purchase.user_id.notin_(cohort_subquery),
+                User.first_purchase_at < date_from,
                 or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
             )
         ) or 0
@@ -1265,24 +1273,31 @@ async def get_campaign_stats(session: AsyncSession, date_from: datetime, date_to
         )
     ) or 0
 
+    # Старички органики — повторные покупки (первая покупка была ДО периода)
     organic_old_revenue = await session.scalar(
-        select(func.sum(Purchase.price)).where(
+        select(func.sum(Purchase.price))
+        .select_from(Purchase)
+        .join(User, User.telegram_id == Purchase.user_id)
+        .where(
             Purchase.status == 'succeeded',
             Purchase.completed_at >= date_from,
             Purchase.completed_at <= date_to,
             Purchase.user_id.in_(organic_veterans_subquery),
-            Purchase.user_id.notin_(organic_cohort_subquery),
+            User.first_purchase_at < date_from,
             or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
         )
     ) or 0
 
     organic_old_buyers = await session.scalar(
-        select(func.count(func.distinct(Purchase.user_id))).where(
+        select(func.count(func.distinct(Purchase.user_id)))
+        .select_from(Purchase)
+        .join(User, User.telegram_id == Purchase.user_id)
+        .where(
             Purchase.status == 'succeeded',
             Purchase.completed_at >= date_from,
             Purchase.completed_at <= date_to,
             Purchase.user_id.in_(organic_veterans_subquery),
-            Purchase.user_id.notin_(organic_cohort_subquery),
+            User.first_purchase_at < date_from,
             or_(Purchase.tariff_name != 'Telegram Stars', Purchase.tariff_name.is_(None))
         )
     ) or 0
