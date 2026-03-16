@@ -15,7 +15,9 @@ from app.database import async_session
 from app.models import User, Purchase, BananaTransaction
 from app.services.analytics_service import get_analytics_report
 from app.services.currency import get_usd_rate
+from app.services.yandex_direct import get_direct_spending
 from admin_panel.routers.auth import get_current_user
+from app import config
 
 
 class JSONResponse(_BaseJSONResponse):
@@ -104,6 +106,19 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         rev = data["revenue"]
         users_data = data["users"]
 
+        # Директ
+        direct_data = {'total': 0, 'campaigns': {}}
+        if config.YANDEX_DIRECT_TOKEN:
+            from datetime import date as date_cls
+            direct_date_from = max(df.date(), date_cls(2025, 12, 1))
+            direct_data = await get_direct_spending(
+                config.YANDEX_DIRECT_TOKEN,
+                direct_date_from,
+                dt_.date()
+            )
+        # KIE
+        kie_data = data.get("kie", {"total_credits": 0, "total_usd": 0, "by_model": {}})
+
         return JSONResponse({
             "revenue": rev["rub_revenue"],
             "income_amount": rev.get("income_amount", rev["rub_revenue"]),
@@ -133,6 +148,8 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
             "fixed_daily": data.get("fixed_expenses", {}).get("daily", 0),
             "cac_buyers": data.get("revenue", {}).get("cac_buyers", 0),
             "income_amount": data.get("revenue", {}).get("income_amount", 0),
+            "direct": direct_data,
+            "kie": kie_data,
         })
     user = get_current_user(request)
     if not user:

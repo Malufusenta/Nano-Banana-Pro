@@ -158,7 +158,7 @@ async def get_campaigns_stats(
         total_revenue_full = new_revenue + delayed_revenue + old_revenue
 
         cac = round(spend / fast_b, 2) if fast_b > 0 else 0
-        roas_new = round(new_revenue / spend * 100, 1) if spend > 0 else 0
+        roas_new = round((new_revenue + delayed_revenue) / spend * 100, 1) if spend > 0 else 0
         roas_total = round(total_revenue_full / spend * 100, 1) if spend > 0 else 0
 
         rows.append({
@@ -195,7 +195,7 @@ async def get_campaigns_stats(
         'cac': round(total_spend / total_buyers_all, 2) if total_buyers_all > 0 else 0,
         'new_revenue': total_new_rev,
         'delayed_revenue': total_delayed_rev,
-        'roas_new': round(total_new_rev / total_spend * 100, 1) if total_spend > 0 else 0,
+        'roas_new': round((total_new_rev + total_delayed_rev) / total_spend * 100, 1) if total_spend > 0 else 0,
         'old_revenue': total_old_rev,
         'old_buyers': sum(r['old_buyers'] for r in rows),
         'roas_total': round(total_rev_all / total_spend * 100, 1) if total_spend > 0 else 0,
