@@ -14,7 +14,7 @@ from sqlalchemy import select, update
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
+from aiogram.types import LinkPreviewOptions  # 👈 добавить
 from app.database import async_session
 from app.models import User, Broadcast
 
@@ -105,7 +105,8 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
                     photo=file_ids[0],
                     caption=broadcast.message_text,
                     reply_markup=keyboard,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    link_preview_options=LinkPreviewOptions(is_disabled=True)  # 👈
                 )
 
             elif broadcast.media_type == "video":  # ✅ НОВОЕ
@@ -123,7 +124,8 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
                     video=file_ids[0],
                     caption=broadcast.message_text,
                     reply_markup=keyboard,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    link_preview_options=LinkPreviewOptions(is_disabled=True)  # 👈
                 )
 
             else:
@@ -131,7 +133,8 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
                     chat_id=user_id,
                     text=broadcast.message_text,
                     reply_markup=keyboard,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    link_preview_options=LinkPreviewOptions(is_disabled=True)  # 👈 добавить
                 )
             
             sent += 1
@@ -160,11 +163,11 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
             await asyncio.sleep(e.retry_after)
             try:
                 if broadcast.media_type == "photo":
-                    await bot.send_photo(chat_id=user_id, photo=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML")
+                    await bot.send_photo(chat_id=user_id, photo=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
                 elif broadcast.media_type == "video":
-                    await bot.send_video(chat_id=user_id, video=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML")
+                    await bot.send_video(chat_id=user_id, video=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
                 else:
-                    await bot.send_message(chat_id=user_id, text=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML")
+                    await bot.send_message(chat_id=user_id, text=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
                 delivered += 1
             except Exception:
                 pass
