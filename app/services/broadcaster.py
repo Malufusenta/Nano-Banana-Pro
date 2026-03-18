@@ -105,8 +105,7 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
                     photo=file_ids[0],
                     caption=broadcast.message_text,
                     reply_markup=keyboard,
-                    parse_mode="HTML",
-                    link_preview_options=LinkPreviewOptions(is_disabled=True)  # 👈
+                    parse_mode="HTML"  # 👈
                 )
 
             elif broadcast.media_type == "video":  # ✅ НОВОЕ
@@ -124,8 +123,8 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
                     video=file_ids[0],
                     caption=broadcast.message_text,
                     reply_markup=keyboard,
-                    parse_mode="HTML",
-                    link_preview_options=LinkPreviewOptions(is_disabled=True)  # 👈
+                    parse_mode="HTML"
+                     
                 )
 
             else:
@@ -163,9 +162,9 @@ async def start_broadcast(bot: Bot, broadcast_id: int, admin_id: int):
             await asyncio.sleep(e.retry_after)
             try:
                 if broadcast.media_type == "photo":
-                    await bot.send_photo(chat_id=user_id, photo=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
+                    await bot.send_photo(chat_id=user_id, photo=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML",)
                 elif broadcast.media_type == "video":
-                    await bot.send_video(chat_id=user_id, video=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
+                    await bot.send_video(chat_id=user_id, video=file_ids[0], caption=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML",)
                 else:
                     await bot.send_message(chat_id=user_id, text=broadcast.message_text, reply_markup=keyboard, parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True))
                 delivered += 1
