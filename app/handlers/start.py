@@ -398,7 +398,7 @@ async def callback_cancel_scenario(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-@router.message(F.text == "⚡ Ускорить Телеграм бесплатно")
+@router.message(F.text == "🚀 Ускорить Телеграм бесплатно")
 async def proxy_handler(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
