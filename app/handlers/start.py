@@ -1,5 +1,5 @@
 from aiogram import Router, types, F, Bot
-from aiogram.filters import CommandStart, CommandObject
+from aiogram.filters import CommandStart, CommandObject, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton  # 👈 ДОБАВЬ
 from app.services.admin_logger import log_new_user, log_referral
@@ -25,6 +25,7 @@ def get_banana_word(n: int) -> str:
 def get_main_kb():
     kb = [
         [KeyboardButton(text="✨ Начать творить")],
+        [KeyboardButton(text="🚀 Ускорить Телеграм бесплатно")],
         [KeyboardButton(text="🍌 Купить бананы"), KeyboardButton(text="👤 Профиль")],
         [KeyboardButton(text="📚 Гайд"), KeyboardButton(text="💬 Поддержка")]
     ]
@@ -395,3 +396,31 @@ async def callback_cancel_scenario(callback: CallbackQuery, state: FSMContext):
         parse_mode="HTML"
     )
     await callback.answer()
+
+@router.message(F.text == "⚡ Ускорить Телеграм бесплатно")
+async def proxy_handler(message: types.Message):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="⚡ УСКОРИТЬ ТЕЛЕГРАМ",
+            url="https://t.me/proxy?server=85.239.52.199&port=443&secret=ee9fae4791bf577d103c3730790ff0c325616263373338322e7275"
+        )]
+    ])
+    await message.answer(
+        "🚀 <b>Телеграм тормозит? Возвращаем скорость!</b>\n\n"
+        "Мы запустили свой мощный и <b>БЕСПЛАТНЫЙ</b> прокси.\n\n"
+        "🚀 Всё летает\n"
+        "✅ Подключение в 1 клик прямо в ТГ.\n"
+        "🛡 Безопасно и анонимно (официальная функция ТГ)\n\n"
+        "<b>Как подключить:</b>\n"
+        "1️⃣ Жми кнопку «⚡ <b>УСКОРИТЬ ТЕЛЕГРАМ</b>»👇👇\n"
+        "2️⃣ Во всплывающем окне нажми «<b>Подключить прокси</b>».\n\n"
+        "📖 <a href=\"https://teletype.in/@nanobanan_promt/V827KcWWDuK\">Подробная инструкция здесь</a>\n"
+        "🔄 <i>Перешли друзьям, у которых тоже виснет ТГ!</i>",
+        parse_mode="HTML",
+        reply_markup=keyboard,
+        link_preview_options=types.LinkPreviewOptions(is_disabled=True)
+    )
+
+@router.message(Command("proxy"))
+async def proxy_command_handler(message: types.Message):
+    await proxy_handler(message)

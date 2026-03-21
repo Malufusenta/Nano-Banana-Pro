@@ -56,10 +56,10 @@ IGNORED_TEXTS = [
     "✨ Начать творить", "🎨 Создать изображение", "Заработать🍌", "📚 Гайд",
     "📸 Примеры работ", "👤 Профиль", "👤 Мой профиль", "💬 Поддержка",
     "🍌 Купить бананы", "Фарминг🍌", "ℹ️ О нас", "ℹ️ Что умеет бот?",
-    "/start", "/help", "/admin", "/stats", "/clear", "/admin_scenarios",
+    "/start", "/help", "/admin", "/stats", "/clear", "/admin_scenarios", "⚡ Ускорить Телеграм бесплатно",
     # 👇 КОМАНДЫ БОКОВОГО МЕНЮ
     "/start", "/help", "/admin", "/stats", "/clear",
-    "/profile", "/free", "/about", "/support", "/guide"
+    "/profile", "/free", "/about", "/support", "/guide", "/proxy"
 ]
 
 async def get_smart_alert_message(session, user_id: int, balance: int, cost: int) -> tuple[str, InlineKeyboardBuilder]:
