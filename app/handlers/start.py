@@ -382,6 +382,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             ])
 
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
+            await message.answer("👆", reply_markup=get_main_kb())
             # 👆 ВСЁ! Больше ничего не нужно
 
 @router.callback_query(F.data == "cancel_scenario")
