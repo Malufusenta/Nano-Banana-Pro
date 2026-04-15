@@ -1,4 +1,5 @@
-from aiogram import Router, types, F, Bot
+import asyncio
+from aiogram import Router, types, F, Bot, html
 from aiogram.filters import CommandStart, CommandObject, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton  # 👈 ДОБАВЬ
@@ -238,6 +239,36 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
             # 🔥 ЕСЛИ ЭТО POST LINK - СПЕЦИАЛЬНОЕ ПРИВЕТСТВИЕ
             if is_post_link and post_config:
+                from app.handlers.generation import GenState
+
+                pq = (post_config.param_question or "").strip()
+                if pq:
+                    await state.update_data(
+                        param_main_prompt_template=post_config.prompt,
+                        param_question_text=pq,
+                        broadcast_ratio=post_config.aspect_ratio,
+                        broadcast_model=post_config.model_type,
+                        from_broadcast=True,
+                        current_post_id=post_config.config_id,
+                        pending_param_photo_file_id=None,
+                    )
+                    await state.set_state(GenState.waiting_for_prompt_text)
+                    word = get_banana_word(welcome_bonus)
+                    await message.answer(
+                        f"👋 <b>Привет! Твои {welcome_bonus} подарочных {word} начислены 🎁</b>\n\n"
+                        "Вижу, ты пришел именно за этим образом! Чтобы он получился идеальным, нужно уточнить:",
+                        parse_mode="HTML",
+                        reply_markup=get_main_kb(),
+                    )
+                    await asyncio.sleep(0.8)
+                    safe_q = html.quote(pq)
+                    await message.answer(
+                        f"❓ <i>{safe_q}</i>\n\n"
+                        "<b>Напишите ваш ответ прямо в этот чат 👇</b>",
+                        parse_mode="HTML",
+                    )
+                    return
+
                 await state.update_data(
                     broadcast_prompt=post_config.prompt,
                     broadcast_ratio=post_config.aspect_ratio,
@@ -245,10 +276,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     from_broadcast=True,
                     current_post_id=post_config.config_id
                 )
-                
-                from app.handlers.generation import GenState
                 await state.set_state(GenState.free_mode)
-                
+
                 word = get_banana_word(welcome_bonus)
                 text = (
                     f"👋 Привет! Я вижу, ты пришел за этим образом! 🔥\n\n"
@@ -258,7 +287,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     f"Ничего нажимать не надо — просто пришли мне свое фото, "
                     f"и я сделаю кадр как в посте! 👇"
                 )
-                
+
                 await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb())
                 return
             
@@ -341,6 +370,25 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
             # 🔥 ЕСЛИ POST LINK - ПРИМЕНЯЕМ НАСТРОЙКИ
             if is_post_link and post_config:
+                from app.handlers.generation import GenState, send_param_prompt_text_intro
+
+                pq = (post_config.param_question or "").strip()
+                if pq:
+                    await state.update_data(
+                        param_main_prompt_template=post_config.prompt,
+                        param_question_text=pq,
+                        broadcast_ratio=post_config.aspect_ratio,
+                        broadcast_model=post_config.model_type,
+                        from_broadcast=True,
+                        current_post_id=post_config.config_id,
+                        pending_param_photo_file_id=None,
+                    )
+                    await state.set_state(GenState.waiting_for_prompt_text)
+                    await send_param_prompt_text_intro(
+                        message.bot, message.chat.id, pq, reply_markup=get_main_kb()
+                    )
+                    return
+
                 await state.update_data(
                     broadcast_prompt=post_config.prompt,
                     broadcast_ratio=post_config.aspect_ratio,
@@ -348,10 +396,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     from_broadcast=True,
                     current_post_id=post_config.config_id
                 )
-                
-                from app.handlers.generation import GenState
                 await state.set_state(GenState.free_mode)
-                
+
                 await message.answer(
                     "✨ <b>Промт из поста применен!</b>\n\n"
                     "📸 Присылай фото, чтобы сгенерировать 👇",

@@ -32,6 +32,55 @@ class PaymentDepthState(StatesGroup):
 
 router = Router()
 
+PARAM_PROMPT_PLACEHOLDER = "{value}"
+
+
+def validate_param_question_against_main_prompt(
+    question: str | None, main_prompt: str | None
+) -> tuple[bool, str | None]:
+    """Если задан вопрос — в основном промпте должен быть {value}."""
+    q = (question or "").strip()
+    if not q:
+        return True, None
+    p = (main_prompt or "").strip()
+    if PARAM_PROMPT_PLACEHOLDER not in p:
+        return False, (
+            "Раз задан вопрос перед генерацией, в <b>основном промпте</b> "
+            "нужен плейсхолдер <code>{value}</code> (в %…% у рассылки или в тексте ссылки на пост)."
+        )
+    return True, None
+
+
+async def send_broadcast_model_pick(message: types.Message):
+    builder = InlineKeyboardBuilder()
+    builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="bc_model_standard")
+    builder.button(text=f"🍌 Nano Banana 2 ({config.COST_NB2_1K} банана)", callback_data="bc_model_nb2")
+    builder.button(text=f"💎 PRO ({config.COST_PRO_1K} банана)", callback_data="bc_model_pro")
+    builder.button(text="❌ Отмена", callback_data="admin_menu")
+    builder.adjust(1)
+    await message.answer(
+        "🤖 <b>Выберите модель генерации:</b>\n\n"
+        "Это модель, которая будет генерировать изображение по кнопке в рассылке.",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
+
+async def send_postlink_model_pick(message: types.Message):
+    builder = InlineKeyboardBuilder()
+    builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="postlink_model_standard")
+    builder.button(text=f"🍌 Nano Banana 2 ({config.COST_NB2_1K} банана)", callback_data="postlink_model_nb2")
+    builder.button(text=f"💎 PRO ({config.COST_PRO_1K} банана)", callback_data="postlink_model_pro")
+    builder.button(text="❌ Отмена", callback_data="admin_menu")
+    builder.adjust(1)
+    await message.answer(
+        "✅ Промт сохранён!\n\n"
+        "📝 <b>Модель</b>\n\n"
+        "Выберите модель для генерации:",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
 
 # --- СОСТОЯНИЯ АДМИНА ---
 class AdminState(StatesGroup):
@@ -42,15 +91,16 @@ class AdminState(StatesGroup):
 # --- СОСТОЯНИЯ ДЛЯ РАССЫЛКИ ---
 class BroadcastState(StatesGroup):
     waiting_for_content = State()       # Ждём контент (текст/фото/альбом)
-    waiting_for_buttons = State()  
-    waiting_for_model = State()       # 👈 УЖЕ ЕСТЬ — просто убедись
-    waiting_for_aspect_ratio = State()  # 👈 ДОБАВЬ ЭТУ СТРОКУ
-     # Ждём список кнопок
-    waiting_for_confirmation = State()  # Показываем превью, ждём подтверждения
+    waiting_for_buttons = State()
+    waiting_for_param_question = State()
+    waiting_for_model = State()
+    waiting_for_aspect_ratio = State()
+    waiting_for_confirmation = State()
 
-    # --- СОСТОЯНИЯ ДЛЯ СОЗДАНИЯ POST LINK ---
+
 class PostLinkState(StatesGroup):
     waiting_for_prompt = State()
+    waiting_for_param_question = State()
     waiting_for_model = State()
     waiting_for_aspect_ratio = State()
 
@@ -450,29 +500,42 @@ async def process_broadcast_buttons(message: types.Message, state: FSMContext):
         buttons=json.dumps(buttons, ensure_ascii=False),
         hidden_prompt=hidden_prompt
     )
-    
-# 🔥 НОВЫЙ БЛОК - ЕСЛИ ЕСТЬ ПРОМПТ, СПРАШИВАЕМ МОДЕЛЬ, ПОТОМ ФОРМАТ 🔥
+
     if hidden_prompt:
-        await state.set_state(BroadcastState.waiting_for_model)
-        
-        builder = InlineKeyboardBuilder()
-        builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="bc_model_standard")
-        builder.button(text=f"🍌 Nano Banana 2 ({config.COST_NB2_1K} банана)", callback_data="bc_model_nb2")
-        builder.button(text=f"💎 PRO ({config.COST_PRO_1K} банана)", callback_data="bc_model_pro")
-        builder.button(text="❌ Отмена", callback_data="admin_menu")
-        builder.adjust(1)
-        
+        await state.set_state(BroadcastState.waiting_for_param_question)
         await message.answer(
-            "🤖 <b>Выберите модель генерации:</b>\n\n"
-            "Это модель, которая будет генерировать изображение по кнопке в рассылке.",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML"
+            "❔ <b>Вопрос перед генерацией</b> (опционально)\n\n"
+            "Если нужно спросить у пользователя текст перед генерацией — пришли текст вопроса.\n"
+            "Или <code>-</code> чтобы пропустить.\n\n"
+            "<i>Если задаёшь вопрос, в промпте в <code>%…%</code> обязательно добавь "
+            "<code>{value}</code> — туда подставится ответ.</i>",
+            parse_mode="HTML",
+            reply_markup=get_cancel_kb(),
         )
         return
-    # 🔥 КОНЕЦ НОВОГО БЛОКА 🔥
 
     # Показываем превью
     await show_broadcast_preview(message, state)
+
+
+@router.message(BroadcastState.waiting_for_param_question)
+async def process_broadcast_param_question(message: types.Message, state: FSMContext):
+    raw = (message.text or "").strip()
+    if raw == "-":
+        await state.update_data(broadcast_param_question=None)
+        await state.set_state(BroadcastState.waiting_for_model)
+        await send_broadcast_model_pick(message)
+        return
+    data = await state.get_data()
+    main = data.get("hidden_prompt")
+    ok, err = validate_param_question_against_main_prompt(raw, main)
+    if not ok:
+        await message.answer(err, parse_mode="HTML", reply_markup=get_cancel_kb())
+        return
+    await state.update_data(broadcast_param_question=raw)
+    await state.set_state(BroadcastState.waiting_for_model)
+    await send_broadcast_model_pick(message)
+
 
 async def show_broadcast_preview(message: types.Message, state: FSMContext):
     """Показывает превью рассылки и запрашивает подтверждение"""
@@ -570,6 +633,7 @@ async def cb_broadcast_confirm(callback: types.CallbackQuery, state: FSMContext)
             media_file_ids=json.dumps(data.get('media_file_ids', [])),  # 👈 ПРАВИЛЬНО
             buttons=data.get('buttons'),
             hidden_prompt=data.get('hidden_prompt'),
+            param_question=data.get('broadcast_param_question'),
             aspect_ratio=data.get('aspect_ratio', '1:1'),
             model_type=data.get('model_type', 'standard'),  # 👈 ДОБАВИТЬ
             status="sending",
@@ -1019,9 +1083,10 @@ async def cb_create_postlink_start(callback: types.CallbackQuery, state: FSMCont
     await callback.message.answer(
         "🔗 <b>Создание ссылки для поста</b>\n\n"
         "📝 <b>Шаг 1/3: Промт</b>\n\n"
-        "Отправьте промт для генерации (текст).\n"
+        "Отправьте <b>основной промт</b> для генерации (текст).\n"
         "Это то, что будет применяться к фото пользователя.\n\n"
-        "<i>Пример: luxury bedroom, 4k, photorealistic</i>",
+        "<i>Пример: luxury bedroom, 4k, photorealistic</i>\n"
+        "<i>Если дальше задашь вопрос пользователю — в этом промте добавь <code>{value}</code>.</i>",
         reply_markup=get_cancel_kb(),
         parse_mode="HTML"
     )
@@ -1041,25 +1106,34 @@ async def process_postlink_prompt(message: types.Message, state: FSMContext):
         return
     
     await state.update_data(postlink_prompt=prompt)
-    await state.set_state(PostLinkState.waiting_for_model)
-    
-    # Кнопки выбора модели
-    builder = InlineKeyboardBuilder()
-# Кнопки выбора модели
-    builder = InlineKeyboardBuilder()
-    builder.button(text=f"🍌 Standard ({config.COST_STANDARD} банан)", callback_data="postlink_model_standard")
-    builder.button(text=f"🍌 Nano Banana 2 ({config.COST_NB2_1K} банана)", callback_data="postlink_model_nb2")
-    builder.button(text=f"💎 PRO ({config.COST_PRO_1K} банана)", callback_data="postlink_model_pro")
-    builder.button(text="❌ Отмена", callback_data="admin_menu")
-    builder.adjust(1)
-    
+    await state.set_state(PostLinkState.waiting_for_param_question)
     await message.answer(
-        "✅ Промт сохранён!\n\n"
-        "📝 <b>Шаг 2/3: Модель</b>\n\n"
-        "Выберите модель для генерации:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML"
+        "❔ <b>Вопрос перед генерацией</b> (опционально)\n\n"
+        "Или <code>-</code> чтобы пропустить.\n\n"
+        "<i>Если задаёшь вопрос — в основном промте выше должен быть <code>{value}</code>.</i>",
+        parse_mode="HTML",
+        reply_markup=get_cancel_kb(),
     )
+
+
+@router.message(PostLinkState.waiting_for_param_question)
+async def process_postlink_param_question(message: types.Message, state: FSMContext):
+    raw = (message.text or "").strip()
+    if raw == "-":
+        await state.update_data(postlink_param_question=None)
+        await state.set_state(PostLinkState.waiting_for_model)
+        await send_postlink_model_pick(message)
+        return
+    data = await state.get_data()
+    main = data.get("postlink_prompt")
+    ok, err = validate_param_question_against_main_prompt(raw, main)
+    if not ok:
+        await message.answer(err, parse_mode="HTML", reply_markup=get_cancel_kb())
+        return
+    await state.update_data(postlink_param_question=raw)
+    await state.set_state(PostLinkState.waiting_for_model)
+    await send_postlink_model_pick(message)
+
 
 @router.callback_query(PostLinkState.waiting_for_model, F.data.startswith("postlink_model_"))
 async def process_postlink_model(callback: types.CallbackQuery, state: FSMContext):
@@ -1124,6 +1198,7 @@ async def process_postlink_finish(callback: types.CallbackQuery, state: FSMConte
         new_config = PostConfig(
             config_id=config_id,
             prompt=prompt,
+            param_question=data.get("postlink_param_question"),
             model_type=model,
             aspect_ratio=ratio,
             created_by=callback.from_user.id

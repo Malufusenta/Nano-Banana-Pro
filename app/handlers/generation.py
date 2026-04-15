@@ -24,7 +24,7 @@ from app.services.ai_engine import generate_image
 from app.services.kie_pricing import get_kie_credits
 from app.utils import prompts
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import func, update
+from sqlalchemy import func, update, select
 from app.utils.prompt_validator import is_lazy_prompt
 from app import config
 import asyncio
@@ -61,6 +61,106 @@ IGNORED_TEXTS = [
     "/start", "/help", "/admin", "/stats", "/clear",
     "/profile", "/free", "/about", "/support", "/guide", "/proxy"
 ]
+
+PARAM_USER_VALUE_MAX_LEN = 500
+
+
+def apply_value_to_main_prompt(main_prompt: str, user_value: str) -> str:
+    v = (user_value or "").strip()
+    if len(v) > PARAM_USER_VALUE_MAX_LEN:
+        v = v[:PARAM_USER_VALUE_MAX_LEN]
+    return (main_prompt or "").replace("{value}", v)
+
+
+async def send_param_prompt_text_intro(
+    bot: Bot,
+    chat_id: int,
+    question: str,
+    reply_markup: types.ReplyKeyboardMarkup | types.ReplyKeyboardRemove | None = None,
+) -> None:
+    await bot.send_message(
+        chat_id,
+        "<b>🔥 Отлично! Промпт уже применен.</b>\n\n"
+        "Чтобы образ получился идеальным, нужно уточнить:",
+        parse_mode="HTML",
+    )
+    await asyncio.sleep(0.8)
+    safe_q = html.quote(question)
+    await bot.send_message(
+        chat_id,
+        f"❓ <i>{safe_q}</i>\n\n"
+        "<b>Напишите ваш ответ прямо в этот чат👇</b>",
+        parse_mode="HTML",
+        reply_markup=reply_markup,
+    )
+
+
+async def send_param_prompt_photo_before_text_error(bot: Bot, chat_id: int, question: str) -> None:
+    await bot.send_message(
+        chat_id,
+        "📸 <b>Фото вижу, но мы пропустили один шаг!</b>\n\n"
+        "Чтобы образ получился идеальным, сначала ответьте на вопрос:",
+        parse_mode="HTML",
+    )
+    await asyncio.sleep(0.8)
+    safe_q = html.quote(question)
+    await bot.send_message(
+        chat_id,
+        f"❓ <i>{safe_q}</i>\n\n"
+        "<b>Просто напишите ответ в этот чат 👇</b>",
+        parse_mode="HTML",
+    )
+
+
+def _is_image_document(message: types.Message) -> bool:
+    d = message.document
+    if not d:
+        return False
+    mt = (d.mime_type or "").lower()
+    if mt.startswith("image/"):
+        return True
+    fn = (d.file_name or "").lower()
+    return any(fn.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif"))
+
+
+async def enter_broadcast_generation_preflight(
+    message: types.Message,
+    state: FSMContext,
+    bot: Bot,
+    *,
+    prompt: str,
+    ratio: str,
+    model: str,
+    file_id: str,
+) -> None:
+    """Собраны промпт + фото (рассылка/post link) → preflight как при обычной отправке фото."""
+    url = await get_photo_url(bot, file_id)
+    if not url:
+        await message.answer("❌ Не удалось получить фото.")
+        return
+    await state.update_data(
+        from_broadcast=False,
+        broadcast_prompt=None,
+        broadcast_ratio=None,
+    )
+    await state.update_data(
+        pf_prompt=prompt,
+        pf_image_urls=[url],
+        pf_ratio=ratio,
+        pf_model=model,
+        is_broadcast_gen=True,
+    )
+    await state.set_state(GenState.preflight_check)
+    text = (
+        "🎨 *Параметры генерации*\n\n"
+        "Выбери модель и жми \"🚀 Запуск\"👇"
+    )
+    await message.answer(
+        text,
+        reply_markup=get_preflight_kb(model, ratio, "1k"),
+        parse_mode="Markdown",
+    )
+
 
 async def get_smart_alert_message(session, user_id: int, balance: int, cost: int) -> tuple[str, InlineKeyboardBuilder]:
     """
@@ -172,6 +272,8 @@ class GenState(StatesGroup):
     waiting_for_edit_instruction = State()
     retry_waiting_photos = State()  # 👈 Новое состояние для ретрая
     waiting_for_video_source = State()  # Ожидание фото для генерации видео
+    waiting_for_prompt_text = State()  # Текстовый ответ на вопрос промпта (рассылка / post link)
+    waiting_for_prompt_photo = State()  # Фото после ответа на вопрос
 
 
 # =====================================================================
@@ -1089,6 +1191,147 @@ async def check_content_filter(message: types.Message, text: str) -> bool:
     
     # Теневой режим - только логируем, не блокируем
     return False
+
+@router.message(GenState.waiting_for_prompt_text, F.text)
+async def handle_waiting_for_prompt_text_answer(message: types.Message, state: FSMContext):
+    if message.text in IGNORED_TEXTS:
+        return
+    data = await state.get_data()
+    main_prompt = data.get("param_main_prompt_template")
+    if not main_prompt or not str(main_prompt).strip():
+        await state.set_state(GenState.free_mode)
+        return
+    raw = (message.text or "").strip()
+    if not raw:
+        await message.answer("Напишите ответ одним сообщением.")
+        return
+    final_prompt = apply_value_to_main_prompt(main_prompt, raw)
+    ratio = data.get("broadcast_ratio", "1:1")
+    model = data.get("broadcast_model", "standard")
+    cached_fid = data.get("pending_param_photo_file_id")
+
+    if cached_fid:
+        await state.update_data(
+            param_main_prompt_template=None,
+            param_question_text=None,
+            pending_param_photo_file_id=None,
+        )
+        await enter_broadcast_generation_preflight(
+            message, state, message.bot,
+            prompt=final_prompt,
+            ratio=ratio,
+            model=model,
+            file_id=cached_fid,
+        )
+        return
+
+    await state.update_data(
+        broadcast_prompt=final_prompt,
+        from_broadcast=True,
+        broadcast_ratio=ratio,
+        broadcast_model=model,
+        param_main_prompt_template=None,
+        param_question_text=None,
+    )
+    await state.set_state(GenState.waiting_for_prompt_photo)
+    await message.answer(
+        "🔥 <b>Отлично!</b>\n\n"
+        "Теперь отправьте фото, чтобы увидеть себя в этом образе.",
+        parse_mode="HTML",
+    )
+
+
+async def _cache_photo_while_waiting_for_prompt_text(
+    message: types.Message, state: FSMContext, file_id: str
+):
+    data = await state.get_data()
+    q = (data.get("param_question_text") or "").strip()
+    if not q:
+        await message.answer("Сначала ответьте на вопрос текстом.")
+        return
+    await state.update_data(pending_param_photo_file_id=file_id)
+    await send_param_prompt_photo_before_text_error(message.bot, message.chat.id, q)
+
+
+@router.message(GenState.waiting_for_prompt_text, F.photo)
+async def handle_waiting_for_prompt_text_photo(message: types.Message, state: FSMContext):
+    if message.media_group_id:
+        return
+    await _cache_photo_while_waiting_for_prompt_text(
+        message, state, message.photo[-1].file_id
+    )
+
+
+@router.message(GenState.waiting_for_prompt_text, F.document)
+async def handle_waiting_for_prompt_text_document(message: types.Message, state: FSMContext):
+    if not _is_image_document(message):
+        await message.answer("Пришлите текстовый ответ или изображение (фото / картинка файлом).")
+        return
+    await _cache_photo_while_waiting_for_prompt_text(
+        message, state, message.document.file_id
+    )
+
+
+@router.message(GenState.waiting_for_prompt_photo, F.photo)
+async def handle_waiting_for_prompt_photo_photo(message: types.Message, state: FSMContext, bot: Bot):
+    if message.media_group_id:
+        return
+    data = await state.get_data()
+    if not (data.get("from_broadcast") and data.get("broadcast_prompt")):
+        await state.set_state(GenState.free_mode)
+        return
+    prompt = data.get("broadcast_prompt")
+    ratio = data.get("broadcast_ratio", "1:1")
+    model = data.get("broadcast_model", "standard")
+    await state.update_data(
+        from_broadcast=False,
+        broadcast_prompt=None,
+        broadcast_ratio=None,
+    )
+    await enter_broadcast_generation_preflight(
+        message, state, bot,
+        prompt=prompt,
+        ratio=ratio,
+        model=model,
+        file_id=message.photo[-1].file_id,
+    )
+
+
+@router.message(GenState.waiting_for_prompt_photo, F.document)
+async def handle_waiting_for_prompt_photo_document(message: types.Message, state: FSMContext, bot: Bot):
+    if not _is_image_document(message):
+        await message.answer("Отправьте фото или изображение файлом.")
+        return
+    data = await state.get_data()
+    if not (data.get("from_broadcast") and data.get("broadcast_prompt")):
+        await state.set_state(GenState.free_mode)
+        return
+    prompt = data.get("broadcast_prompt")
+    ratio = data.get("broadcast_ratio", "1:1")
+    model = data.get("broadcast_model", "standard")
+    await state.update_data(
+        from_broadcast=False,
+        broadcast_prompt=None,
+        broadcast_ratio=None,
+    )
+    await enter_broadcast_generation_preflight(
+        message, state, bot,
+        prompt=prompt,
+        ratio=ratio,
+        model=model,
+        file_id=message.document.file_id,
+    )
+
+
+@router.message(GenState.waiting_for_prompt_photo, F.text)
+async def handle_waiting_for_prompt_photo_text(message: types.Message, state: FSMContext):
+    if message.text in IGNORED_TEXTS:
+        return
+    await message.answer(
+        "Сейчас нужно отправить <b>фото</b> для генерации.",
+        parse_mode="HTML",
+    )
+
 
 @router.message(F.chat.type == "private", F.text, StateFilter(GenState.free_mode, None))
 async def handle_free_text(message: types.Message, state: FSMContext):
@@ -2071,39 +2314,56 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     
     broadcast_id = int(callback.data.split("_")[1])
     
-    # Получаем промпт И ФОРМАТ из БД
     async with async_session() as session:
-        from sqlalchemy import select
         result = await session.execute(
             select(Broadcast).where(Broadcast.id == broadcast_id)
         )
         broadcast = result.scalar_one_or_none()
 
-        if not broadcast or not broadcast.hidden_prompt:
+        if not broadcast:
+            await callback.answer("⚠️ Рассылка не найдена", show_alert=True)
+            return
+
+        pq = (broadcast.param_question or "").strip()
+        has_param_question = bool(pq)
+
+        if not broadcast.hidden_prompt:
             await callback.answer("⚠️ Ошибка: промпт не найден", show_alert=True)
             return
 
         broadcast.clicks_count += 1
         await session.commit()
-    
-    # Сохраняем промпт И ФОРМАТ в state
+
+    if has_param_question:
+        pq_clean = pq
+        await state.update_data(
+            param_main_prompt_template=broadcast.hidden_prompt,
+            param_question_text=pq_clean,
+            broadcast_ratio=broadcast.aspect_ratio or "1:1",
+            broadcast_model=broadcast.model_type or "standard",
+            from_broadcast=True,
+            pending_param_photo_file_id=None,
+        )
+        await state.set_state(GenState.waiting_for_prompt_text)
+        await send_param_prompt_text_intro(callback.bot, callback.from_user.id, pq_clean)
+        await callback.answer()
+        return
+
     await state.update_data(
         broadcast_prompt=broadcast.hidden_prompt,
         broadcast_ratio=broadcast.aspect_ratio or "1:1",
-        broadcast_model=broadcast.model_type or "standard",  # 👈
+        broadcast_model=broadcast.model_type or "standard",
         from_broadcast=True
     )
-    
-    
     await state.set_state(GenState.free_mode)
-    
+
     await callback.message.answer(
         f"🔥 <b>Отлично!</b>\n\n"
         f"Отправьте фото, чтобы увидеть себя в этом образе.\n\n"
         f"💡 <i>Промпт уже применен - просто пришлите фото!</i>",
         parse_mode="HTML"
     )
-    
+
     await callback.answer()
 
     # =====================================================================

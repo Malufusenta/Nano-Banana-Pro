@@ -72,6 +72,7 @@ async def get_broadcast_detail(broadcast_id: int, user=Depends(require_auth)):
         "id": b.id,
         "status": b.status or "—",
         "message_text": b.message_text or "",
+        "param_question": b.param_question or "",
         "media_type": b.media_type or "text",
         "total_users": b.total_users or 0,
         "sent_count": b.sent_count or 0,

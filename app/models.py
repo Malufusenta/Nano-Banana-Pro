@@ -141,6 +141,8 @@ class Broadcast(Base):
     
     # Для Type B кнопок - скрытый промпт
     hidden_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Опционально: вопрос перед генерацией; подстановка в hidden_prompt с {value}
+    param_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     aspect_ratio = Column(String(10), default="1:1")
     model_type = Column(String(20), default="standard")  # 👈 ДОБАВИТЬ
     
@@ -165,6 +167,8 @@ class PostConfig(Base):
     
     # Настройки генерации
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    # Опционально: вопрос перед генерацией; подстановка в prompt с {value}
+    param_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_type: Mapped[str] = mapped_column(String(20), default="standard")  # standard / pro
     aspect_ratio: Mapped[str] = mapped_column(String(10), default="1:1")
     
