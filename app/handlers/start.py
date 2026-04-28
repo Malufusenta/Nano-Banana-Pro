@@ -449,7 +449,7 @@ async def proxy_handler(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="⚡ УСКОРИТЬ ТЕЛЕГРАМ",
-            url="https://t.me/proxy?server=85.239.52.199&port=443&secret=ee9fae4791bf577d103c3730790ff0c325616263373338322e7275"
+            url="tg://proxy?server=147.45.175.171&port=443&secret=ee9fae4791bf577d103c3730790ff0c325676f6f676c652e636f6d"
         )]
     ])
     await message.answer(
