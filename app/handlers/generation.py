@@ -2239,7 +2239,20 @@ async def process_generation(
                 "🍌 <i>Просто повторять запрос нет смысла. Пожалуйста, измени формулировку промпта (добавь деталей или, наоборот, упрости) и попробуй снова!</i>"
             )
 
-            # --- ГРУППА 2.6: Отказ провайдера (Kie REJECT) ---
+            # --- ГРУППА 2.6: Публичная личность (Kie REJECT specific) ---
+        elif (
+            "kie reject" in err_msg
+            and "request blocked" in err_msg
+            and ("prominent public figure" in err_msg or "public figure" in err_msg)
+        ):
+            user_friendly_text = (
+                "👤 <b>Запрос отклонён: публичная личность</b>\n\n"
+                "Похоже, на фото или в описании есть узнаваемая публичная персона.\n"
+                "По правилам провайдера такую генерацию выполнить нельзя.\n"
+                "🍌 <i>Попробуй другое фото без знаменитостей или измени запрос без упоминания публичных людей.</i>"
+            )
+
+            # --- ГРУППА 2.7: Отказ провайдера (Kie REJECT общий) ---
         elif "kie reject" in err_msg or "failed to generate image" in err_msg:
             user_friendly_text = (
                 "🛑 <b>Генерация прервана.</b>\n\n"
@@ -2247,7 +2260,7 @@ async def process_generation(
                 "🍌 <i>Пожалуйста, попробуй перефразировать промпт.</i>"
             )
 
-            # --- ГРУППА 2.7: Протухшая ссылка на файл в Telegram (404 Client Error) ---
+            # --- ГРУППА 2.8: Протухшая ссылка на файл в Telegram (404 Client Error) ---
         elif "api.telegram.org/file/" in err_msg and "404" in err_msg:
             user_friendly_text = (
                 "🖼 <b>Исходная картинка потерялась!</b>\n\n"
@@ -2255,7 +2268,7 @@ async def process_generation(
                 "🍌 <i>Пожалуйста, отправь свою фотографию заново и повтори запрос.</i>"
             )
 
-            # --- ГРУППА 2.8: Мягкий отказ нейросети (Copilot / DALL-E / Bing) ---
+            # --- ГРУППА 2.9: Мягкий отказ нейросети (Copilot / DALL-E / Bing) ---
         elif any(x in err_msg for x in ["unable to help you with that", "对不起", "generation failed: sorry"]):
             user_friendly_text = (
                 "🛑 <b>Нейросеть вежливо отказалась.</b>\n\n"
