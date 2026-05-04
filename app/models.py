@@ -26,7 +26,7 @@ class User(Base):
     
     # Бонус и Настройки
     is_sub_bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
-    preferred_model: Mapped[str] = mapped_column(String, default="standard") # standard / pro / nb2
+    preferred_model: Mapped[str] = mapped_column(String, default="nb2") # standard / pro / nb2
     is_model_manually_selected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     generations_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
@@ -38,6 +38,8 @@ class User(Base):
     is_chat_sub_claimed: Mapped[bool] = mapped_column(Boolean, default=False)    # Чат
     referrer_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # Кто пригласил
     source: Mapped[str | None] = mapped_column(String, nullable=True) # Источник трафика
+    locale: Mapped[str] = mapped_column(String(8), default="en", server_default="en", nullable=False)
+    last_payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Аналитика покупок (LTV)
     total_revenue: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -87,6 +89,19 @@ class Purchase(Base):
         Index('ix_purchases_user_status', 'user_id', 'status'),
         Index('ix_purchases_payment_id', 'payment_id', unique=True),
     )
+
+
+class CryptoPayInvoice(Base):
+    """Учёт обработанных Crypto Pay (fiat USD) инвойсов для идемпотентности вебхука."""
+
+    __tablename__ = "crypto_pay_invoices"
+
+    invoice_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    package_key: Mapped[str] = mapped_column(String(16), nullable=False)
+    bananas: Mapped[int] = mapped_column(Integer, nullable=False)
+    credited_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
 
 # 3. Таблица Истории (Контекст + Галерея)
 class MessageHistory(Base):

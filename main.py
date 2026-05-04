@@ -53,11 +53,12 @@ sys.stdout = PrintLogger(logger)
 # Импорты после настройки логирования
 from aiogram import Bot, Dispatcher
 from app.database import engine, Base, async_session
-from app.handlers import start, generation, payment, menu_actions, admin, admin_scenarios
+from app.handlers import start, generation, payment, crypto_payment, menu_actions, admin, admin_scenarios
 from app.middlewares.album import AlbumMiddleware
 from app.middlewares.admin_spy import AdminSpyMiddleware
 from app.middlewares.antifraud import AntiFraudMiddleware
 from app.middlewares.block_middleware import BlockCheckMiddleware
+from app.middlewares.locale import LocaleMiddleware
 from app.services.yandex_metrica import init_metrica_service
 from app.services.analytics_service import get_analytics_report, format_report_message
 from app.webhook_server import start_webhook_server
@@ -103,6 +104,8 @@ async def main():
     # 🔥 ПРОВЕРКА БЛОКИРОВКИ (ПЕРВАЯ, САМАЯ ВАЖНАЯ!)
     dp.message.middleware(BlockCheckMiddleware())
     dp.callback_query.middleware(BlockCheckMiddleware())
+    dp.message.middleware(LocaleMiddleware())
+    dp.callback_query.middleware(LocaleMiddleware())
 
     dp.message.middleware(AntiFraudMiddleware())
     dp.callback_query.middleware(AntiFraudMiddleware())
@@ -116,6 +119,7 @@ async def main():
     dp.include_router(admin.router)
     dp.include_router(admin_scenarios.router)
     dp.include_router(start.router)
+    dp.include_router(crypto_payment.router)
     dp.include_router(payment.router)
     dp.include_router(menu_actions.router)
     dp.include_router(generation.router)

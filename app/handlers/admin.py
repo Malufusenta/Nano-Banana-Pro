@@ -8,6 +8,8 @@ from app.database import async_session
 from app.services.user_service import find_user_by_input, admin_change_balance, get_user_admin_card_data
 from app.services.payment_service import confirm_purchase
 from app.handlers.start import get_main_kb
+from app.handlers.payment import get_banana_label
+from app.services.i18n import t
 import asyncio  # 👈 Для фоновых задач
 import json     # 👈 Для парсинга JSON (если ещё нет)
 from sqlalchemy import select, func
@@ -845,9 +847,17 @@ async def process_balance_change(message: types.Message, state: FSMContext, bot:
     # Если action == "rem", делаем число отрицательным
     final_amount = amount if action == "add" else -amount
     
+    notify_locale = "en"
     async with async_session() as session:
         new_balance = await admin_change_balance(session, target_id, final_amount)
-    
+        if new_balance is not None and action == "add":
+            result = await session.execute(
+                select(User).where(User.telegram_id == target_id)
+            )
+            target_user = result.scalar_one_or_none()
+            if target_user and target_user.locale in {"ru", "en", "es"}:
+                notify_locale = target_user.locale
+
     if new_balance is not None:
         await log_admin_action(
             message.from_user.id, 
@@ -864,11 +874,17 @@ async def process_balance_change(message: types.Message, state: FSMContext, bot:
         # Уведомляем юзера (только при начислении)
         if action == "add":
             try:
+                suffix = get_banana_label(notify_locale, amount)
+                credit_text = t(
+                    "notification.admin_balance_credited",
+                    notify_locale,
+                    amount=amount,
+                    suffix=suffix,
+                )
                 await bot.send_message(
-                    target_id, 
-                    f"🎁 **Администратор начислил вам {amount} бананов!**\n"
-                    f"Приятного творчества! 🍌",
-                    parse_mode="Markdown"
+                    target_id,
+                    credit_text,
+                    parse_mode="HTML",
                 )
             except Exception as e:
                 error_msg = str(e).lower()

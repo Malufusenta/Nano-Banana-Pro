@@ -50,7 +50,7 @@ SQLAlchemy==2.0.44
 Telethon==1.41.2
 tenacity==9.1.2
 tqdm==4.67.1
-typing-inspection==0.4.1
+typing-inspection==0.4.2
 typing_extensions==4.15.0
 uritemplate==4.2.0
 urllib3==2.5.0

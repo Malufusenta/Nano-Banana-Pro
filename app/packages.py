@@ -16,3 +16,12 @@ STARS_PACKAGES = {
     "stars_60": {"bananas": 60, "stars": 350, "emoji": "🍌"},
     "stars_120": {"bananas": 120, "stars": 650, "emoji": "🍌"},
 }
+
+# Fiat Crypto Pay — см. BANANA_PACKAGES_DEFAULT ниже и config.BANANA_PACKAGES (.env).
+BANANA_PACKAGES_DEFAULT = {
+    "s": {"bananas": 10, "usdt": "1.49"},
+    "m": {"bananas": 44, "usdt": "4.49"},
+    "l": {"bananas": 140, "usdt": "9.99"},
+    "xl": {"bananas": 340, "usdt": "21.99"},
+    "xxl": {"bananas": 832, "usdt": "49.99"},
+}

@@ -15,7 +15,8 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int, username: 
         telegram_id=telegram_id,
         username=username,
         full_name=full_name,
-        generations_balance=START_BALANCE
+        generations_balance=START_BALANCE,
+        preferred_model="nb2"
     ).on_conflict_do_nothing(index_elements=['telegram_id'])
     
     await session.execute(stmt)
@@ -277,19 +278,12 @@ async def get_user_model_preference(session: AsyncSession, user_id: int) -> str:
     user = result.scalar_one_or_none()
     
     if not user:
-        return "standard"
+        return "nb2"
     
     # Если пользователь сам выбрал модель — уважаем его выбор
     if user.is_model_manually_selected:
         return user.preferred_model
-    
-    # Сегментация: опытный = 2+ генерации ИЛИ 1+ покупка
-    is_experienced = (user.generations_count >= 2) or (user.orders_count > 0)
-    
-    if is_experienced:
-        return "nb2"
-    else:
-        return "standard"
+    return user.preferred_model or "nb2"  # 👈 ИЗМЕНЕНО!
 
 async def set_user_model_preference(session: AsyncSession, user_id: int, model: str, manual: bool = False):
     query = select(User).where(User.telegram_id == user_id)
@@ -316,6 +310,32 @@ async def get_user(session, telegram_id: int):
     query = select(User).where(User.telegram_id == telegram_id)
     result = await session.execute(query)
     return result.scalars().first()
+
+
+async def set_user_locale(session: AsyncSession, telegram_id: int, locale: str):
+    user = await get_user(session, telegram_id)
+    if not user:
+        return None
+    if user.locale != locale:
+        user.locale = locale
+        await session.commit()
+    return user
+
+
+async def get_user_locale(session: AsyncSession, telegram_id: int, default: str = "en") -> str:
+    user = await get_user(session, telegram_id)
+    if not user or not getattr(user, "locale", None):
+        return default
+    return user.locale
+
+
+async def set_last_payment_method(session: AsyncSession, telegram_id: int, method: str):
+    user = await get_user(session, telegram_id)
+    if not user:
+        return None
+    user.last_payment_method = method
+    await session.commit()
+    return user
 
 
 async def get_user_financial_stats(session, user_id: int):
