@@ -193,6 +193,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 generations_balance=0,
                 balance_free=0,
                 balance_paid=0,
+		preferred_model="nb2",
                 preferred_model="nb2"
             ).on_conflict_do_nothing(index_elements=['telegram_id'])
             
