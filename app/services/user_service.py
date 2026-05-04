@@ -16,7 +16,6 @@ async def get_or_create_user(session: AsyncSession, telegram_id: int, username: 
         username=username,
         full_name=full_name,
         generations_balance=START_BALANCE,
-	preferred_model="nb2",
         preferred_model="nb2"
     ).on_conflict_do_nothing(index_elements=['telegram_id'])
     
@@ -285,7 +284,6 @@ async def get_user_model_preference(session: AsyncSession, user_id: int) -> str:
     if user.is_model_manually_selected:
         return user.preferred_model
     return user.preferred_model or "nb2"  # 👈 ИЗМЕНЕНО!
-
 
 async def set_user_model_preference(session: AsyncSession, user_id: int, model: str, manual: bool = False):
     query = select(User).where(User.telegram_id == user_id)
