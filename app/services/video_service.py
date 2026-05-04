@@ -19,6 +19,7 @@ from sqlalchemy import select
 from app.models import VideoGenerationTask, User
 from app.services.user_service import add_paid_balance
 from app.config import KLING_API_KEY, BOT_TOKEN
+from app.services.i18n import t
 
 
 class KlingAPI:
@@ -304,7 +305,8 @@ async def download_and_send_video(
     user_id: int,
     video_url: str,
     session: AsyncSession,
-    task_id: str
+    task_id: str,
+    locale: str = "en",
 ):
     """
     Скачивает видео и отправляет пользователю
@@ -338,19 +340,21 @@ async def download_and_send_video(
         from app.services.user_service import get_user_balance
         balance = await get_user_balance(session, user_id)
         
-        caption = (
-            f"🎬 <b>Твое видео готово!</b>\n\n"
-            f"🔋 Осталось: <b>{balance}</b> 🍌\n\n"
-            f"Сгенерировано в @nan0banana_bot"
-        )
+        caption = t("generation.msg.video_ready_caption", locale, balance=balance)
         
         # 3. Добавляем кнопку
         from aiogram.utils.keyboard import InlineKeyboardBuilder
         from app import config
 
         builder = InlineKeyboardBuilder()
-        builder.button(text=f"🔄 Ещё раз ({config.COST_VIDEO}🍌)", callback_data=f"reanimate_{task_id}")
-        builder.button(text="📂 Скачать без сжатия", callback_data=f"download_video_{task_id}")
+        builder.button(
+            text=t("generation.result.btn_reroll", locale, cost=config.COST_VIDEO),
+            callback_data=f"reanimate_{task_id}",
+        )
+        builder.button(
+            text=t("generation.result.btn_download_lossless", locale),
+            callback_data=f"download_video_{task_id}",
+        )
         builder.adjust(1)  # По одной кнопке в ряд
         
         # 4. Отправляем в Telegram (КАК РАБОТАЛО!)

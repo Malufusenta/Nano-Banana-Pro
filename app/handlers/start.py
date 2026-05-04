@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 import re
 from sqlalchemy import select
 from app.models import PostConfig, AdScenario, User
+from app.services.i18n import resolve_locale, t
 
 router = Router()
 
@@ -23,20 +24,37 @@ def get_banana_word(n: int) -> str:
     if 2 <= n % 10 <= 4 and (n % 100 < 10 or n % 100 >= 20): return "банана"
     return "бананов"
 
-def get_main_kb():
+
+def get_banana_word_by_locale(n: int, locale: str) -> str:
+    if locale == "ru":
+        return get_banana_word(n)
+    if n == 1:
+        return t("banana.one", locale)
+    return t("banana.many", locale)
+
+def _menu_labels(key: str) -> set[str]:
+    return {t(key, "ru"), t(key, "en"), t(key, "es")}
+
+
+def get_main_kb(locale: str = "ru"):
     kb = [
-        [KeyboardButton(text="✨ Начать творить")],
-        [KeyboardButton(text="🚀 Ускорить Телеграм бесплатно")],
-        [KeyboardButton(text="🍌 Купить бананы"), KeyboardButton(text="👤 Профиль")],
-        [KeyboardButton(text="📚 Гайд"), KeyboardButton(text="💬 Поддержка")]
+        [KeyboardButton(text=t("menu.create", locale))],
+        [KeyboardButton(text=t("menu.proxy", locale))],
+        [KeyboardButton(text=t("menu.buy", locale)), KeyboardButton(text=t("menu.profile", locale))],
+        [KeyboardButton(text=t("menu.guide", locale)), KeyboardButton(text=t("menu.support", locale))]
     ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, input_field_placeholder="Пиши сюда ")
+    return ReplyKeyboardMarkup(
+        keyboard=kb,
+        resize_keyboard=True,
+        input_field_placeholder=t("menu.input_placeholder", locale),
+    )
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, command: CommandObject, state: FSMContext, bot: Bot):
     
     await state.clear()
     user_id = message.from_user.id
+    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
     from app.config import BONUS_AMOUNT; welcome_bonus = BONUS_AMOUNT
 
     # 🔥 ПРОВЕРКА БЛОКИРОВКИ
@@ -111,8 +129,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         
         if not post_config:
             await message.answer(
-                "⚠️ <b>Ссылка устарела или неверна.</b>\n\n"
-                "Попробуйте найти свежую ссылку в нашем канале!",
+                t("start.postlink_invalid", locale),
                 parse_mode="HTML"
             )
             return
@@ -170,17 +187,19 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 telegram_id=user_id,
                 username=message.from_user.username,
                 full_name=message.from_user.full_name,
+                locale=locale,
                 referrer_id=referrer_id,
                 source=user_source,
                 generations_balance=0,
                 balance_free=0,
                 balance_paid=0,
 		preferred_model="nb2",
+                preferred_model="nb2"
             ).on_conflict_do_nothing(index_elements=['telegram_id'])
             
             await session.execute(stmt)
             await session.commit()
-            
+
             user = await get_user(session, user_id)
             
             if user:
@@ -226,8 +245,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                             
             # 🔥 КНОПКИ ДЛЯ РЕКЛАМНОГО СЦЕНАРИЯ
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+qcYoFpW4yXRlZjVi")],  # 👈 Первая строка
-                    [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_scenario")]  # 👈 Вторая строка
+                    [InlineKeyboardButton(text=t("start.choose_look_button", locale), url="https://t.me/+qcYoFpW4yXRlZjVi")],  # 👈 Первая строка
+                    [InlineKeyboardButton(text=t("common.cancel_button", locale), callback_data="cancel_scenario")]  # 👈 Вторая строка
                 ])
                 
                 await message.answer(
@@ -254,18 +273,16 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                         pending_param_photo_file_id=None,
                     )
                     await state.set_state(GenState.waiting_for_prompt_text)
-                    word = get_banana_word(welcome_bonus)
+                    word = get_banana_word_by_locale(welcome_bonus, locale)
                     await message.answer(
-                        f"👋 <b>Привет! Твои {welcome_bonus} подарочных {word} начислены 🎁</b>\n\n"
-                        "Вижу, ты пришел именно за этим образом! Чтобы он получился идеальным, нужно уточнить:",
+                        t("start.postlink_with_question_intro", locale, bonus=welcome_bonus, suffix=word),
                         parse_mode="HTML",
-                        reply_markup=get_main_kb(),
+                        reply_markup=get_main_kb(locale),
                     )
                     await asyncio.sleep(0.8)
                     safe_q = html.quote(pq)
                     await message.answer(
-                        f"❓ <i>{safe_q}</i>\n\n"
-                        "<b>Напишите ваш ответ прямо в этот чат 👇</b>",
+                        f"❓ <i>{safe_q}</i>\n\n{t('prompt.answer_here', locale)}",
                         parse_mode="HTML",
                     )
                     return
@@ -279,31 +296,18 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 )
                 await state.set_state(GenState.free_mode)
 
-                word = get_banana_word(welcome_bonus)
-                text = (
-                    f"👋 Привет! Я вижу, ты пришел за этим образом! 🔥\n\n"
-                    f"Я <b>Nano Banana Pro 🍌</b> — твой AI-фотошоп.\n\n"
-                    f"🎁 Твои {welcome_bonus} приветственных {word} уже начислены.\n"
-                    f"✨ Я уже настроил нужный промт.\n\n"
-                    f"Ничего нажимать не надо — просто пришли мне свое фото, "
-                    f"и я сделаю кадр как в посте! 👇"
-                )
+                word = get_banana_word_by_locale(welcome_bonus, locale)
+                text = t("start.postlink_ready", locale, bonus=welcome_bonus, suffix=word)
 
-                await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb())
+                await message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(locale))
                 return
             
             # Обычное приветствие для новых юзеров
-            word = get_banana_word(welcome_bonus)
-            text = (
-                f"👋 Привет! Я <b>Nano Banana Pro 🍌</b> — твой AI-фотошоп.\n\n"
-                f"🎁 <b>Тебе уже начислено {welcome_bonus} подарочных {word}</b>\n\n"
-                f"<b>Я готов творить!</b>\n"
-                f"Напиши, что создать, или пришли <b>от 1 до 4 фото</b>, которые нужно изменить или объединить\n\n"
-                f"🤷‍♀️ <b>Не знаешь, что сгенерировать?👇</b>"
-            )
+            word = get_banana_word_by_locale(welcome_bonus, locale)
+            text = t("start.new_user", locale, bonus=welcome_bonus, suffix=word)
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+qcYoFpW4yXRlZjVi")]
+                [InlineKeyboardButton(text=t("start.choose_look_button", locale), url="https://t.me/+qcYoFpW4yXRlZjVi")]
             ])
             
             try:
@@ -329,7 +333,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     reply_markup=keyboard,
                     link_preview_options=types.LinkPreviewOptions(is_disabled=True)
                 )
-            await message.answer("☝️", reply_markup=get_main_kb())
+            await message.answer("☝️", reply_markup=get_main_kb(locale))
             return
         
         # ЕСЛИ СТАРЫЙ ЮЗЕР
@@ -362,10 +366,9 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 await state.set_state(GenState.free_mode)
                 
                 await message.answer(
-                    "✨ <b>Настройки из рекламы применены!</b>\n\n"
-                    "📸 Присылай фото, чтобы сгенерировать 👇",
+                    t("start.ad_settings_applied", locale),
                     parse_mode="HTML",
-                    reply_markup=get_main_kb()
+                    reply_markup=get_main_kb(locale)
                 )
                 return
 
@@ -386,7 +389,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     )
                     await state.set_state(GenState.waiting_for_prompt_text)
                     await send_param_prompt_text_intro(
-                        message.bot, message.chat.id, pq, reply_markup=get_main_kb()
+                        message.bot, message.chat.id, pq, locale=locale, reply_markup=get_main_kb(locale)
                     )
                     return
 
@@ -400,10 +403,9 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                 await state.set_state(GenState.free_mode)
 
                 await message.answer(
-                    "✨ <b>Промт из поста применен!</b>\n\n"
-                    "📸 Присылай фото, чтобы сгенерировать 👇",
+                    t("start.post_prompt_applied", locale),
                     parse_mode="HTML",
-                    reply_markup=get_main_kb()
+                    reply_markup=get_main_kb(locale)
                 )
                 return
 
@@ -414,22 +416,16 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             #         await session.commit()
 
             bal = user.generations_balance
-            word = get_banana_word(bal)
-            text = (
-                f"👋 *С возвращением!*\n"
-                f"🍌 Твой баланс: *{bal} {word}*\n\n"
-                f"*Я готов творить! 🎨*\n"
-                f"Пришли *от 1 до 4 фото* с описанием или напиши, что сделать.\n\n"
-                f"*Не знаешь, что создать? 👇*"
-            )
+            word = get_banana_word_by_locale(bal, locale)
+            text = t("start.returning_user", locale, balance=bal, suffix=word)
 
             # Создаем inline-кнопку для старого юзера
             keyboard_old = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💃 Выбрать образ", url="https://t.me/+3ovTRpUPci85ODYy")]
+                [InlineKeyboardButton(text=t("start.choose_look_button", locale), url="https://t.me/+3ovTRpUPci85ODYy")]
             ])
 
             await message.answer(text, parse_mode="Markdown", reply_markup=keyboard_old)
-            await message.answer("👆", reply_markup=get_main_kb())
+            await message.answer("👆", reply_markup=get_main_kb(locale))
             # 👆 ВСЁ! Больше ничего не нужно
 
 @router.callback_query(F.data == "cancel_scenario")
@@ -438,32 +434,22 @@ async def callback_cancel_scenario(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     
     await callback.message.edit_text(
-        "❌ <b>Отменено</b>\n\n"
-        "Возвращайся когда захочешь! 😊\n\n"
-        "Используй кнопки ниже 👇",
+        t("common.cancelled", resolve_locale(callback.from_user.language_code if callback.from_user else None)),
         parse_mode="HTML"
     )
     await callback.answer()
 
-@router.message(F.text == "🚀 Ускорить Телеграм бесплатно")
+@router.message(F.text.in_(_menu_labels("menu.proxy")))
 async def proxy_handler(message: types.Message):
+    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text="⚡ УСКОРИТЬ ТЕЛЕГРАМ",
+            text=t("proxy.button", locale),
             url="tg://proxy?server=147.45.175.171&port=443&secret=ee9fae4791bf577d103c3730790ff0c325676f6f676c652e636f6d"
         )]
     ])
     await message.answer(
-        "🚀 <b>Телеграм тормозит? Возвращаем скорость!</b>\n\n"
-        "Мы запустили свой мощный и <b>БЕСПЛАТНЫЙ</b> прокси.\n\n"
-        "🚀 Всё летает\n"
-        "✅ Подключение в 1 клик прямо в ТГ.\n"
-        "🛡 Безопасно и анонимно (официальная функция ТГ)\n\n"
-        "<b>Как подключить:</b>\n"
-        "1️⃣ Жми кнопку «⚡ <b>УСКОРИТЬ ТЕЛЕГРАМ</b>»👇👇\n"
-        "2️⃣ Во всплывающем окне нажми «<b>Подключить прокси</b>».\n\n"
-        "📖 <a href=\"https://teletype.in/@nanobanan_promt/V827KcWWDuK\">Подробная инструкция здесь</a>\n"
-        "🔄 <i>Перешли друзьям, у которых тоже виснет ТГ!</i>",
+        t("proxy.text", locale),
         parse_mode="HTML",
         reply_markup=keyboard,
         link_preview_options=types.LinkPreviewOptions(is_disabled=True)

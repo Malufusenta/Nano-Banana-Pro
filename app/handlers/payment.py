@@ -4,11 +4,13 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.database import async_session
 from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance, get_user_admin_card_data, add_paid_balance
-from app.services.user_service import get_user_profile_data, admin_change_balance, get_user_balance, get_user_financial_stats
+from app.services.user_service import get_user_profile_data, admin_change_balance, get_user_balance, get_user_financial_stats, set_last_payment_method
 from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded, update_purchase_analytics
 from app import config
 from datetime import datetime
 from app.services.payment_api import create_yoo_payment, check_yoo_payment
+from app.services.i18n import resolve_locale, t
+from app.utils.telegram_locale import effective_locale
 from app.services.admin_logger import log_payment
 from app.models import Purchase, User# ← Добавь в начало
 from sqlalchemy import select     # ← Добавь в начало
@@ -20,6 +22,10 @@ router = Router()
 # 👇👇👇 ВСТАВЬ СЮДА СВОИ ЮЗЕРНЕЙМЫ 👇👇👇
 CHANNEL_ID = "@nanobanan_promt"
 CHAT_ID = "@nanabanan_chat"
+
+
+def _menu_labels(key: str) -> set[str]:
+    return {t(key, "ru"), t(key, "en"), t(key, "es")}
 
 
 # 👇 ВСТАВИТЬ В НАЧАЛО ФАЙЛА (после списков PACKAGES)
@@ -40,30 +46,53 @@ def get_banana_suffix(count):
     else:
         return "бананов"
 
-@router.message(F.text == "Заработать🍌")
+
+def get_user_locale_from_event(event_user: types.User | None) -> str:
+    return resolve_locale(event_user.language_code if event_user else None)
+
+
+def get_banana_label(locale: str, count: int) -> str:
+    if locale == "ru":
+        return get_banana_suffix(count)
+    if count == 1:
+        return t("banana.one", locale)
+    return t("banana.many", locale)
+
+
+def build_shop_keyboard(locale: str) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    is_ru = locale == "ru"
+
+    if is_ru:
+        for key, pkg in PACKAGES.items():
+            p = pkg["price"] / pkg["gens"]
+            s = f"{p:.2f}".replace(".", ",").rstrip("0").rstrip(",")
+            btn = f"{pkg['emoji']}{pkg['gens']} {pkg['suffix']} - {pkg['price']}₽ | {s}₽/🍌"
+            builder.button(text=btn, callback_data=f"buy_rub_{key}")
+
+    builder.button(text=t("shop.crypto_usd_button", locale), callback_data="buy_bananas_crypto")
+    builder.button(text=t("shop.stars_button", locale), callback_data="open_stars_menu")
+    builder.adjust(1)
+    return builder
+
+
+@router.message(F.text.in_(_menu_labels("menu.free")))
 @router.message(Command("free"))
 async def show_freebies(message: types.Message, bot: Bot):
     await _show_freebies_logic(message, message.from_user.id, bot)
 
-async def _show_freebies_logic(message, user_id: int, bot: Bot):
-   
+async def _show_freebies_logic(message, user_id: int, bot: Bot, locale: str | None = None):
+    locale = await effective_locale(bot, message, user_id, locale)
+
     bot_info = await bot.me()
     
     ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
     
-    text = (
-        "<b>Хочешь бананы, но не хочешь платить?</b> 😉\n\n"
-        "Мы начисляем <b>+2 банана</b> на баланс за каждого нового пользователя, который придет от тебя и начнет пользоваться ботом.\n\n"
-        "Количество приглашений не ограничено!\n\n"
-        "<b>10 человек = 20 бананов 🔥</b>\n\n"
-        "👇<b> Твоя личная ссылка</b> (нажми на нее, чтобы скопировать):\n\n"
-        f"<code>{ref_link}</code>\n\n"
-        "<i>Отправляй в чаты, группы и сторис!</i>" 
-    )
+    text = t("freebies.text", locale, link=ref_link)
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="🍌 Купить бананы", callback_data="buy_menu")
-    builder.button(text="🔙 В меню", callback_data="main_menu")
+    builder.button(text=t("menu.buy", locale), callback_data="buy_menu")
+    builder.button(text=t("shop.back_to_methods", locale), callback_data="main_menu")
     builder.adjust(1)  # Кнопки друг под другом
     
     await message.answer(text, parse_mode="HTML", reply_markup=builder.as_markup())
@@ -72,17 +101,18 @@ async def _show_freebies_logic(message, user_id: int, bot: Bot):
 async def cb_buy_from_freebies(callback: types.CallbackQuery):
     """Открывает магазин из раздела халявы"""
     await callback.message.delete()
-    await cmd_shop(callback.message)
+    await cmd_shop(callback.message, user_id=callback.from_user.id, locale=get_user_locale_from_event(callback.from_user))
     await callback.answer()
 
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu_from_freebies(callback: types.CallbackQuery):
     """Возврат в главное меню"""
     from app.handlers.start import get_main_kb
+    locale = get_user_locale_from_event(callback.from_user)
     await callback.message.delete()
     await callback.message.answer(
-        "🏠 Главное меню",
-        reply_markup=get_main_kb()
+        t("menu.main", locale),
+        reply_markup=get_main_kb(locale)
     )
     await callback.answer()
 
@@ -90,63 +120,57 @@ async def cb_main_menu_from_freebies(callback: types.CallbackQuery):
 # =====================================================================
 # 💰 МАГАЗИН И ПРОФИЛЬ
 # =====================================================================
-@router.message(F.text == "🍌 Купить бананы")
+@router.message(F.text.in_(_menu_labels("menu.buy")))
 @router.message(Command("buy"))
-async def cmd_shop(message: types.Message):
+async def cmd_shop(message: types.Message, user_id: int | None = None, locale: str | None = None):
+    real_user_id = user_id or (message.from_user.id if message.from_user else None)
+    if not real_user_id:
+        return
     async with async_session() as session:
+        if locale is None:
+            locale = await effective_locale(message.bot, message, real_user_id, None, session=session)
         result = await session.execute(
-            select(User).where(User.telegram_id == message.from_user.id)
+            select(User).where(User.telegram_id == real_user_id)
         )
         user = result.scalar_one_or_none()
         if user and not user.visited_shop_at:
             user.visited_shop_at = datetime.now()
             await session.commit()
 
-    builder = InlineKeyboardBuilder()
-    
-    # Рублевые пакеты
-    for key, pkg in PACKAGES.items():
-        # Расчет цены за 1 шт
-        p = pkg['price'] / pkg['gens']
-        s = f"{p:.2f}".replace('.', ',').rstrip('0').rstrip(',')
-        if s.endswith(','): s = s[:-1]
-        
-        btn = f"{pkg['emoji']}{pkg['gens']} {pkg['suffix']} - {pkg['price']}₽ | {s}₽/🍌"
-        builder.button(text=btn, callback_data=f"buy_{key}")
-    
-    # Кнопка перехода на Stars
-    builder.button(text="⭐️ Оплатить Stars", callback_data="open_stars_menu")
-    
-    builder.adjust(1)
+    builder = build_shop_keyboard(locale)
     await message.answer(
-        "🍌 *Магазин Бананов*\n\nПополни баланс и твори без ограничений!\n\n*Стоимость:*\n🍌 Standard: 1 банан\n⚡ Nano Banana 2: от 2 бананов\n💎 PRO: от 4 бананов\n📷 Оживи фото: 12 бананов\n\nВыбери пакет👇",
-        reply_markup=builder.as_markup(), parse_mode="Markdown"
+        t("shop.message", locale),
+        reply_markup=builder.as_markup(),
+        parse_mode="Markdown",
     )
 
 # Меню Stars
 @router.callback_query(F.data == "open_stars_menu")
 async def show_stars_menu(callback: types.CallbackQuery):
+    locale = get_user_locale_from_event(callback.from_user)
     builder = InlineKeyboardBuilder()
     
     for key, pkg in STARS_PACKAGES.items():
-        suffix = get_banana_suffix(pkg['bananas'])
+        suffix = get_banana_label(locale, pkg['bananas'])
         btn_text = f"{pkg['emoji']} {pkg['bananas']} {suffix} — {pkg['stars']} ⭐️"
-        builder.button(text=btn_text, callback_data=f"buy_{key}")
-    
-    builder.button(text="🔙 Назад к рублям", callback_data="open_rub_menu")
+        builder.button(text=btn_text, callback_data=f"buy_stars_{key}")
+
+    builder.button(text=t("shop.back_to_methods", locale), callback_data="open_shop_menu")
     builder.adjust(1)
     
     await callback.message.edit_text(
-        "⭐️ *Оплата Telegram Stars*\n\nВыбери пакет:",
+        t("shop.stars_title", locale),
         reply_markup=builder.as_markup(),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
+    await callback.answer()
+
 
 # Возврат к рублевому меню
-@router.callback_query(F.data == "open_rub_menu")
+@router.callback_query(F.data == "open_shop_menu")
 async def back_to_rub_menu(callback: types.CallbackQuery):
     await callback.answer()
-    await cmd_shop(callback.message)
+    await cmd_shop(callback.message, user_id=callback.from_user.id, locale=get_user_locale_from_event(callback.from_user))
 
 # ... (импорты сверху остаются те же)
 
@@ -155,19 +179,26 @@ async def back_to_rub_menu(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("buy_"))
 async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
+    locale = get_user_locale_from_event(callback.from_user)
     parts = callback.data.split("_")
-    
-    # 1. Если это Stars (оставляем старую логику)
-    if len(parts) >= 3 and parts[1] == "stars":
-        pkg_key = f"{parts[1]}_{parts[2]}"
-        await handle_stars_purchase(callback, bot, pkg_key)
+    if len(parts) < 3:
+        await callback.answer(t("shop.tariff_not_found", locale))
         return
-    
-    # 2. Получаем тариф
-    pkg_key = parts[1]
+
+    payment_type = parts[1]
+
+    if payment_type == "stars":
+        pkg_key = "_".join(parts[2:])
+        await handle_stars_purchase(callback, bot, pkg_key, locale)
+        return
+    if payment_type != "rub":
+        await callback.answer(t("shop.tariff_not_found", locale))
+        return
+    pkg_key = "_".join(parts[2:])
+
     package = PACKAGES.get(pkg_key)
-    if not package: 
-        await callback.answer("Тариф не найден")
+    if not package:
+        await callback.answer(t("shop.tariff_not_found", locale))
         return
 
     user_id = callback.from_user.id
@@ -194,7 +225,7 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
         card_url = payment_card.confirmation.confirmation_url
     except Exception as e:
         print(f"⚠️ Оплата картой не создана: {e}")
-        await callback.answer("Ошибка платежной системы", show_alert=True)
+        await callback.answer(t("shop.payment_error", locale), show_alert=True)
         return
 
     # 4. СОБИРАЕМ КРАСИВЫЙ ТЕКСТ
@@ -228,14 +259,14 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
     )
 
 # Создание Stars инвойса
-async def handle_stars_purchase(callback: types.CallbackQuery, bot: Bot, pkg_key: str):
+async def handle_stars_purchase(callback: types.CallbackQuery, bot: Bot, pkg_key: str, locale: str):
     package = STARS_PACKAGES.get(pkg_key)
     if not package:
-        await callback.answer("Пакет не найден")
+        await callback.answer(t("shop.tariff_not_found", locale))
         return
     
     user_id = callback.from_user.id
-    suffix = get_banana_suffix(package['bananas'])
+    suffix = get_banana_label(locale, package['bananas'])
     
     # Формируем payload для идентификации платежа
     payload = f"{pkg_key}_{user_id}"
@@ -252,11 +283,13 @@ async def handle_stars_purchase(callback: types.CallbackQuery, bot: Bot, pkg_key
     
     await callback.answer()
 
+
 # =====================================================================
 # 3. ПРОВЕРКА ПЛАТЕЖА (ПО КНОПКЕ)
 # =====================================================================
 @router.callback_query(F.data.startswith("check_"))
 async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
+    locale = get_user_locale_from_event(callback.from_user)
     parts = callback.data.split("_")
     payment_id = parts[1]
     pkg_key = parts[2]
@@ -277,16 +310,26 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
                     )
                 )
                 if existing.scalar_one_or_none():
-                    await callback.answer("✅ Оплата уже зачислена!")
+                    await callback.answer("✅")
                     await callback.message.edit_text(
-                        "✅ Оплата успешна! Бананы уже на балансе 🍌", 
+                        t("payment.success", locale, amount=package["gens"], suffix=get_banana_label(locale, package["gens"])),
                         reply_markup=None
                     )
                     return
         
                 await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'])
+                await update_purchase_analytics(
+                    session,
+                    callback.from_user.id,
+                    package["price"],
+                    f"{package['gens']} bananas",
+                    payment_id=payment_id,
+                    payment_method="yookassa_card",
+                )
                 # Начисляем бананы
-                await add_paid_balance(session, callback.from_user.id, package['gens'])                
+                await add_paid_balance(session, callback.from_user.id, package['gens'])
+                await set_last_payment_method(session, callback.from_user.id, "yookassa_card")
+                await session.commit()
                 # Логируем С АНАЛИТИКОЙ
                 try:
                     new_bal = await get_user_balance(session, callback.from_user.id)
@@ -307,23 +350,22 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
 
             # Поздравляем
             await callback.message.edit_text(
-                f"✅ <b>Оплата прошла успешно!</b>\n\n"
-                f"🍌 Начислено: <b>+{package['gens']} бананов</b>\n"
-                f"Спасибо за покупку! Можно снова творить 🎨",
+                t("payment.success", locale, amount=package["gens"], suffix=get_banana_label(locale, package["gens"])),
                 parse_mode="HTML"
             )
             
         elif status == "pending":
-            await callback.answer("⏳ Оплата еще не поступила. Завершите платеж в браузере.", show_alert=True)
+            await callback.answer(t("payment.pending", locale), show_alert=True)
             
         elif status == "canceled":
-            await callback.message.edit_text("❌ Платеж отменен.", reply_markup=None)
+            await callback.message.edit_text(t("payment.cancelled", locale), reply_markup=None)
             
     except Exception as e:
         print(f"Check Error: {e}")
-        await callback.answer("Ошибка проверки.", show_alert=True)
+        await callback.answer(t("payment.processing_error", locale), show_alert=True)
 
-@router.message(F.text == "👤 Профиль") 
+
+@router.message(F.text.in_(_menu_labels("menu.profile"))) 
 @router.message(Command("profile"))
 async def show_profile(message: types.Message):
     """
@@ -332,6 +374,7 @@ async def show_profile(message: types.Message):
     - 3 кнопки: Купить, Заработать, Техподдержка
     """
     user_id = message.from_user.id
+    locale = get_user_locale_from_event(message.from_user)
     
     async with async_session() as session:
         data = await get_user_profile_data(session, user_id)
@@ -347,26 +390,27 @@ async def show_profile(message: types.Message):
     user = data['user']
     
     # 📝 ТЕКСТ ПО ТЗ (HTML разметка для моноширинного ID)
-    text = (
-        "👤 <b>Твой профиль</b>\n\n"
-        f"🆔 ID: <code>{user_id}</code>\n"
-        f"🍌 Баланс: <b>{user.generations_balance} шт.</b>\n"
-        f"🎨 Создано шедевров: <b>{user.total_generations_used}</b>\n\n"
-        f"👥 Приглашено: <b>{ref_stats['referral_count']}</b> (+{ref_stats['referral_earnings']} 🍌)\n\n"
-        "👇 <b>Управление аккаунтом:</b>"
+    text = t(
+        "profile.text",
+        locale,
+        user_id=user_id,
+        balance=user.generations_balance,
+        generated=user.total_generations_used,
+        ref_count=ref_stats["referral_count"],
+        ref_earn=ref_stats["referral_earnings"],
     )
     
     # ⌨️ КНОПКИ ПО ТЗ (3 ряда)
     builder = InlineKeyboardBuilder()
     
     # Ряд 1: Монетизация
-    builder.button(text="🍌 КУПИТЬ БАНАНЫ", callback_data="goto_shop")
+    builder.button(text=t("profile.buy_button", locale), callback_data="goto_shop")
     
     # Ряд 2: Удержание
-    builder.button(text="⚒️ Заработать бананы", callback_data="goto_free")
+    builder.button(text=t("profile.earn_button", locale), callback_data="goto_free")
     
     # Ряд 3: Доверие (URL-кнопка)
-    builder.button(text="👨‍💻 Техподдержка", url="https://t.me/nan0banana_help")
+    builder.button(text=t("profile.support_button", locale), url="https://t.me/nan0banana_help")
     
     builder.adjust(1)  # Каждая кнопка на новой строке
     
@@ -374,28 +418,11 @@ async def show_profile(message: types.Message):
 
 # 👇 ЗАМЕНИТЬ ФУНКЦИЮ cmd_guide НА ЭТУ 👇
 
-@router.message(F.text == "ℹ️ О нас") 
+@router.message(F.text.in_(_menu_labels("menu.about"))) 
 @router.message(Command("about")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def cmd_about(message: types.Message):
-    text = (
-        "ℹ️ <b>О сервисе Nano Banana Pro</b>\n"
-        "Сервис предоставляет доступ к облачной генерации изображений с помощью нейросети.\n"
-        "🍌 <b>Бананы</b> — это внутренняя валюта, которая используется для оплаты генераций.\n\n"
-        
-        "👤 <b>Владелец сервиса:</b>\n"
-        "Кузьмичева Диана Юрьевна\n"
-        "📄 <b>Юридический статус:</b>\n"
-        "Самозанятый (Плательщик НПД)\n"
-        "🆔 <b>ИНН:</b> 025502709811\n\n"
-        
-        "📞 <b>Контакты:</b>\n"
-        "Telegram: @nan0banana_help\n"
-        "Email: help.nanobanan@gmail.com\n\n"
-        
-        "⚖️ <b>Документы:</b>\n"
-        "• <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Договор-оферта</a>\n"
-        "• <a href='https://telegra.ph/POLITIKA-V-OTNOSHENII-OBRABOTKI-PERSONALNYH-DANNYH-12-09-5'>Политика конфиденциальности</a>"
-    )
+    locale = get_user_locale_from_event(message.from_user)
+    text = t("about.text", locale)
     # disable_web_page_preview=True чтобы не вылезала превьюшка телеграфа
     await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
 
@@ -412,7 +439,7 @@ async def cb_goto_shop(callback: types.CallbackQuery):
             user.visited_shop_at = datetime.now()
             await session.commit()
     
-    await cmd_shop(callback.message)
+    await cmd_shop(callback.message, user_id=callback.from_user.id, locale=get_user_locale_from_event(callback.from_user))
 
 @router.callback_query(F.data == "goto_free")
 async def cb_goto_free(callback: types.CallbackQuery, bot: Bot):
@@ -428,6 +455,7 @@ async def cb_goto_free(callback: types.CallbackQuery, bot: Bot):
 # Pre-checkout для Stars
 @router.pre_checkout_query()
 async def process_pre_checkout(pre_checkout: PreCheckoutQuery, bot: Bot):
+    locale = resolve_locale(pre_checkout.from_user.language_code if pre_checkout.from_user else None)
     try:
         await bot.answer_pre_checkout_query(
             pre_checkout_query_id=pre_checkout.id,
@@ -437,12 +465,13 @@ async def process_pre_checkout(pre_checkout: PreCheckoutQuery, bot: Bot):
         await bot.answer_pre_checkout_query(
             pre_checkout_query_id=pre_checkout.id,
             ok=False,
-            error_message="Ошибка обработки платежа. Попробуйте позже."
+            error_message=t("payment.processing_error", locale)
         )
 
 # Успешная оплата Stars
 @router.message(F.successful_payment)
 async def process_successful_payment(message: types.Message, bot: Bot):
+    locale = get_user_locale_from_event(message.from_user)
     payment = message.successful_payment
     total_amount = payment.total_amount
     payload = payment.invoice_payload
@@ -464,11 +493,11 @@ async def process_successful_payment(message: types.Message, bot: Bot):
         package = next((p for p in STARS_PACKAGES.values() if p["stars"] == total_amount), None)
 
     if not package:
-        await message.answer("❌ Ошибка обработки платежа (Тариф не найден)")
+        await message.answer(t("shop.tariff_not_found", locale))
         return
     
     bananas_count = package['bananas']
-    suffix = get_banana_word(bananas_count)
+    suffix = get_banana_label(locale, bananas_count)
     
     # Начисляем бананы
     async with async_session() as session:
@@ -482,9 +511,11 @@ async def process_successful_payment(message: types.Message, bot: Bot):
             user_id, 
             total_amount,
             "Telegram Stars",  # ← Чтобы отличить от рублей
-            payment_id=None
+            payment_id=None,
+            payment_method="telegram_stars"
         )
         await admin_change_balance(session, user_id, bananas_count)
+        await set_last_payment_method(session, user_id, "telegram_stars")
         await session.commit()  # ← И ЕЩЁ ОДИН COMMIT В КОНЦЕ
 
         
@@ -505,75 +536,23 @@ async def process_successful_payment(message: types.Message, bot: Bot):
             print(f"Log Error: {e}")
     
     await message.answer(
-        f"✅ <b>Оплата прошла успешно!</b>\n\n"
-        f"🍌 Начислено: <b>+{bananas_count} {suffix}</b>\n"
-        f"Спасибо за покупку! 🎨",
+        t("payment.success", locale, amount=bananas_count, suffix=suffix),
         parse_mode="HTML"
     )
 
 # 👇 ВСТАВИТЬ ЭТУ ФУНКЦИЮ В app/handlers/payment.py (ВМЕСТО СТАРОЙ cmd_guide)
 
-@router.message(F.text == "📚 Гайд") 
+@router.message(F.text.in_(_menu_labels("menu.guide"))) 
 @router.message(Command("guide")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def cmd_guide(message: types.Message):
     # Твой новый ID картинки
     guide_image_id = "AgACAgIAAxkBAAINf2k-n4BsQHY-hpG5xWHmjyDS878NAAI4C2sbbRj4Sbbtx_VnA3xWAQADAgADeAADNgQ" 
     
-    text = (
-        "🍌 <b>Гайд: Как стать повелителем Nano Banana</b>\n\n"
-        "Наш бот — это ваш личный цифровой художник. Он понимает вас с полуслова, если знать, как просить.\n\n"
-        
-        "🔥 <b>Что умеет бот? (3 главных режима)</b>\n\n"
-        "1️⃣ <b>Генерация с нуля (Текст → Картинка)</b> 🎨\n"
-        "Опишите идею словами — бот нарисует.\n"
-        "<i>Совет:</i> Не пишите просто «кот». Пишите как режиссер: <i>«Рыжий кот в скафандре сидит на поверхности Марса, кинематографичный свет, 4k».</i>\n\n"
-        
-        "2️⃣ <b>Фотошоп словами (Редактирование)</b> 🛠\n"
-        "Не нравится деталь на фото? Исправьте её!\n"
-        "Пришлите фото и напишите: <i>«Убери людей с фона», «Замени костюм на вечернее платье» или «Преврати день в ночь».</i>\n\n"
-        
-        "3️⃣ <b>Объединение и Перенос лица</b> 🎭\n"
-        "Хотите стать героем фильма или сделать коллаж?\n"
-        "• Прикрепите <b>от 2 до 4 фото</b> (например: ваше селфи + фото пляжа).\n"
-        "• Напишите: <i>«Помести меня на этот пляж» или «Сделай из нас Деда Мороза и Снегурочку».</i>\n\n"
-        
-        "— — —\n\n"
-        "⚠️ <b>ВАЖНО: Секрет идеального сходства</b>\n\n"
-        "💎 <b>Выбор модели решает всё!</b>\n"
-        "Если вам нужна точная копия лица (фотореализм) — обязательно переключитесь на модель PRO.\n\n"
-        "• <b>Standard</b> — создает художественные образы, может слегка менять черты.\n"
-        "• <b>PRO</b> — сохраняет максимальную портретную схожесть.\n\n"
-        "📸 <b>Требования к фото:</b>\n\n"
-        "✅ <b>ИДЕАЛЬНОЕ ФОТО:</b>\n"
-        "• Селфи крупным планом (анфас).\n"
-        "• Дневное освещение (свет падает на лицо, нет жестких теней).\n"
-        "• Без очков, масок и рук у лица.\n\n"
-        "❌ <b>ПЛОХОЕ ФОТО:</b>\n"
-        "• Размытое, темное, засвеченное.\n"
-        "• Лицо далеко или прикрыто волосами.\n"
-        "• Групповое фото (бот не поймет, кто из них вы).\n\n"
-        
-        "— — —\n\n"
-        "🏆 <b>Золотые правила запроса (Промпта)</b>\n\n"
-        "1️⃣ <b>Забудьте про набор слов.</b>\n"
-        "Не пишите: <i>«Девушка, красиво, лес».</i>\n"
-        "Пишите предложениями: <i>«Красивая девушка гуляет по осеннему лесу на закате».</i>\n\n"
-        "2️⃣ <b>Давайте контекст.</b>\n"
-        "Бот умный. Скажите ему: <i>«Сделай фото сэндвича для дорогого меню»</i> — и он сам добавит правильный свет и тарелку.\n\n"
-        "3️⃣ <b>Уточняйте детали.</b>\n"
-        "Описывайте материалы (<i>«шелковое платье»</i>), стиль (<i>«киберпанк», «аниме»</i>) и настроение.\n\n"
-        "— — —\n\n"
-        "🚀 <b>Где брать идеи?</b>\n\n"
-        "🎨 <b>Банк промптов:</b> @nanobanan_promt\n"
-        "Смотрите примеры работ и копируйте готовые описания.\n\n"
-        "👥 <b>Комьюнити творцов:</b> @nanabanan_chat\n"
-        "Делись своими шедеврами, вдохновляйся работами других и находи новые идеи.\n\n"
-        "👇 <b>Попробуйте прямо сейчас!</b>\n"
-        "Пришлите фото или текст."
-    )
+    locale = get_user_locale_from_event(message.from_user)
+    text = t("guide.text", locale)
     
     builder = InlineKeyboardBuilder()
-    builder.button(text="✨ Начать творить", callback_data="start_creation_from_guide")
+    builder.button(text=t("menu.create", locale), callback_data="start_creation_from_guide")
     
     try:
         # 1. Сначала шлем фото (без текста, чтобы не превысить лимит)
@@ -589,12 +568,9 @@ async def cmd_guide(message: types.Message):
         await message.answer(text, parse_mode="HTML", reply_markup=builder.as_markup())
 
     # 👇 ОБРАБОТЧИК КНОПКИ "ПОДДЕРЖКА"
-@router.message(F.text == "💬 Поддержка")
+@router.message(F.text.in_(_menu_labels("menu.support")))
 @router.message(Command("support")) # ✅ ДОБАВИЛ ВОТ ЭТО
 async def cmd_support(message: types.Message):
-    text = (
-        "💬 <b>Возникли вопросы или проблемы?</b>\n\n"
-        "Напишите нам, мы поможем:\n"
-        "@nan0banana_help"
-    )
+    locale = get_user_locale_from_event(message.from_user)
+    text = t("support.text", locale, support="@nan0banana_help")
     await message.answer(text, parse_mode="HTML")
