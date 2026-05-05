@@ -416,7 +416,10 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
 
             bal = user.generations_balance
             word = get_banana_word_by_locale(bal, locale)
-            text = t("start.returning_user", locale, balance=bal, suffix=word)
+            text = (
+                f"{t('start.returning_user', locale, balance=bal, suffix=word)}\n\n"
+                f"{t('generation.start_creating_text', locale)}"
+            )
 
             # Создаем inline-кнопку для старого юзера
             keyboard_old = InlineKeyboardMarkup(inline_keyboard=[
