@@ -17,7 +17,8 @@ from sqlalchemy.exc import IntegrityError     # ← В начале файла
 
 
 # Настройки
-WEBHOOK_PORT = 5001
+import os
+WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', 5001))
 WEBHOOK_PATH = "/yookassa_webhook"
 
 async def handle_yookassa(request):
