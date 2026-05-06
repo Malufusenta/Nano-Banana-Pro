@@ -1,5 +1,7 @@
 from aiogram import Router, types, F
+from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from app.services.i18n import t, resolve_locale
 
 router = Router()
 
@@ -7,53 +9,33 @@ router = Router()
 CHANNEL_LINK = "https://t.me/YourChannel" 
 SUPPORT_USERNAME = "@tvoj_username" # Твой юзернейм для связи
 
+
+def _menu_labels(key: str) -> set[str]:
+    return {t(key, "ru"), t(key, "en"), t(key, "es")}
+
 # 1. Кнопка "📸 Примеры работ"
-@router.message(F.text == "📸 Примеры работ")
+@router.message(F.text.in_(_menu_labels("menu.examples")))
+@router.message(Command("examples"))
 async def show_examples(message: types.Message):
+    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
     builder = InlineKeyboardBuilder()
-    builder.button(text="📱 Перейти в канал", url=CHANNEL_LINK)
-    
-    text = (
-        "📸 **Галерея шедевров**\n\n"
-        "Мы публикуем лучшие работы пользователей и обучающие промпты в нашем канале.\n\n"
-        "Там ты найдёшь:\n"
-        "• Примеры AI-фотосессий\n"
-        "• Идеи для трэш-контента\n"
-        "• Новые фишки бота"
-    )
-    await message.answer(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+    builder.button(text=t("menu.examples_button", locale), url=CHANNEL_LINK)
+    await message.answer(t("menu.examples_title", locale), parse_mode="HTML", reply_markup=builder.as_markup())
 
 # 2. Кнопка "ℹ️ Что умеет бот?"
-@router.message(F.text == "ℹ️ Что умеет бот?")
+@router.message(F.text.in_(_menu_labels("menu.what_can_bot")))
+@router.message(Command("helpinfo"))
 async def show_info(message: types.Message):
-    text = (
-        "🔥 **Что умеет AI Image Generator:**\n\n"
-        "🖼 **ГЕНЕРАЦИЯ ПО ТЕКСТУ**\n"
-        "Опиши что хочешь — получи результат.\n"
-        "_Пример: «Кот-космонавт на Марсе»_\n\n"
-        "📷 **ФОТОШОП (AI EDIT)**\n"
-        "Отправь фото + текст с изменениями.\n"
-        "_Пример: фото + «Сделай в аниме стиле»_\n\n"
-        "🎨 **КАТЕГОРИИ**\n"
-        "У нас есть готовые режимы: от красивых аватарок до трэш-приколов (пожар, авария).\n\n"
-        "⚡️ **СКОРОСТЬ**\n"
-        "Генерация занимает всего 30-60 секунд."
-    )
-    await message.answer(text, parse_mode="Markdown")
+    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
+    await message.answer(t("menu.info_text", locale), parse_mode="HTML")
 
 # 3. Кнопка "📚 Помощь" (или если нажали /help)
 # Мы ловим и текст кнопки, и команду /help
-@router.message(F.text == "📚 Помощь")
-@router.message(F.text == "/help") 
+@router.message(F.text.in_(_menu_labels("menu.help")))
+@router.message(Command("help"))
 async def show_help(message: types.Message):
-    text = (
-        "❓ **Частые вопросы:**\n\n"
-        "**Q: Какие фото можно отправлять?**\n"
-        "A: Любые! Чем выше качество — тем лучше результат.\n\n"
-        "**Q: Что делать, если результат не понравился?**\n"
-        "A: Попробуй переформулировать запрос с большими деталями.\n\n"
-        "**Q: Как купить генерации?**\n"
-        "A: Нажми «💎 Купить генерации» в меню.\n\n"
-        f"🆘 **Если бот завис или есть проблема:**\nПиши сюда: {SUPPORT_USERNAME}"
+    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
+    await message.answer(
+        t("menu.help_text", locale, support=SUPPORT_USERNAME),
+        parse_mode="HTML"
     )
-    await message.answer(text, parse_mode="Markdown")

@@ -37,7 +37,7 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('total_revenue', sa.Integer(), server_default=sa.text('0'), nullable=False))
     op.add_column('users', sa.Column('orders_count', sa.Integer(), server_default=sa.text('0'), nullable=False))
     op.add_column('users', sa.Column('first_purchase_at', sa.DateTime(), nullable=True))
-    op.add_column('users', sa.Column('had_free_actions_before_purchase', sa.Boolean(), server_default=sa.text('0'), nullable=False))    # ### end Alembic commands ###
+    op.add_column('users', sa.Column('had_free_actions_before_purchase', sa.Boolean(), server_default=sa.text('false'), nullable=False))
 
 
 def downgrade() -> None:
