@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import ssl
 
 from aiohttp import web
 from aiogram import Bot
@@ -287,6 +289,13 @@ async def start_webhook_server(bot: Bot):
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT)
+    ssl_context = None
+    ssl_cert = os.getenv("SSL_CERT")
+    ssl_key = os.getenv("SSL_KEY")
+    if ssl_cert and ssl_key:
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(ssl_cert, ssl_key)
+
+    site = web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT, ssl_context=ssl_context)
     await site.start()
     print(f"🚀 Сервер оплат запущен на порту {WEBHOOK_PORT}")
