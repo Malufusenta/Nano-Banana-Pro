@@ -156,7 +156,7 @@
   "generation.err.server_busy": "⏳ <b>Servidores saturados.</b>\n\nMuchas tareas en cola.\n🍌 <i>Suele pasar en minutos — inténtalo pronto.</i>",
   "generation.err.maintenance": "🛠 <b>Mantenimiento.</b>\n\nActualizamos conexiones con los proveedores de IA.\n🍌 <i>Volveremos enseguida — gracias por la paciencia.</i>",
   "generation.err.unknown": "⚠️ <b>Anomalía banana.</b>\n\nError desconocido — ya lo registramos.\n🍌 <i>Prueba un poco más tarde.</i>",
-  "freebies.text": "<b>¿Quieres bananas sin pagar?</b>\n\nSumamos <b>+2 bananas</b> por cada nuevo usuario con tu enlace.\n\nTu enlace personal:\n\n<code>{link}</code>",
+  "freebies.text": "<b>¿Quieres bananas pero no quieres pagar?</b> 😉\n\nAcreditamos <b>+2 bananas</b> a tu saldo por cada nuevo usuario que llegue desde tu enlace y empiece a usar el bot.\n\n¡Las invitaciones son ilimitadas!\n\n<b>10 personas = 20 bananas 🔥</b>\n\n👇<b> Tu enlace personal</b> (tócalo para copiarlo):\n\n<code>{link}</code>\n\n<i>¡Compártelo en chats, grupos y stories!</i>",
   "profile.text": "👤 <b>Tu perfil</b>\n\n🆔 ID: <code>{user_id}</code>\n🍌 Saldo: <b>{balance}</b>\n🎨 Generadas: <b>{generated}</b>\n\n👥 Referidos: <b>{ref_count}</b> (+{ref_earn} 🍌)\n\n👇 <b>Gestión de cuenta:</b>",
   "profile.buy_button": "🍌 COMPRAR BANANAS",
   "profile.earn_button": "⚒️ GANAR BANANAS",
