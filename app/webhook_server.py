@@ -123,6 +123,7 @@ async def handle_crypto_pay_webhook(request):
                     item_name,
                     new_bal,
                     stats=stats,
+                    currency=paid_asset,
                 )
             else:
                 logger.warning(

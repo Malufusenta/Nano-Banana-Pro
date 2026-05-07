@@ -355,6 +355,8 @@ async def get_user_financial_stats(session, user_id: int):
     return {
         "count": count or 0,
         "total_spent": total_spent or 0,
+        "total_spent_usd": float(user.total_revenue_usd) if user else 0.0,
+        "total_spent_ton": float(user.total_revenue_ton) if user else 0.0,
         "source": source
     }
 

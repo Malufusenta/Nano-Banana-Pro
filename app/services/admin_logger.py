@@ -186,12 +186,11 @@ async def log_new_user(bot: Bot, user, deep_link: str = None):
 
 # 👇 ЗАМЕНИТЬ ФУНКЦИЮ log_payment НА ЭТУ
 
-async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dict = None):
+async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dict = None, currency: str = None):
     username = f"@{user.username}" if user.username else "Нет"
     
     # Анализируем статус
     count = stats.get("count", 1) if stats else 1
-    total = stats.get("total_spent", amount) if stats else amount
     source = stats.get("source", "Неизвестно") if stats else "Неизвестно"
 
     if count == 1:
@@ -201,13 +200,23 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
     else:
         status_line = f"Покупка №: {count} (Постоянник! 🔥)"
 
-    item_name_lc = (item_name or "").lower()
-    if "stars" in item_name_lc:
-        currency = "⭐️"
-    elif "crypto" in item_name_lc or "usdt" in item_name_lc or "ton" in item_name_lc:
-        currency = "💎"
+    if currency is None:
+        item_name_lc = (item_name or "").lower()
+        if "stars" in item_name_lc:
+            currency = "⭐️"
+        elif "ton" in item_name_lc:
+            currency = "TON"
+        elif "crypto" in item_name_lc or "usdt" in item_name_lc:
+            currency = "USDT"
+        else:
+            currency = "₽"
+
+    if currency == "TON":
+        total = stats.get("total_spent_ton", amount) if stats else amount
+    elif currency == "USDT":
+        total = stats.get("total_spent_usd", amount) if stats else amount
     else:
-        currency = "₽"
+        total = stats.get("total_spent", amount) if stats else amount
 
     text = (
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
