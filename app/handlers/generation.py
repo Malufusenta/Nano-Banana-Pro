@@ -39,6 +39,17 @@ content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
 )
 
+MODEL_DESCRIPTIONS = {
+    "standard": "😢 <b>Модель Standard</b> — <i>Искажает лица, детали и не умеет писать текст без ошибок и иероглифов.</i>",
+    "nb2": "🔥 <b>Модель Nano Banana 2</b> — <i>Идеально понимает текст, стиль и сложные детали.</i>",
+    "pro": "💎 <b>Модель PRO</b> — <i>Переносит лица с фотографической точностью (1-в-1).</i>",
+}
+
+
+def get_model_description(model: str) -> str:
+    return MODEL_DESCRIPTIONS.get(model, "")
+
+
 def calc_cost(model_type: str, quality: str) -> int:
     if model_type == "pro":
         if quality == "4k": return config.COST_PRO_4K
@@ -156,6 +167,7 @@ async def enter_broadcast_generation_preflight(
         locale,
         prompt_raw="",
         cost=0,
+        model=model,
         has_photo=True,
         is_edit_mode=False,
         is_broadcast=True,
@@ -356,7 +368,7 @@ def _preflight_locale(user: types.User | None) -> str:
     return resolve_locale(user.language_code if user else None)
 
 
-def _preflight_prompt_snippet(prompt: str, max_len: int = 100) -> str:
+def _preflight_prompt_snippet(prompt: str, max_len: int = 35) -> str:
     raw = (prompt or "")[:max_len]
     return html.quote(raw) + "..."
 
@@ -366,6 +378,7 @@ def compose_preflight_message_html(
     *,
     prompt_raw: str,
     cost: int,
+    model: str,
     has_photo: bool,
     is_edit_mode: bool,
     is_broadcast: bool,
@@ -381,12 +394,15 @@ def compose_preflight_message_html(
     prompt_line = t("generation.preflight.prompt_line", locale, snippet=snippet)
     cost_line = t("generation.preflight.cost_line", locale, cost=cost, suffix=banana_suffix)
     footer = t("generation.preflight.footer", locale)
+    model_desc = get_model_description(model)
     header = (
         t("generation.preflight.header_settings", locale)
         if use_settings_header
         else t("generation.preflight.header_params", locale)
     )
     parts = [header, prompt_line, cost_line]
+    if model_desc and not is_edit_mode:
+        parts.append(model_desc)
     if (not has_photo) or is_edit_mode:
         parts.append(t("generation.preflight.warning", locale))
     parts.append(footer)
@@ -430,12 +446,19 @@ def get_preflight_kb(model_type: str, ratio: str, quality: str, locale: str):
     cost = calc_cost(model_type, quality)
 
     builder.button(text=model_btn, callback_data="pf_toggle_model")
-    if qual_btn:
-        builder.button(text=qual_btn, callback_data="pf_toggle_quality")
-    builder.button(text=t("generation.preflight.btn_format", locale, ratio=ratio), callback_data="pf_select_ratio")
+    if model_type == "pro":
+        builder.button(text=t("generation.preflight.btn_format", locale, ratio=ratio), callback_data="pf_select_ratio")
+        if qual_btn:
+            builder.button(text=qual_btn, callback_data="pf_toggle_quality")
+    else:
+        if qual_btn:
+            builder.button(text=qual_btn, callback_data="pf_toggle_quality")
+        builder.button(text=t("generation.preflight.btn_format", locale, ratio=ratio), callback_data="pf_select_ratio")
     builder.button(text=t("generation.preflight.btn_start", locale, cost=cost), callback_data="pf_start")
 
-    if model_type in ("pro", "nb2"):
+    if model_type == "pro":
+        builder.adjust(2, 1, 1)
+    elif model_type == "nb2":
         builder.adjust(1, 2, 1)
     else:
         builder.adjust(1, 1, 1)
@@ -587,6 +610,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
             locale,
             prompt_raw=prompt or "",
             cost=cost,
+            model=pref_model,
             has_photo=has_photo,
             is_edit_mode=is_edit_mode,
             is_broadcast=False,
@@ -598,6 +622,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
             locale,
             prompt_raw=prompt or "",
             cost=cost,
+            model=pref_model,
             has_photo=has_photo,
             is_edit_mode=is_edit_mode,
             is_broadcast=False,
@@ -657,6 +682,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
             locale,
             prompt_raw="",
             cost=0,
+            model=new_model,
             has_photo=True,
             is_edit_mode=False,
             is_broadcast=True,
@@ -669,6 +695,7 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
             locale,
             prompt_raw=prompt_raw,
             cost=cost,
+            model=new_model,
             has_photo=has_photo,
             is_edit_mode=is_edit_mode,
             is_broadcast=False,
@@ -709,6 +736,7 @@ async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext)
         locale,
         prompt_raw=prompt_raw,
         cost=cost,
+        model=model,
         has_photo=has_photo,
         is_edit_mode=is_edit_mode,
         is_broadcast=False,
@@ -761,6 +789,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
             locale,
             prompt_raw="",
             cost=0,
+            model=model,
             has_photo=True,
             is_edit_mode=False,
             is_broadcast=True,
@@ -775,6 +804,7 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
             locale,
             prompt_raw=prompt_raw,
             cost=cost,
+            model=data.get("pf_model", "standard"),
             has_photo=has_photo,
             is_edit_mode=is_edit_mode,
             is_broadcast=False,
@@ -952,6 +982,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
             locale,
             prompt_raw="",
             cost=0,
+            model=broadcast_model,
             has_photo=True,
             is_edit_mode=False,
             is_broadcast=True,
@@ -1483,6 +1514,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
             locale,
             prompt_raw="",
             cost=0,
+            model=model,
             has_photo=True,
             is_edit_mode=False,
             is_broadcast=True,
@@ -1945,8 +1977,8 @@ async def process_generation(
     # ✅ Нормализация URL
     final_urls = normalize_image_urls(image_urls)
     
-    # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: сложный мульти-фото (Standard + NB2, без PRO)
-    is_complex_standard = (not use_pro_model and len(final_urls) >= 2)
+    # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: сложный только для Standard (без PRO и NB2)
+    is_complex_standard = (not use_pro_model and not use_nb2_model and len(final_urls) >= 2)
     # 🔥 ДЕТЕКТОР ЗАДАЧ ТИПА "ЗАМЕНА/ВСТАВКА"
     swap_keywords = [
         'поменя', 'замен', 'положи', 'помести', 'вставь', 'перенес', 
@@ -2027,9 +2059,8 @@ async def process_generation(
     # 2. Сообщение о старте (РАЗНОЕ для простого/сложного)
     if is_complex_standard:
         # 📌 СЦЕНАРИЙ Б: Сложный (Standard + много фото) - С ПРЕДУПРЕЖДЕНИЕМ
-        model_name = "Nano Banana 2" if use_nb2_model else "STANDARD"
         wait_msg = await message.answer(
-            t("generation.msg.creating_complex_standard", locale, model_name=model_name),
+            t("generation.msg.creating_complex_standard", locale),
             parse_mode="HTML",
         )
         should_delete_wait_msg = False  # НЕ УДАЛЯЕМ
