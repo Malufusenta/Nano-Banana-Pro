@@ -39,13 +39,9 @@ logger = logging.getLogger(__name__)
 async def handle_crypto_pay_webhook(request):
     raw = await request.read()
     sig = request.headers.get("crypto-pay-api-signature") or request.headers.get("Crypto-Pay-Api-Signature")
-    logger.info(f"🔑 Signature header: {sig}")
-    logger.info(f"🔑 Raw body: {raw[:200]}")
     token = crypto_pay.token or ""
     secret = hashlib.sha256(token.encode()).digest()
     expected = hmac.new(secret, raw, hashlib.sha256).hexdigest()
-    logger.info(f"🔑 Expected: {expected}")
-    logger.info(f"🔑 Got: {sig}")
     if not crypto_pay.verify_webhook_signature(raw, sig):
         return web.Response(status=403, text="invalid signature")
     try:
