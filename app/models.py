@@ -43,6 +43,8 @@ class User(Base):
 
     # Аналитика покупок (LTV)
     total_revenue: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_revenue_usd: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0, server_default="0")
+    total_revenue_ton: Mapped[float] = mapped_column(Numeric(10, 4), default=0.0, server_default="0")
     orders_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     first_purchase_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     had_free_actions_before_purchase: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")

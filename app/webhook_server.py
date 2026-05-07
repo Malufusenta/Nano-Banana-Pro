@@ -97,6 +97,8 @@ async def handle_crypto_pay_webhook(request):
                 invoice_id=invoice_id,
                 parsed=parsed,
                 price_usd=price_usd,
+                paid_asset=inv.get("paid_asset", "USDT"),
+                paid_amount=float(inv.get("paid_amount", 0)),
                 bot=bot_instance,
             )
             if result:
@@ -110,11 +112,14 @@ async def handle_crypto_pay_webhook(request):
                 new_bal = await get_user_balance(session, user_id)
                 u_res = await session.execute(select(User).where(User.telegram_id == user_id))
                 db_user = u_res.scalar_one_or_none()
-                item_name = f"💎 Crypto Pay: +{parsed['bananas']} 🍌"
+                paid_asset = inv.get("paid_asset", "USDT")
+                paid_amount = float(inv.get("paid_amount", 0))
+                asset_emoji = "💎" if paid_asset == "USDT" else "💠"
+                item_name = f"{parsed['bananas']} бананов ({asset_emoji} Crypto Pay {paid_asset})"
                 await log_payment(
                     bot_instance,
                     db_user,
-                    price_usd,
+                    paid_amount,
                     item_name,
                     new_bal,
                     stats=stats,

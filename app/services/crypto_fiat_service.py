@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any
 
 from aiogram import Bot
@@ -55,6 +56,8 @@ async def fulfill_crypto_fiat_invoice(
     invoice_id: int,
     parsed: dict[str, Any],
     price_usd: float,
+    paid_asset: str = "USDT",
+    paid_amount: float = 0.0,
     bot: Bot | None = None,
 ) -> bool:
     """
@@ -75,16 +78,23 @@ async def fulfill_crypto_fiat_invoice(
 
     user_id = parsed["user_id"]
     payment_id = f"crypto_{invoice_id}"
-    await mark_purchase_as_succeeded(session, user_id, price_usd, parsed["bananas"])
+    await mark_purchase_as_succeeded(session, user_id, int(price_usd), parsed["bananas"])
     await update_purchase_analytics(
         session,
         user_id,
-        price_usd,
+        int(price_usd),
         f"{parsed['bananas']} bananas (Crypto USD)",
         payment_id=payment_id,
         payment_method="crypto_pay",
     )
     await add_paid_balance(session, user_id, parsed["bananas"])
+    res = await session.execute(select(User).where(User.telegram_id == user_id))
+    user = res.scalar_one_or_none()
+    if user:
+        if paid_asset == "TON":
+            user.total_revenue_ton += Decimal(str(paid_amount))
+        else:
+            user.total_revenue_usd += Decimal(str(paid_amount))
     await set_last_payment_method(session, user_id, "crypto_pay")
     await session.commit()
 
