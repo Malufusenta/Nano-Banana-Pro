@@ -44,6 +44,8 @@ def translate_callback(code: str) -> str:
         "close_admin": "❌ Выход из админки",
         "open_stars_menu": "⭐️ Меню Stars",
         "open_rub_menu": "₽ Меню Рублей",
+        "open_shop_menu": "🛍 Меню способов оплаты",
+        "buy_bananas_crypto": "💵 Crypto Pay (USD) — выбор пакета",
         "cancel_wizard": "❌ Отмена действия"
     }
     
@@ -57,7 +59,15 @@ def translate_callback(code: str) -> str:
     if code.startswith("buy_stars_"):
         count = code.split('_')[2]
         return f"⭐️ Выбор пакета: {count} бананов (Stars)"
-        
+
+    if code.startswith("buy_rub_"):
+        tariff = code.split("_", 2)[2].upper()
+        return f"💳 Выбор рублевого тарифа: {tariff}"
+
+    if code.startswith("buy_pkg:"):
+        tier = code.split(":", 1)[1]
+        return f"💵 Crypto Pay (USD): пакет {tier}"
+
     if code.startswith("buy_"):
         tariff = code.split('_')[1].upper()
         return f"💳 Выбор тарифа: {tariff}"
@@ -191,18 +201,26 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
     else:
         status_line = f"Покупка №: {count} (Постоянник! 🔥)"
 
+    item_name_lc = (item_name or "").lower()
+    if "stars" in item_name_lc:
+        currency = "⭐️"
+    elif "crypto" in item_name_lc or "usdt" in item_name_lc or "ton" in item_name_lc:
+        currency = "💎"
+    else:
+        currency = "₽"
+
     text = (
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
         "➖➖➖➖➖➖➖\n"
         # 👇 УБРАЛ <code>, так как твой send_log теперь делает это сам!
         f"Клиент: {username} (ID: {user.id})\n" 
-        f"Сумма: <b>{amount} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
+        f"Сумма: <b>{amount} {currency}</b>\n"
         f"Товар: {item_name}\n"
         f"----------------\n"
         f"{status_line}\n"
         # 👇 ТУТ ОСТАВИЛ <code>, потому что это не ID, логгер это не тронет
         f"Источник: <code>{source}</code>\n"
-        f"Всего принес денег: <b>{total} {'⭐️' if 'Stars' in item_name else '₽'}</b>\n"
+        f"Всего принес денег: <b>{total} {currency}</b>\n"
         "#payment"
     )
     

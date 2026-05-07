@@ -278,7 +278,7 @@ async def get_user_model_preference(session: AsyncSession, user_id: int) -> str:
     user = result.scalar_one_or_none()
     
     if not user:
-        return "standard"
+        return "nb2"
     
     # Если пользователь сам выбрал модель — уважаем его выбор
     if user.is_model_manually_selected:
@@ -311,6 +311,32 @@ async def get_user(session, telegram_id: int):
     query = select(User).where(User.telegram_id == telegram_id)
     result = await session.execute(query)
     return result.scalars().first()
+
+
+async def set_user_locale(session: AsyncSession, telegram_id: int, locale: str):
+    user = await get_user(session, telegram_id)
+    if not user:
+        return None
+    if user.locale != locale:
+        user.locale = locale
+        await session.commit()
+    return user
+
+
+async def get_user_locale(session: AsyncSession, telegram_id: int, default: str = "en") -> str:
+    user = await get_user(session, telegram_id)
+    if not user or not getattr(user, "locale", None):
+        return default
+    return user.locale
+
+
+async def set_last_payment_method(session: AsyncSession, telegram_id: int, method: str):
+    user = await get_user(session, telegram_id)
+    if not user:
+        return None
+    user.last_payment_method = method
+    await session.commit()
+    return user
 
 
 async def get_user_financial_stats(session, user_id: int):
