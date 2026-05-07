@@ -211,12 +211,20 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
         else:
             currency = "₽"
 
-    if currency == "TON":
-        total = stats.get("total_spent_ton", amount) if stats else amount
-    elif currency == "USDT":
-        total = stats.get("total_spent_usd", amount) if stats else amount
+    if currency in ("USDT", "TON"):
+        total_usdt = stats.get("total_spent_usd", 0) if stats else 0
+        total_ton = stats.get("total_spent_ton", 0) if stats else 0
+        if total_usdt and total_ton:
+            total_display = f"{total_usdt} USDT | {total_ton} TON"
+        elif total_usdt:
+            total_display = f"{total_usdt} USDT"
+        elif total_ton:
+            total_display = f"{total_ton} TON"
+        else:
+            total_display = f"{amount} {currency}"
     else:
         total = stats.get("total_spent", amount) if stats else amount
+        total_display = f"{total} {currency}"
 
     text = (
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
@@ -229,7 +237,7 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
         f"{status_line}\n"
         # 👇 ТУТ ОСТАВИЛ <code>, потому что это не ID, логгер это не тронет
         f"Источник: <code>{source}</code>\n"
-        f"Всего принес денег: <b>{total} {currency}</b>\n"
+        f"Всего принес денег: <b>{total_display}</b>\n"
         "#payment"
     )
     
