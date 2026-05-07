@@ -39,7 +39,6 @@ def _menu_labels(key: str) -> set[str]:
 def get_main_kb(locale: str = "ru"):
     kb = [
         [KeyboardButton(text=t("menu.create", locale))],
-        [KeyboardButton(text=t("menu.proxy", locale))],
         [KeyboardButton(text=t("menu.buy", locale)), KeyboardButton(text=t("menu.profile", locale))],
         [KeyboardButton(text=t("menu.guide", locale)), KeyboardButton(text=t("menu.support", locale))]
     ]
@@ -441,22 +440,4 @@ async def callback_cancel_scenario(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-@router.message(F.text.in_(_menu_labels("menu.proxy")))
-async def proxy_handler(message: types.Message):
-    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=t("proxy.button", locale),
-            url="tg://proxy?server=147.45.175.171&port=443&secret=ee9fae4791bf577d103c3730790ff0c325676f6f676c652e636f6d"
-        )]
-    ])
-    await message.answer(
-        t("proxy.text", locale),
-        parse_mode="HTML",
-        reply_markup=keyboard,
-        link_preview_options=types.LinkPreviewOptions(is_disabled=True)
-    )
-
-@router.message(Command("proxy"))
-async def proxy_command_handler(message: types.Message):
-    await proxy_handler(message)
+ 
