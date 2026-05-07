@@ -39,15 +39,16 @@ content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
 )
 
-MODEL_DESCRIPTIONS = {
-    "standard": "😢 <b>Модель Standard</b> — <i>Искажает лица, детали и не умеет писать текст без ошибок и иероглифов.</i>",
-    "nb2": "🔥 <b>Модель Nano Banana 2</b> — <i>Идеально понимает текст, стиль и сложные детали.</i>",
-    "pro": "💎 <b>Модель PRO</b> — <i>Переносит лица с фотографической точностью (1-в-1).</i>",
-}
-
-
-def get_model_description(model: str) -> str:
-    return MODEL_DESCRIPTIONS.get(model, "")
+def get_model_description(model: str, locale: str) -> str:
+    key_map = {
+        "standard": "generation.preflight.model_desc_standard",
+        "nb2": "generation.preflight.model_desc_nb2",
+        "pro": "generation.preflight.model_desc_pro",
+    }
+    key = key_map.get(model)
+    if not key:
+        return ""
+    return t(key, locale)
 
 
 def calc_cost(model_type: str, quality: str) -> int:
@@ -394,7 +395,7 @@ def compose_preflight_message_html(
     prompt_line = t("generation.preflight.prompt_line", locale, snippet=snippet)
     cost_line = t("generation.preflight.cost_line", locale, cost=cost, suffix=banana_suffix)
     footer = t("generation.preflight.footer", locale)
-    model_desc = get_model_description(model)
+    model_desc = get_model_description(model, locale)
     header = (
         t("generation.preflight.header_settings", locale)
         if use_settings_header
