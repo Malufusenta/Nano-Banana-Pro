@@ -94,7 +94,7 @@
   "generation.msg.category_replace_step1": "🖼 <b>Modo reemplazo (paso 1/3)</b>\nEnvía la <b>foto base</b>.",
   "generation.msg.category_free_mode": "🎨 <b>Modo libre</b>\n\nEscribe texto o envía fotos.",
   "generation.msg.category_selected": "✅ Modo elegido. Envía foto o texto.",
-  "generation.msg.creating_complex_standard": "⏳ <b>Creando…</b>\n\n⚠️ <b>Estás combinando varias fotos en modo STANDARD.</b>\nLos detalles y el parecido (sobre todo rostros) pueden verse raros.\n💡 <i>Para máxima precisión recomendamos PRO.</i>",
+  "generation.msg.creating_complex_standard": "⏳ <b>Creando…</b>\n\n⚠️ <b>Estás combinando varias fotos en modo {model_name}.</b>\nLos detalles y el parecido (sobre todo rostros) pueden verse raros.\n💡 <i>Para máxima precisión recomendamos PRO.</i>",
   "generation.msg.creating_simple": "⏳ <b>Creando…</b>",
   "generation.msg.result_caption": "🍌 <b>¡Listo!</b>\n🔋 Saldo: <b>{balance}</b> 🍌\n\n<b>P.D. ¿Quieres un rostro idéntico?</b> 👯‍♀️\n👉 <a href=\"https://t.me/nanobanan_promt/12\"><b>El secreto del 100% de parecido aquí</b></a>\n\nGenerado con @nan0banana_bot",
   "generation.msg.gen_error_null": "❌ <b>Error de generación</b>\n\nLa API no pudo crear la imagen.\n💰 Se devolvieron {cost} 🍌 al saldo.",

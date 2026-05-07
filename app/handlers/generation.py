@@ -1945,8 +1945,8 @@ async def process_generation(
     # ✅ Нормализация URL
     final_urls = normalize_image_urls(image_urls)
     
-    # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: Простой vs Сложный
-    is_complex_standard = (not use_pro_model and not use_nb2_model and len(final_urls) >= 2)
+    # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: сложный мульти-фото (Standard + NB2, без PRO)
+    is_complex_standard = (not use_pro_model and len(final_urls) >= 2)
     # 🔥 ДЕТЕКТОР ЗАДАЧ ТИПА "ЗАМЕНА/ВСТАВКА"
     swap_keywords = [
         'поменя', 'замен', 'положи', 'помести', 'вставь', 'перенес', 
@@ -2027,8 +2027,9 @@ async def process_generation(
     # 2. Сообщение о старте (РАЗНОЕ для простого/сложного)
     if is_complex_standard:
         # 📌 СЦЕНАРИЙ Б: Сложный (Standard + много фото) - С ПРЕДУПРЕЖДЕНИЕМ
+        model_name = "Nano Banana 2" if use_nb2_model else "STANDARD"
         wait_msg = await message.answer(
-            t("generation.msg.creating_complex_standard", locale),
+            t("generation.msg.creating_complex_standard", locale, model_name=model_name),
             parse_mode="HTML",
         )
         should_delete_wait_msg = False  # НЕ УДАЛЯЕМ

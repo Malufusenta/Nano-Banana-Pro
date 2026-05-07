@@ -94,7 +94,7 @@
   "generation.msg.category_replace_step1": "🖼 <b>Режим замены (Шаг 1/3)</b>\nПришли <b>фото-основу</b>.",
   "generation.msg.category_free_mode": "🎨 <b>Свободный режим</b>\n\nПиши текст или присылай фото.",
   "generation.msg.category_selected": "✅ Выбран режим. Пришли фото или текст.",
-  "generation.msg.creating_complex_standard": "⏳ <b>Создаю...</b>\n\n⚠️ <b>Вы объединяете несколько фото в модели STANDARD.</b>\nДетали и сходство (особенно лица) могут искажаться.\n💡 <i>Для максимальной точности рекомендуем модель PRO.</i>",
+  "generation.msg.creating_complex_standard": "⏳ <b>Создаю...</b>\n\n⚠️ <b>Вы объединяете несколько фото в модели {model_name}.</b>\nДетали и сходство (особенно лица) могут искажаться.\n💡 <i>Для максимальной точности рекомендуем модель PRO.</i>",
   "generation.msg.creating_simple": "⏳ <b>Создаю...</b>",
   "generation.msg.result_caption": "🍌 <b>Готово!</b>\n🔋 Осталось: <b>{balance}</b> 🍌\n\n<b>P.S. Хочешь, чтобы лицо получалось один в один?</b> 👯‍♀️\n👉 <a href=\"https://t.me/nanobanan_promt/12\"><b>Секрет 100% сходства тут</b></a>\n\nСгенерировано в @nan0banana_bot",
   "generation.msg.gen_error_null": "❌ <b>Ошибка генерации</b>\n\nAPI не смог создать изображение.\n💰 {cost} 🍌 возвращены на баланс.",
