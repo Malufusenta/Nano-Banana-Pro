@@ -317,7 +317,7 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
                     )
                     return
         
-                await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'])
+                await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'], package['gens'])
                 await update_purchase_analytics(
                     session,
                     callback.from_user.id,
@@ -502,7 +502,7 @@ async def process_successful_payment(message: types.Message, bot: Bot):
     # Начисляем бананы
     async with async_session() as session:
         await create_purchase_record(session, user_id, total_amount, bananas_count)
-        await mark_purchase_as_succeeded(session, user_id, total_amount)
+        await mark_purchase_as_succeeded(session, user_id, total_amount, bananas_count)
         await session.commit()  # ← ДОБАВЬ ЭТУ СТРОКУ!
 
         # Обновляем аналитику для Stars

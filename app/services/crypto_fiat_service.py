@@ -75,7 +75,7 @@ async def fulfill_crypto_fiat_invoice(
 
     user_id = parsed["user_id"]
     payment_id = f"crypto_{invoice_id}"
-    await mark_purchase_as_succeeded(session, user_id, price_usd)
+    await mark_purchase_as_succeeded(session, user_id, price_usd, parsed["bananas"])
     await update_purchase_analytics(
         session,
         user_id,

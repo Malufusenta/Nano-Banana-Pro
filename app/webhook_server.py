@@ -179,7 +179,7 @@ async def handle_yookassa(request):
                     
                     # 1. Записываем покупку
                     try:
-                        await mark_purchase_as_succeeded(session, user_id, amount)
+                        await mark_purchase_as_succeeded(session, user_id, amount, gens_to_add)
 
                         income_amount = float(object_.get("income_amount", {}).get("value", 0.0))
                         payment_method = object_.get("payment_method", {}).get("type", None)

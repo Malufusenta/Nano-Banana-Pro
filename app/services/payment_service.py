@@ -66,7 +66,12 @@ async def fulfill_payment(session: AsyncSession, user_id: int, gens_amount: int)
 
 # 👇 ВОТ ЭТА ФУНКЦИЯ ТЕПЕРЬ УМНАЯ 👇
 
-async def mark_purchase_as_succeeded(session: AsyncSession, user_id: int, price: float):
+async def mark_purchase_as_succeeded(
+    session: AsyncSession,
+    user_id: int,
+    price: float,
+    gens_amount: int = 0,
+):
     """
     Фиксирует успешную оплату для вебхука.
     Логика:
@@ -93,7 +98,7 @@ async def mark_purchase_as_succeeded(session: AsyncSession, user_id: int, price:
         purchase = Purchase(
             user_id=user_id,
             price=price,
-            amount=0, 
+            amount=gens_amount,
             status="succeeded",
             created_at=datetime.now(),
             completed_at=datetime.now()
