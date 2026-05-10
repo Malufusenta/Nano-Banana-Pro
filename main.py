@@ -73,10 +73,14 @@ async def send_daily_report(bot):
     """
     from app.config import ADMIN_IDS
     
-    # Вчерашний день
-    yesterday = datetime.now() - timedelta(days=1)
+    # Вчерашний день по Москве
+    yesterday = datetime.now(moscow_tz) - timedelta(days=1)
     date_from = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
     date_to = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Конвертируем в UTC и убираем таймзону (чтобы матчилось с БД)
+    date_from = date_from.astimezone(pytz.utc).replace(tzinfo=None)
+    date_to = date_to.astimezone(pytz.utc).replace(tzinfo=None)
     
     # Собираем статистику
     async with async_session() as session:
