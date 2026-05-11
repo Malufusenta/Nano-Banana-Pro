@@ -2,8 +2,19 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 from typing import Callable, Dict, Any, Awaitable
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def _compile_complaint_trigger_patterns(triggers: list[str]) -> list[re.Pattern[str]]:
+    """Целые слова/фразы, без ложных срабатываний вроде «не я» внутри «не яркие»."""
+    patterns: list[re.Pattern[str]] = []
+    for trigger in triggers:
+        parts = trigger.split()
+        inner = r"\s+".join(re.escape(p) for p in parts)
+        patterns.append(re.compile(rf"\b{inner}\b", re.IGNORECASE))
+    return patterns
 
 class ComplaintFilterMiddleware(BaseMiddleware):
     """
@@ -13,14 +24,18 @@ class ComplaintFilterMiddleware(BaseMiddleware):
     
     # Триггеры жалоб
     COMPLAINT_TRIGGERS = [
-        'не похоже', 'не похож', 'не я', 'чужое лицо', 'не знаю','непохоже',
+        'не похоже', 'не похож', 'не я', 'чужое лицо', 'не знаю', 'непохоже', 'непохожи',
         'нет сходства', 'ужасно', 'кошмар', 'бред', 
         'фигня', 'хуйня',
-        'переделывайте', 'переделывай', 'переделай',
+        'переделывайте', 'переделывай',
         'это вообще не мы', 'это не мы', 'не мы', 'не моё лицо',
         'это не я', 'совсем не я', 'вообще не я',
     ]
-    
+
+    _COMPLAINT_PATTERNS: list[re.Pattern[str]] = _compile_complaint_trigger_patterns(
+        COMPLAINT_TRIGGERS
+    )
+
     # Глаголы генерации (если есть - это промпт, не жалоба)
     GENERATION_VERBS = [
         'нарисуй', 'сделай', 'создай', 'сгенерируй', 
@@ -47,8 +62,8 @@ class ComplaintFilterMiddleware(BaseMiddleware):
         
         # ✅ Проверка условий (новая логика)
         
-        # Проверяем наличие триггера жалобы
-        has_complaint = any(trigger in text_lower for trigger in self.COMPLAINT_TRIGGERS)
+        # Проверяем наличие триггера жалобы (по границам слов, не подстрока)
+        has_complaint = any(p.search(text_lower) for p in self._COMPLAINT_PATTERNS)
         # 1. Больше 10 слов = это промпт (независимо от триггеров)
         if word_count > 10:
             return await handler(event, data)
