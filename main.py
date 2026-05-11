@@ -5,6 +5,10 @@ from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import pytz
+
+# Создаем константу московского времени для всего файла
+moscow_tz = pytz.timezone('Europe/Moscow')
 
 # Настройка логирования ПЕРВЫМ ДЕЛОМ
 file_handler = TimedRotatingFileHandler(
@@ -138,13 +142,13 @@ async def main():
 
     logger.info("✅ Бот запущен!")
 
-    # Создаём планировщик для автоматических отчётов
-    scheduler = AsyncIOScheduler()
+    # Создаём планировщик для автоматических отчётов, ЖЕСТКО ЗАДАЕМ МОСКВУ
+    scheduler = AsyncIOScheduler(timezone=moscow_tz)
     
     # Добавляем задачу: каждый день в 04:30
     scheduler.add_job(
         send_daily_report,
-        CronTrigger(hour=4, minute=30),
+        CronTrigger(hour=4, minute=30, timezone=moscow_tz),
         args=[bot],
         id='daily_report',
         replace_existing=True
