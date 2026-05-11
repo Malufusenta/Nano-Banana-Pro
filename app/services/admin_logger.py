@@ -424,7 +424,8 @@ async def log_content_filter(
     text: str,
     trigger_type: str,
     matched_word: str,
-    was_blocked: bool
+    was_blocked: bool,
+    channel_id: int | None = None,
 ):
     """
     Логирует срабатывание фильтра контента
@@ -439,7 +440,8 @@ async def log_content_filter(
         was_blocked: Был ли заблокирован запрос (или только залогирован)
     """
     
-    if not config.FILTER_LOG_CHANNEL_ID:
+    target_chat_id = channel_id or config.FILTER_LOG_CHANNEL_ID
+    if not target_chat_id:
         return
     
     # Определяем эмодзи и статус
@@ -451,7 +453,8 @@ async def log_content_filter(
         "question_mark": "Знак вопроса (?)",
         "stop_word": "Стоп-слово",
         "nsfw_word": "NSFW контент",
-        "whitelist": "Белый список (разрешено)"
+        "whitelist": "Белый список (разрешено)",
+        "korean_trend_block": "KBO / корейский тренд (пейволл)",
     }
     
     trigger_name = trigger_names.get(trigger_type, trigger_type)
@@ -470,7 +473,7 @@ async def log_content_filter(
     
     try:
         await bot.send_message(
-            chat_id=config.FILTER_LOG_CHANNEL_ID,
+            chat_id=target_chat_id,
             text=message_text,
             parse_mode="HTML"
         )

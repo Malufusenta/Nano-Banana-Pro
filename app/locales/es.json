@@ -88,6 +88,7 @@
   "generation.msg.photo_accepted_face_rules": "📸 <b>¡Foto recibida!</b>\nAhora escribe tu petición con <b>reglas para conservar el rostro</b>.",
   "generation.msg.need_photo_first": "❌ Primero envía una foto.",
   "generation.msg.photos_missing_error": "❌ Error: no se encontraron fotos.",
+  "generation.korean_trend_paywall": "Este prompt solo está disponible de pago. Compra un paquete de plátanos para generar la imagen.",
   "generation.msg.reroll_stale": "⚠️ Los datos de la generación están desactualizados.",
   "generation.msg.reroll_generating": "🔄 <b>¡Otra vez!</b>\nGenerando…",
   "generation.msg.download_fallback_link": "💎 No se pudo descargar el archivo directamente. Enlace al original:\n{url}",

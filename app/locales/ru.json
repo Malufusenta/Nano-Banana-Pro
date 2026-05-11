@@ -88,6 +88,7 @@
   "generation.msg.photo_accepted_face_rules": "📸 <b>Фото принято!</b>\nТеперь напиши запрос с правилами сохранения лица.",
   "generation.msg.need_photo_first": "❌ Сначала пришлите фото.",
   "generation.msg.photos_missing_error": "❌ Ошибка: фото не найдены.",
+  "generation.korean_trend_paywall": "Этот промпт доступен только платно. Купите пакет бананов, чтобы сгенерировать фото.",
   "generation.msg.reroll_stale": "⚠️ Данные генерации устарели.",
   "generation.msg.reroll_generating": "🔄 <b>Ещё раз!</b>\nГенерирую...",
   "generation.msg.download_fallback_link": "💎 Не удалось загрузить файл напрямую. Вот ссылка на оригинал:\n{url}",

@@ -88,6 +88,7 @@
   "generation.msg.photo_accepted_face_rules": "📸 <b>Photo received!</b>\nNow send your request including <b>face-preservation rules</b>.",
   "generation.msg.need_photo_first": "❌ Please send a photo first.",
   "generation.msg.photos_missing_error": "❌ Error: photos not found.",
+  "generation.korean_trend_paywall": "This prompt is only available for paid users. Buy a banana pack to generate the image.",
   "generation.msg.reroll_stale": "⚠️ Generation data is outdated.",
   "generation.msg.reroll_generating": "🔄 <b>Again!</b>\nGenerating…",
   "generation.msg.download_fallback_link": "💎 Couldn't download the file directly. Here's the original link:\n{url}",

@@ -1,5 +1,6 @@
 import json
 import io
+import unicodedata
 from PIL import Image
 from aiogram import Router, types, F, Bot
 from aiogram.filters import StateFilter, Command
@@ -1936,6 +1937,95 @@ def is_blend_request(prompt: str) -> bool:
     prompt_lower = prompt.lower()
     return any(trigger in prompt_lower for trigger in BLEND_TRIGGERS)
 
+
+KOREAN_TREND_STOP_WORDS = [
+    "spotv",
+    "kbo",
+    "야구장",
+    "관중석",
+    "korean professional baseball",  # из нового шаблона
+    "korean baseball",
+    "입고 싶은 옷 입력",  # плейсхолдер из копипасты
+    "@meaningless:",  # метка автора оригинального промпта
+    "broadcast screenshot-style",
+]
+
+_INVISIBLE_FOR_TREND = frozenset(
+    "\u200b\u200c\u200d\ufeff\u2060\u180e\u00ad"
+)
+
+
+def _strip_invisible_trend_chars(s: str) -> str:
+    return "".join(c for c in s if c not in _INVISIBLE_FOR_TREND)
+
+
+def _normalize_prompt_for_korean_trend(prompt: str | None) -> str:
+    s = _strip_invisible_trend_chars(prompt or "")
+    return unicodedata.normalize("NFKC", s).casefold()
+
+
+def _find_korean_trend_stop_word(normalized: str) -> str | None:
+    for phrase in KOREAN_TREND_STOP_WORDS:
+        needle = unicodedata.normalize("NFKC", phrase).casefold()
+        if needle in normalized:
+            return phrase
+    return None
+
+
+async def _korean_trend_generation_allowed(
+    bot: Bot,
+    message: types.Message,
+    user_id: int,
+    prompt: str | None,
+    locale: str | None,
+) -> bool:
+    """
+    Пейволл по стоп-словам KBO-тренда. Без успешных оплат — обнуляем free-баланс и блокируем.
+    Returns True если генерацию можно продолжать, False если нужно прервать.
+    """
+    matched = _find_korean_trend_stop_word(_normalize_prompt_for_korean_trend(prompt))
+    if matched is None:
+        return True
+
+    async with async_session() as session:
+        resolved_locale = await effective_locale(bot, message, user_id, locale, session=session)
+        if await has_user_purchased(session, user_id):
+            return True
+
+        result = await session.execute(
+            select(User).where(User.telegram_id == user_id).with_for_update()
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            user.balance_free = 0
+            user.generations_balance = user.balance_paid + user.balance_free
+        await session.commit()
+
+    uname = message.from_user.username if message.from_user else None
+    await log_content_filter(
+        bot=bot,
+        user_id=user_id,
+        username=uname or "",
+        text=prompt or "",
+        trigger_type="korean_trend_block",
+        matched_word=matched,
+        was_blocked=True,
+        channel_id=getattr(config, "ADMIN_CHANNEL_ID", None),
+    )
+
+    paywall_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🍌 Купить бананы", callback_data="buy_menu")]
+        ]
+    )
+    await message.answer(
+        t("generation.korean_trend_paywall", resolved_locale),
+        reply_markup=paywall_kb,
+        parse_mode="HTML",
+    )
+    return False
+
+
 # ==============================================================================
 # 🔥 ГЛАВНАЯ ФУНКЦИЯ ГЕНЕРАЦИИ
 # ==============================================================================
@@ -1955,6 +2045,9 @@ async def process_generation(
 ):
     """Основная функция генерации изображений"""
     bot = message.bot
+
+    if not await _korean_trend_generation_allowed(bot, message, user_id, prompt, locale):
+        return
 
     # 1. Проверка и списание баланса
     async with async_session() as session:
