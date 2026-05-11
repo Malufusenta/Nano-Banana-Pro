@@ -137,7 +137,8 @@ async def main():
     init_metrica_service(
         counter_id=config.YANDEX_METRICA_COUNTER_ID,
         token=config.YANDEX_METRICA_TOKEN,
-        enabled=config.YANDEX_METRICA_ENABLED  # False для теста
+        enabled=config.YANDEX_METRICA_ENABLED,  # False для теста
+        bot_start_target=config.YANDEX_METRICA_BOT_START_TARGET,
     )
 
     logger.info("✅ Бот запущен!")

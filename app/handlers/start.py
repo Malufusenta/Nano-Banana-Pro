@@ -83,7 +83,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             source_part = parts[0]
             cid_part = parts[1] if len(parts) > 1 else None
 
-            if cid_part and re.match(r'^\d{15,20}$', cid_part):
+            if cid_part and re.match(r'^[\d\.]{15,25}$', cid_part):
                 yandex_client_id = cid_part
 
             # Нормализуем ключ: "ad_yandex_rsya_3" → "yandex_rsya_3"
@@ -100,8 +100,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             scenario_key = parts[0]
             client_id_part = parts[1] if len(parts) > 1 else None
 
-            # Валидация ClientID (15-20 цифр)
-            if client_id_part and re.match(r'^\d{15,20}$', client_id_part):
+            # Валидация ClientID (цифры и точка, 15–25 символов — в т.ч. форматы с точкой)
+            if client_id_part and re.match(r'^[\d\.]{15,25}$', client_id_part):
                 yandex_client_id = client_id_part
                 ad_scenario_key = scenario_key
                 source = scenario_key
@@ -110,7 +110,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
         # ===== ФОРМАТ 3: cid_123456 =====
         elif args.startswith("cid_"):
             potential_cid = args.replace("cid_", "")
-            if re.match(r'^\d{15,20}$', potential_cid):
+            if re.match(r'^[\d\.]{15,25}$', potential_cid):
                 yandex_client_id = potential_cid
                 args = None
 
@@ -343,6 +343,16 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
             # Обновляем ClientID если пришел новый
             if user and yandex_client_id and user.yandex_client_id != yandex_client_id:
                 user.yandex_client_id = yandex_client_id
+
+            if yandex_client_id:
+                try:
+                    from app.services.yandex_metrica import metrica_service
+                    if metrica_service:
+                        await metrica_service.send_bot_start_event(
+                            client_id=yandex_client_id
+                        )
+                except Exception as e:
+                    print(f"⚠️ Ошибка отправки BOT_START для старого юзера: {e}")
             
             # Обновляем сценарий
             if ad_scenario:
