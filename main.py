@@ -149,7 +149,7 @@ async def main():
     # Добавляем задачу: каждый день в 04:30
     scheduler.add_job(
         send_daily_report,
-        CronTrigger(hour=4, minute=30, timezone=moscow_tz),
+        CronTrigger(hour=9, minute=0, timezone=moscow_tz),
         args=[bot],
         id='daily_report',
         replace_existing=True
