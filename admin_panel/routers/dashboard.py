@@ -156,7 +156,6 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     date_from, date_to = get_period_dates(period)
-    print(f"DEBUG date_from={date_from} date_to={date_to} period={period}", flush=True)
     usd_rate = await get_usd_rate()
 
     async with async_session() as session:
