@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import ssl
+from datetime import datetime
 
 from aiohttp import web
 from aiogram import Bot
@@ -146,8 +147,14 @@ async def handle_yookassa(request):
         if event == "payment.succeeded":
             payment_id = object_.get("id")
             metadata = object_.get("metadata", {})
-        
             
+            # Извлекаем реальное время завершения платежа из ЮКассы
+            captured_at_str = object_.get("captured_at")
+            if captured_at_str:
+                completed_at = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            else:
+                completed_at = datetime.utcnow()
+        
             # Ищем ID юзера
             user_id = int(metadata.get("user_id", 0)) if metadata.get("user_id") else 0
             amount = float(object_.get("amount", {}).get("value", 0.0))
@@ -185,7 +192,7 @@ async def handle_yookassa(request):
                     
                     # 1. Записываем покупку
                     try:
-                        await mark_purchase_as_succeeded(session, user_id, amount, gens_to_add)
+                        await mark_purchase_as_succeeded(session, user_id, amount, gens_to_add, completed_at)
 
                         income_amount = float(object_.get("income_amount", {}).get("value", 0.0))
                         payment_method = object_.get("payment_method", {}).get("type", None)

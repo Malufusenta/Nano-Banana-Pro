@@ -71,6 +71,7 @@ async def mark_purchase_as_succeeded(
     user_id: int,
     price: float,
     gens_amount: int = 0,
+    completed_at: datetime = None,
 ):
     """
     Фиксирует успешную оплату для вебхука.
@@ -89,10 +90,13 @@ async def mark_purchase_as_succeeded(
     result = await session.execute(stmt)
     purchase = result.scalars().first()
     
+    # Используем время из параметра или текущее UTC
+    final_completed_at = completed_at if completed_at else datetime.utcnow()
+    
     # 2. Если нашли — обновляем статус
     if purchase:
         purchase.status = "succeeded"
-        purchase.completed_at = datetime.now()
+        purchase.completed_at = final_completed_at
     else:
         # 3. Если не нашли (быстрая оплата) — СОЗДАЕМ новую
         purchase = Purchase(
@@ -101,7 +105,7 @@ async def mark_purchase_as_succeeded(
             amount=gens_amount,
             status="succeeded",
             created_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=final_completed_at
         )
         session.add(purchase)
 
@@ -159,7 +163,7 @@ async def update_purchase_analytics(
         )
         first_source = first_purchase_result.scalar_one_or_none()
         purchase.user_source = first_source or user.source or "organic"
-        purchase.completed_at = datetime.now()
+        # Не трогаем completed_at - оно уже установлено из ЮКассы в mark_purchase_as_succeeded
         if payment_id:
             purchase.payment_id = payment_id
 
