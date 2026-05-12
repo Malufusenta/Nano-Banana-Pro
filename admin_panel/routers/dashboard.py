@@ -4,6 +4,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+import pytz
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.responses import JSONResponse as _BaseJSONResponse
@@ -18,6 +19,8 @@ from app.services.currency import get_usd_rate
 from app.services.yandex_direct import get_direct_spending
 from admin_panel.routers.auth import get_current_user
 from app import config
+
+moscow_tz = pytz.timezone('Europe/Moscow')
 
 
 class JSONResponse(_BaseJSONResponse):
@@ -84,7 +87,10 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
     if date_from and date_to:
         from datetime import datetime as dt
         df = dt.strptime(date_from, "%Y-%m-%d")
+        df = moscow_tz.localize(df).astimezone(pytz.utc).replace(tzinfo=None)
+        
         dt_ = dt.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        dt_ = moscow_tz.localize(dt_).astimezone(pytz.utc).replace(tzinfo=None)
         user = get_current_user(request)
         if not user:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
