@@ -535,7 +535,7 @@ def get_categories_kb():
 # =====================================================================
 # 🛫 ПРЕДПОЛЕТНЫЙ ЧЕК
 # =====================================================================
-async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None, is_edit_mode=False):
+async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None, is_edit_mode=False, initial_ratio=None):
     user_id = message.from_user.id
 
     # 🔥 ПРОВЕРЯЕМ РЕКЛАМНЫЙ СЦЕНАРИЙ
@@ -580,6 +580,8 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     
     async with async_session() as session:
         pref_model = "pro" if force_pro else await get_user_model_preference(session, user_id)
+        user_obj = await get_user(session, user_id)
+        saved_ratio = initial_ratio or getattr(user_obj, "last_image_ratio", "1:1") or "1:1"
     
     normalized_urls = normalize_image_urls(image_urls)
     
@@ -587,7 +589,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         pf_prompt=prompt, 
         pf_image_urls=normalized_urls,
         pf_model=pref_model, 
-        pf_ratio="1:1", 
+        pf_ratio=saved_ratio, 
         pf_quality="hd" if pref_model == "nb2" else "2k",
         pf_is_edit_mode=is_edit_mode,
     )
@@ -633,7 +635,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
 
     await message.answer(
         text,
-        reply_markup=get_preflight_kb(pref_model, "1:1", "hd", locale),
+        reply_markup=get_preflight_kb(pref_model, saved_ratio, "hd", locale),
         parse_mode="HTML",
     )
 
@@ -829,6 +831,14 @@ async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
 async def cb_pf_set_ratio(callback: types.CallbackQuery, state: FSMContext):
     new_ratio = callback.data.split("_")[2]
     await state.update_data(pf_ratio=new_ratio)
+    
+    # Сохраняем в БД
+    async with async_session() as session:
+        user_obj = await get_user(session, callback.from_user.id)
+        if user_obj:
+            user_obj.last_image_ratio = new_ratio
+            await session.commit()
+    
     await cb_pf_ratio_back(callback, state)
 
 # 👇 ЗАМЕНИ ФУНКЦИЮ cb_pf_start НА ЭТУ 👇
@@ -1819,18 +1829,23 @@ async def cb_edit_result(callback: types.CallbackQuery, state: FSMContext, bot: 
             params = json.loads(history_item.content)
             use_pro = params.get("pro", False)
             use_nb2 = params.get("nb2", False)
+            ratio = params.get("ratio", "1:1")
         except: 
             use_pro = False
             use_nb2 = False
+            ratio = "1:1"
         
         if use_pro: cost = config.COST_PRO_1K
         elif use_nb2: cost = config.COST_NB2_1K
         else: cost = config.COST_STANDARD
         
+        original_ratio = ratio
+        
         await state.update_data(
             editing_file_id=history_item.file_id,
             edit_use_pro=use_pro,
-            edit_cost=cost
+            edit_cost=cost,
+            editing_original_ratio=original_ratio,  # ← сохраняем ratio оригинала
         )
         await state.set_state(GenState.waiting_for_edit_instruction)
         
@@ -1863,7 +1878,9 @@ async def handle_edit_instruction(message: types.Message, state: FSMContext, bot
         await state.clear()
         return
     
-    await start_preflight_check(message, state, instruction, [img_url], is_edit_mode=True)
+    data = await state.get_data()
+    original_ratio = data.get("editing_original_ratio", None)
+    await start_preflight_check(message, state, instruction, [img_url], is_edit_mode=True, initial_ratio=original_ratio)
 
 # =====================================================================
 # КОМАНДЫ

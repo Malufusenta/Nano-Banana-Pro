@@ -28,6 +28,7 @@ class User(Base):
     is_sub_bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False)
     preferred_model: Mapped[str] = mapped_column(String, default="nb2") # standard / pro / nb2
     is_model_manually_selected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    last_image_ratio: Mapped[str] = mapped_column(String(10), default="1:1", server_default="1:1")
     generations_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
