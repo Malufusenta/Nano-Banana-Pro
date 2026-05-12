@@ -162,6 +162,7 @@ async def enter_broadcast_generation_preflight(
         pf_ratio=ratio,
         pf_model=model,
         is_broadcast_gen=True,
+        no_standard_model=True,
     )
     await state.set_state(GenState.preflight_check)
     locale = _preflight_locale(message.from_user)
@@ -540,6 +541,11 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
 
     # 🔥 ПРОВЕРЯЕМ РЕКЛАМНЫЙ СЦЕНАРИЙ
     data = await state.get_data()
+    
+    # Если это обычная генерация (не рассылка, не ссылка) — сбрасываем флаг
+    if not data.get("from_broadcast") and not data.get("from_ad_scenario"):
+        await state.update_data(no_standard_model=False)
+    
     from_ad_scenario = data.get("from_ad_scenario", False)
     
     # Если пришли из рекламного сценария - используем его настройки
@@ -644,13 +650,15 @@ async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     current_model = data.get("pf_model", "standard")
     
-    # Переключение по кругу: standard → nb2 → pro → standard
-    if current_model == "standard":
-        new_model = "nb2"
-    elif current_model == "nb2":
-        new_model = "pro"
+    if data.get("no_standard_model"):
+        new_model = "pro" if current_model == "nb2" else "nb2"
     else:
-        new_model = "standard"
+        if current_model == "standard":
+            new_model = "nb2"
+        elif current_model == "nb2":
+            new_model = "pro"
+        else:
+            new_model = "standard"
     
     await state.update_data(pf_model=new_model)
     
@@ -2554,6 +2562,7 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
             broadcast_model=broadcast.model_type or "standard",
             from_broadcast=True,
             pending_param_photo_file_id=None,
+            no_standard_model=True,  # ← добавить
         )
         await state.set_state(GenState.waiting_for_prompt_text)
         await send_param_prompt_text_intro(
@@ -2569,7 +2578,8 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
         broadcast_prompt=broadcast.hidden_prompt,
         broadcast_ratio=broadcast.aspect_ratio or "1:1",
         broadcast_model=broadcast.model_type or "standard",
-        from_broadcast=True
+        from_broadcast=True,
+        no_standard_model=True,  # ← добавить
     )
     await state.set_state(GenState.free_mode)
 

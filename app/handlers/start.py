@@ -235,7 +235,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     ad_scenario_prompt=ad_scenario.prompt,
                     ad_scenario_ratio=ad_scenario.aspect_ratio,
                     ad_scenario_model=ad_scenario.model_type,
-                    from_ad_scenario=True
+                    from_ad_scenario=True,
+                    no_standard_model=True,
                 )
                 
                 from app.handlers.generation import GenState
@@ -269,6 +270,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                         from_broadcast=True,
                         current_post_id=post_config.config_id,
                         pending_param_photo_file_id=None,
+                        no_standard_model=True,
                     )
                     await state.set_state(GenState.waiting_for_prompt_text)
                     word = get_banana_word_by_locale(welcome_bonus, locale)
@@ -290,7 +292,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     broadcast_ratio=post_config.aspect_ratio,
                     broadcast_model=post_config.model_type,
                     from_broadcast=True,
-                    current_post_id=post_config.config_id
+                    current_post_id=post_config.config_id,
+                    no_standard_model=True,
                 )
                 await state.set_state(GenState.free_mode)
 
@@ -367,7 +370,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     ad_scenario_prompt=ad_scenario.prompt,
                     ad_scenario_ratio=ad_scenario.aspect_ratio,
                     ad_scenario_model=ad_scenario.model_type,
-                    from_ad_scenario=True
+                    from_ad_scenario=True,
+                    no_standard_model=True,
                 )
                 
                 from app.handlers.generation import GenState
@@ -394,6 +398,7 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                         from_broadcast=True,
                         current_post_id=post_config.config_id,
                         pending_param_photo_file_id=None,
+                        no_standard_model=True,
                     )
                     await state.set_state(GenState.waiting_for_prompt_text)
                     await send_param_prompt_text_intro(
@@ -406,7 +411,8 @@ async def cmd_start(message: types.Message, command: CommandObject, state: FSMCo
                     broadcast_ratio=post_config.aspect_ratio,
                     broadcast_model=post_config.model_type,
                     from_broadcast=True,
-                    current_post_id=post_config.config_id
+                    current_post_id=post_config.config_id,
+                    no_standard_model=True,
                 )
                 await state.set_state(GenState.free_mode)
 
