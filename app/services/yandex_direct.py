@@ -63,7 +63,7 @@ async def get_direct_spending(token: str, date_from: date, date_to: date) -> dic
         # Парсим TSV
         campaigns = {}
         total = 0.0
-        VAT = 1.22  # +20% НДС
+        VAT = 1.20  # +20% НДС
 
         for line in text.strip().split("\n"):
             if not line.strip():
