@@ -20,8 +20,8 @@ def is_mobile(request: Request) -> bool:
     return any(x in ua for x in ["mobile", "android", "iphone", "ipad"])
 
 
-PACKAGES_PATH = "/home/Dianka/Nano-Banana-Pro/app/packages.py"
-CONFIG_PATH = "/home/Dianka/Nano-Banana-Pro/app/config.py"
+PACKAGES_PATH = "/home/dianka/Nano-Banana-Pro/app/packages.py"
+CONFIG_PATH = "/home/dianka/Nano-Banana-Pro/app/config.py"
 BACKUP_DIR = "/var/backups/postgres"
 
 
@@ -168,7 +168,7 @@ async def get_kie_balance_endpoint(user=Depends(require_auth)):
     return JSONResponse(balance)
 
 
-LOG_DIR = "/home/Dianka/Nano-Banana-Pro"
+LOG_DIR = "/home/dianka/Nano-Banana-Pro"
 
 @router.get("/api/settings/logs/files")
 async def list_log_files(user=Depends(require_auth)):
