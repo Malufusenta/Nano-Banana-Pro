@@ -39,3 +39,13 @@ async def show_help(message: types.Message):
         t("menu.help_text", locale, support=SUPPORT_USERNAME),
         parse_mode="HTML"
     )
+
+# 4. Устаревшая кнопка "🚀 Ускорить Телеграм бесплатно"
+@router.message(F.text.in_({"🚀 Ускорить Телеграм бесплатно", "🚀 Speed up Telegram for free"}))
+async def handle_deprecated_proxy_button(message: types.Message):
+    from app.handlers.start import get_main_kb
+    locale = resolve_locale(message.from_user.language_code if message.from_user else None)
+    await message.answer(
+        "⚙️ Эта функция больше не поддерживается. Выберите нужное действие ниже 👇",
+        reply_markup=get_main_kb(locale)
+    )

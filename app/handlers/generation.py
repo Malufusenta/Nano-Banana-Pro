@@ -1441,7 +1441,12 @@ async def handle_waiting_for_prompt_photo_text(message: types.Message, state: FS
     )
 
 
-@router.message(F.chat.type == "private", F.text, StateFilter(GenState.free_mode, None))
+@router.message(
+    F.chat.type == "private",
+    F.text,
+    ~F.text.in_({"🚀 Ускорить Телеграм бесплатно", "🚀 Speed up Telegram for free"}),
+    StateFilter(GenState.free_mode, None)
+)
 async def handle_free_text(message: types.Message, state: FSMContext):
     """Обработка текста без фото"""
     if message.text in IGNORED_TEXTS: 
