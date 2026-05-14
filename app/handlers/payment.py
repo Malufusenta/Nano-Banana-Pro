@@ -8,15 +8,16 @@ from sqlalchemy import func, select
 
 from app import config
 from app.database import async_session
-from app.models import Purchase, User
+from app.models import PaymentAttempt, Purchase, User
 from app.packages import PACKAGES, STARS_PACKAGES
 from app.services.admin_logger import log_payment
 from app.services.i18n import resolve_locale, t
 from app.services.payment_api import create_yoo_payment, get_yoo_payment_details
 from app.services.payment_service import (
-    bind_yookassa_payment,
     create_purchase_record,
+    create_payment_attempt_record,
     finalize_yookassa_purchase,
+    get_latest_purchase_attempt,
     mark_purchase_as_succeeded,
     update_purchase_analytics,
 )
@@ -275,34 +276,46 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
         await callback.answer(t("shop.tariff_not_found", locale))
         return
 
-    async def build_payment_url(payment_method: str) -> str | None:
-        try:
-            async with async_session() as session:
-                purchase = await create_purchase_record(session, callback.from_user.id, package["price"], package["gens"])
-                await session.commit()
+    sbp_url = None
+    card_url = None
 
-            payment = create_yoo_payment(
-                package["price"],
-                f"Покупка {package['gens']} бананов",
+    try:
+        async with async_session() as session:
+            purchase = await create_purchase_record(
+                session,
                 callback.from_user.id,
-                purchase.id,
-                payment_method=payment_method,
+                package["price"],
+                package["gens"],
             )
 
-            async with async_session() as session:
-                bind_status = await bind_yookassa_payment(session, purchase.id, payment.id)
-                if bind_status not in {"bound", "already_bound"}:
-                    await session.rollback()
-                    raise ValueError(f"Unexpected bind status: {bind_status}")
-                await session.commit()
+            for payment_method in ("sbp", "bank_card"):
+                try:
+                    payment = create_yoo_payment(
+                        package["price"],
+                        f"Покупка {package['gens']} бананов",
+                        callback.from_user.id,
+                        purchase.id,
+                        payment_method=payment_method,
+                    )
+                    await create_payment_attempt_record(
+                        session,
+                        purchase.id,
+                        payment.id,
+                        payment_method,
+                    )
+                    confirmation_url = payment.confirmation.confirmation_url
+                    if payment_method == "sbp":
+                        sbp_url = confirmation_url
+                    else:
+                        card_url = confirmation_url
+                except Exception as e:
+                    print(f"⚠️ Ошибка создания YooKassa платежа ({payment_method}): {e}")
 
-            return payment.confirmation.confirmation_url
-        except Exception as e:
-            print(f"⚠️ Ошибка создания YooKassa платежа ({payment_method}): {e}")
-            return None
-
-    sbp_url = await build_payment_url("sbp")
-    card_url = await build_payment_url("bank_card")
+            await session.commit()
+    except Exception as e:
+        print(f"⚠️ Ошибка подготовки Purchase/PaymentAttempt: {e}")
+        await callback.answer(t("shop.payment_error", locale), show_alert=True)
+        return
 
     if not sbp_url and not card_url:
         await callback.answer(t("shop.payment_error", locale), show_alert=True)
@@ -388,6 +401,11 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
         tariff_name = purchase.tariff_name or f"{purchase.amount} bananas"
         payment_id = purchase.payment_id
 
+        if not payment_id:
+            async with async_session() as session:
+                latest_attempt = await get_latest_purchase_attempt(session, purchase_id)
+            payment_id = latest_attempt.payment_id if latest_attempt else None
+
         if purchase.status == "succeeded":
             await callback.answer("✅")
             await callback.message.edit_text(
@@ -434,9 +452,15 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
 
             async with async_session() as session:
                 if purchase_id is None:
-                    purchase = await session.scalar(
-                        select(Purchase).where(Purchase.payment_id == payment_id).limit(1)
+                    attempt = await session.scalar(
+                        select(PaymentAttempt).where(PaymentAttempt.payment_id == payment_id).limit(1)
                     )
+                    if attempt:
+                        purchase = await session.scalar(
+                            select(Purchase).where(Purchase.id == attempt.purchase_id).limit(1)
+                        )
+                    else:
+                        purchase = None
                     if not purchase:
                         purchase = await session.scalar(
                             select(Purchase)
@@ -449,17 +473,12 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
                             .limit(1)
                         )
                     if not purchase:
-                        purchase = await create_purchase_record(
-                            session,
-                            callback.from_user.id,
-                            price_rub,
-                            bananas_count,
-                        )
-                    purchase_id = purchase.id
+                        purchase_id = None
+                    else:
+                        purchase_id = purchase.id
 
                 result = await finalize_yookassa_purchase(
                     session,
-                    purchase_id=purchase_id,
                     payment_id=payment_id,
                     amount=payment_details["amount"],
                     payment_method=payment_details["payment_method"],
@@ -468,7 +487,7 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
                     tariff_name=tariff_name,
                 )
 
-                if result.status == "applied":
+                if result.status in {"applied", "duplicate_ignored"}:
                     await session.commit()
                 else:
                     await session.rollback()
@@ -484,7 +503,7 @@ async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
                     is_first_purchase=result.is_first_purchase,
                 )
 
-            if result.status in {"applied", "already_processed"}:
+            if result.status in {"applied", "already_processed", "duplicate_ignored"}:
                 success_amount = result.amount or bananas_count
                 await callback.answer("✅")
                 await callback.message.edit_text(

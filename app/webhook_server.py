@@ -20,7 +20,7 @@ from app.services.admin_logger import log_payment
 from app.services.crypto_fiat_service import fulfill_crypto_fiat_invoice, parse_fiat_invoice_payload
 from app.services.crypto_pay import crypto_pay
 from app.services.i18n import t
-from app.services.payment_service import create_purchase_record, finalize_yookassa_purchase
+from app.services.payment_service import finalize_yookassa_purchase
 from app.services.user_service import (
     get_user_balance,
     get_user_financial_stats,
@@ -54,37 +54,6 @@ def _resolve_tariff_by_amount(amount: Decimal):
         if package_price == amount:
             return pkg["gens"], f"{pkg['gens']} {pkg['suffix']}", int(pkg["price"])
     return None
-
-
-async def _resolve_legacy_purchase_id(
-    session,
-    *,
-    payment_id: str,
-    user_id: int,
-    price_rub: int,
-    gens_to_add: int,
-):
-    existing_purchase_id = await session.scalar(
-        select(Purchase.id).where(Purchase.payment_id == payment_id).limit(1)
-    )
-    if existing_purchase_id:
-        return existing_purchase_id
-
-    legacy_purchase = await session.scalar(
-        select(Purchase)
-        .where(
-            Purchase.user_id == user_id,
-            Purchase.price == price_rub,
-            Purchase.status == "pending",
-        )
-        .order_by(Purchase.created_at.desc())
-        .limit(1)
-    )
-    if legacy_purchase:
-        return legacy_purchase.id
-
-    purchase = await create_purchase_record(session, user_id, price_rub, gens_to_add)
-    return purchase.id
 
 
 async def _run_yookassa_post_commit_effects(
@@ -278,12 +247,6 @@ async def handle_yookassa(request):
             raw_user_id = metadata.get("user_id")
             user_id = int(raw_user_id) if raw_user_id else 0
 
-            raw_purchase_id = metadata.get("purchase_id")
-            try:
-                purchase_id = int(raw_purchase_id) if raw_purchase_id else None
-            except (TypeError, ValueError):
-                purchase_id = None
-
             amount = _normalize_rub_amount(object_.get("amount", {}).get("value", 0))
             print(f"🔔 WEBHOOK: Пришла оплата {amount}р от {user_id}")
 
@@ -292,28 +255,13 @@ async def handle_yookassa(request):
                 print(f"⚠️ WEBHOOK: Неизвестная сумма оплаты: {amount}₽ от юзера {user_id}")
                 return web.Response(status=200)
 
-            gens_to_add, tariff_name, price_rub = tariff_data
+            gens_to_add, tariff_name, _price_rub = tariff_data
             income_amount = object_.get("income_amount", {}).get("value")
             payment_method = object_.get("payment_method", {}).get("type")
 
             async with async_session() as session:
-                if purchase_id is None:
-                    if not user_id:
-                        print(f"⚠️ WEBHOOK: legacy payload без purchase_id и user_id для payment_id={payment_id}")
-                        return web.Response(status=200)
-
-                    print(f"⚠️ WEBHOOK: legacy fallback для payment_id={payment_id}")
-                    purchase_id = await _resolve_legacy_purchase_id(
-                        session,
-                        payment_id=payment_id,
-                        user_id=user_id,
-                        price_rub=price_rub,
-                        gens_to_add=gens_to_add,
-                    )
-
                 result = await finalize_yookassa_purchase(
                     session,
-                    purchase_id=purchase_id,
                     payment_id=payment_id,
                     amount=amount,
                     payment_method=payment_method,
@@ -322,7 +270,7 @@ async def handle_yookassa(request):
                     tariff_name=tariff_name,
                 )
 
-                if result.status == "applied":
+                if result.status in {"applied", "duplicate_ignored"}:
                     await session.commit()
                 else:
                     await session.rollback()
@@ -337,7 +285,7 @@ async def handle_yookassa(request):
                     gens_to_add=result.amount,
                     is_first_purchase=result.is_first_purchase,
                 )
-            elif result.status in {"already_processed", "conflict", "amount_mismatch", "not_found"}:
+            elif result.status in {"already_processed", "duplicate_ignored", "conflict", "amount_mismatch", "not_found"}:
                 print(f"⚠️ WEBHOOK: payment_id={payment_id}, result={result.status}")
 
         return web.Response(status=200)

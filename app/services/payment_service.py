@@ -5,8 +5,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AdScenario, BananaTransaction, Purchase, User
-from app.services.user_service import track_banana_transaction
+from app.models import AdScenario, BananaTransaction, PaymentAttempt, Purchase, User
+from app.services.user_service import add_paid_balance
 
 
 @dataclass(slots=True)
@@ -55,38 +55,38 @@ async def create_purchase_record(session: AsyncSession, user_id: int, price: int
     return purchase
 
 
-async def bind_yookassa_payment(session: AsyncSession, purchase_id: int, payment_id: str) -> str:
-    purchase = await session.scalar(
-        select(Purchase)
-        .where(Purchase.id == purchase_id)
-        .with_for_update()
+async def create_payment_attempt_record(
+    session: AsyncSession,
+    purchase_id: int,
+    payment_id: str,
+    payment_method: str | None,
+) -> PaymentAttempt:
+    attempt = PaymentAttempt(
+        purchase_id=purchase_id,
+        payment_id=payment_id,
+        payment_method=payment_method,
+        status="pending",
     )
-    if not purchase:
-        return "not_found"
-
-    existing_purchase_id = await session.scalar(
-        select(Purchase.id).where(
-            Purchase.payment_id == payment_id,
-            Purchase.id != purchase_id,
-        )
-    )
-    if existing_purchase_id:
-        return "conflict"
-
-    if purchase.payment_id:
-        if purchase.payment_id == payment_id:
-            return "already_bound"
-        return "conflict"
-
-    purchase.payment_id = payment_id
+    session.add(attempt)
     await session.flush()
-    return "bound"
+    return attempt
+
+
+async def get_latest_purchase_attempt(
+    session: AsyncSession,
+    purchase_id: int,
+) -> PaymentAttempt | None:
+    return await session.scalar(
+        select(PaymentAttempt)
+        .where(PaymentAttempt.purchase_id == purchase_id)
+        .order_by(PaymentAttempt.created_at.desc(), PaymentAttempt.id.desc())
+        .limit(1)
+    )
 
 
 async def finalize_yookassa_purchase(
     session: AsyncSession,
     *,
-    purchase_id: int,
     payment_id: str,
     amount: Decimal | float | int | str,
     payment_method: str | None,
@@ -94,13 +94,21 @@ async def finalize_yookassa_purchase(
     completed_at: datetime | None,
     tariff_name: str,
 ) -> YookassaFinalizeResult:
+    attempt = await session.scalar(
+        select(PaymentAttempt)
+        .where(PaymentAttempt.payment_id == payment_id)
+        .limit(1)
+    )
+    if not attempt:
+        return YookassaFinalizeResult(status="not_found")
+
     purchase = await session.scalar(
         select(Purchase)
-        .where(Purchase.id == purchase_id)
+        .where(Purchase.id == attempt.purchase_id)
         .with_for_update()
     )
     if not purchase:
-        return YookassaFinalizeResult(status="not_found")
+        return YookassaFinalizeResult(status="not_found", purchase_id=attempt.purchase_id)
 
     user = await session.scalar(
         select(User)
@@ -122,34 +130,10 @@ async def finalize_yookassa_purchase(
             tariff_name=tariff_name,
         )
 
-    existing_purchase_id = await session.scalar(
-        select(Purchase.id).where(
-            Purchase.payment_id == payment_id,
-            Purchase.id != purchase.id,
-        )
-    )
-    if existing_purchase_id:
-        return YookassaFinalizeResult(
-            status="conflict",
-            purchase_id=purchase.id,
-            user_id=purchase.user_id,
-            amount=purchase.amount,
-            price=purchase.price,
-            tariff_name=tariff_name,
-        )
-
-    if purchase.payment_id and purchase.payment_id != payment_id:
-        return YookassaFinalizeResult(
-            status="conflict",
-            purchase_id=purchase.id,
-            user_id=purchase.user_id,
-            amount=purchase.amount,
-            price=purchase.price,
-            tariff_name=tariff_name,
-        )
-
     if purchase.status == "succeeded":
         if purchase.payment_id == payment_id:
+            if attempt.status != "succeeded":
+                attempt.status = "succeeded"
             return YookassaFinalizeResult(
                 status="already_processed",
                 purchase_id=purchase.id,
@@ -159,13 +143,16 @@ async def finalize_yookassa_purchase(
                 tariff_name=purchase.tariff_name or tariff_name,
                 is_first_purchase=bool(purchase.is_first_purchase),
             )
+        if attempt.status == "pending":
+            attempt.status = "canceled"
         return YookassaFinalizeResult(
-            status="conflict",
+            status="duplicate_ignored",
             purchase_id=purchase.id,
             user_id=purchase.user_id,
             amount=purchase.amount,
             price=purchase.price,
-            tariff_name=tariff_name,
+            tariff_name=purchase.tariff_name or tariff_name,
+            is_first_purchase=bool(purchase.is_first_purchase),
         )
 
     if purchase.status != "pending":
@@ -178,11 +165,13 @@ async def finalize_yookassa_purchase(
             tariff_name=tariff_name,
         )
 
+    attempt.payment_method = payment_method or attempt.payment_method
+    attempt.status = "succeeded"
     purchase.payment_id = payment_id
     purchase.status = "succeeded"
     purchase.completed_at = completed_at or datetime.utcnow()
     purchase.tariff_name = tariff_name
-    purchase.payment_method = payment_method
+    purchase.payment_method = attempt.payment_method
     purchase.income_amount = _money_to_cents(income_amount)
 
     first_source = await session.scalar(
@@ -208,11 +197,10 @@ async def finalize_yookassa_purchase(
     is_first_purchase = previous_purchase_count == 0
     purchase.is_first_purchase = is_first_purchase
 
-    user.balance_paid += purchase.amount
-    user.generations_balance = user.balance_paid + user.balance_free
+    await add_paid_balance(session, purchase.user_id, purchase.amount)
     user.total_revenue += purchase.price
     user.orders_count += 1
-    user.last_payment_method = _resolve_last_payment_method(payment_method)
+    user.last_payment_method = _resolve_last_payment_method(attempt.payment_method)
 
     if is_first_purchase:
         user.first_purchase_at = purchase.completed_at
@@ -226,14 +214,6 @@ async def finalize_yookassa_purchase(
         )
         user.had_free_actions_before_purchase = had_free_actions is not None
 
-    await track_banana_transaction(
-        session,
-        purchase.user_id,
-        purchase.amount,
-        "purchased",
-        f"Purchased {purchase.amount} bananas",
-    )
-
     scenario_incremented = False
     if user.active_scenario_id:
         await session.execute(
@@ -242,6 +222,16 @@ async def finalize_yookassa_purchase(
             .values(total_purchases=AdScenario.total_purchases + 1)
         )
         scenario_incremented = True
+
+    await session.execute(
+        update(PaymentAttempt)
+        .where(
+            PaymentAttempt.purchase_id == purchase.id,
+            PaymentAttempt.id != attempt.id,
+            PaymentAttempt.status == "pending",
+        )
+        .values(status="canceled")
+    )
 
     return YookassaFinalizeResult(
         status="applied",

@@ -1,5 +1,5 @@
-from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column, Numeric, Index
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import BigInteger, String, Integer, DateTime, func, Boolean, Text, Column, Numeric, Index, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from datetime import datetime
 
@@ -92,6 +92,28 @@ class Purchase(Base):
         Index('ix_purchases_user_status', 'user_id', 'status'),
         Index('ix_purchases_payment_id', 'payment_id', unique=True),
     )
+
+    payment_attempts: Mapped[list["PaymentAttempt"]] = relationship(
+        back_populates="purchase",
+        cascade="all, delete-orphan",
+    )
+
+
+class PaymentAttempt(Base):
+    __tablename__ = "payment_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    purchase_id: Mapped[int] = mapped_column(
+        ForeignKey("purchases.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    payment_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    payment_method: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    purchase: Mapped["Purchase"] = relationship(back_populates="payment_attempts")
 
 
 class CryptoPayInvoice(Base):
