@@ -338,6 +338,32 @@ async def log_lazy_prompt_interceptor(bot: Bot, user_id: int, username: str, laz
     )
     asyncio.create_task(send_log(bot, text, disable_notification=True))
 
+async def log_duplicate_photo_interceptor(
+    bot: Bot,
+    user_id: int,
+    username: str | None,
+    duplicate_owner_id: int,
+    image_hash: str,
+    prompt: str | None = None,
+    balance_before: int | None = None,
+):
+    u_name = f"@{username}" if username else f"ID:{user_id}"
+    safe_prompt = (prompt or "").strip()
+    if len(safe_prompt) > 120:
+        safe_prompt = safe_prompt[:120] + "..."
+
+    text = (
+        "🪤 <b>ПЕРЕХВАТЧИК НИЩЕБРОДА</b>\n"
+        "➖➖➖➖➖➖➖\n"
+        f"👤 Юзер: {u_name} (<code>{user_id}</code>)\n"
+        f"🕵️ Совпало с юзером: <code>{duplicate_owner_id}</code>\n"
+        f"🔑 pHash: <code>{image_hash}</code>\n"
+        f"💰 Баланс до обнуления: <b>{balance_before or 0}</b> 🍌\n"
+        f"📝 Промпт: <code>{html.escape(safe_prompt or '—')}</code>\n"
+        "#нищеброд"
+    )
+    asyncio.create_task(send_log(bot, text, disable_notification=True))
+
     # 🚨 ТИП 8: ФИЛЬТР ЖАЛОБ НА СХОДСТВО
 async def log_complaint_filter(bot: Bot, user_id: int, username: str, complaint_text: str):
     u_name = f"@{username}" if username else f"ID:{user_id}"

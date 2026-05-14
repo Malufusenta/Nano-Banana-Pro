@@ -147,6 +147,8 @@
   "generation.smart.need_more": "🎨 <b>Almost enough for a masterpiece!</b>\n\nThis action costs <b>{cost} 🍌</b>, but you only have <b>{balance} 🍌</b> left.\n\n👇 Top up to continue:",
   "generation.smart.empty_buy": "🙈 <b>You're out of bananas!</b>\n\nBalance is 0. Don't stop now — top up and keep creating!\n\n👇 Top up:",
   "generation.smart.empty_newbie": "🙈 <b>You're out of bananas!</b>\n\nYou got so creative you ran out — that's fine!\n\n👇 Top up now:",
+  "generation.abuse.duplicate_photo_message": "Oops! We recognized you. You have already generated this photo with us. Free generations are issued only once. Please top up your balance👇",
+  "generation.abuse.duplicate_photo_button": "Buy Bananas 🍌",
   "generation.err.security": "🔞 <b>Safety filter triggered!</b>\n\nThe model won't generate this (adult content, violence, or other restricted topics).\n🍌 <i>Try a softer, safer description.</i>",
   "generation.err.validation": "📏 <b>Request too complex or invalid.</b>\n\nThe text may be too long or settings incompatible.\n🍌 <i>Simplify and try again.</i>",
   "generation.err.gemini": "🎨 <b>Couldn't generate from this description.</b>\n\nThe model got lost in the details.\n🍌 <i>Repeating the same prompt won't help. Change the wording (more or less detail) and try again!</i>",

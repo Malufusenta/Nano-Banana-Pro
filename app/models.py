@@ -128,6 +128,20 @@ class CryptoPayInvoice(Base):
     credited_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class ImageHash(Base):
+    __tablename__ = "image_hashes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    hash: Mapped[str] = mapped_column(String(16), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_image_hashes_hash", "hash"),
+        Index("ix_image_hashes_created_at", "created_at"),
+    )
+
+
 # 3. Таблица Истории (Контекст + Галерея)
 class MessageHistory(Base):
     __tablename__ = "message_history"

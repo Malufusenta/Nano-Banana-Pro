@@ -5,6 +5,7 @@ from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 import pytz
 
 # Создаем константу московского времени для всего файла
@@ -65,6 +66,7 @@ from app.middlewares.block_middleware import BlockCheckMiddleware
 from app.middlewares.locale import LocaleMiddleware
 from app.services.yandex_metrica import init_metrica_service
 from app.services.analytics_service import get_analytics_report, format_report_message
+from app.services.image_hash_service import cleanup_expired_hashes
 from app.webhook_server import start_webhook_server
 from app import config
 
@@ -100,6 +102,13 @@ async def send_daily_report(bot):
             await bot.send_message(admin_id, message, parse_mode="HTML")
         except Exception as e:
             logger.error(f"❌ Ошибка отправки отчёта админу {admin_id}: {e}", exc_info=True)
+
+
+async def cleanup_image_hashes_job() -> None:
+    async with async_session() as session:
+        deleted_rows = await cleanup_expired_hashes(session)
+    if deleted_rows:
+        logger.info("🧹 Removed %s expired image hashes", deleted_rows)
 
 async def main():
     
@@ -154,10 +163,16 @@ async def main():
         id='daily_report',
         replace_existing=True
     )
+    scheduler.add_job(
+        cleanup_image_hashes_job,
+        IntervalTrigger(hours=1, timezone=moscow_tz),
+        id='image_hash_cleanup',
+        replace_existing=True
+    )
     
     # Запускаем планировщик
     scheduler.start()
-    logger.info("📅 Планировщик запущен: отчёты будут отправляться в 04:30")
+    logger.info("📅 Планировщик запущен: отчёты будут отправляться в 04:30, image_hashes чистятся каждый час")
 
     # Запускаем сервер оплат параллельно с ботом
     await start_webhook_server(bot)

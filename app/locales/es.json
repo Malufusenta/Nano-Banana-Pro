@@ -147,6 +147,8 @@
   "generation.smart.need_more": "🎨 <b>Casi alcanzas para una obra maestra.</b>\n\nEsta acción cuesta <b>{cost} 🍌</b>, pero solo tienes <b>{balance} 🍌</b>.\n\n👇 Recarga para continuar:",
   "generation.smart.empty_buy": "🙈 <b>¡Te quedaste sin bananas!</b>\n\nSaldo en 0. ¡No pares ahora — recarga y sigue creando!\n\n👇 Recargar:",
   "generation.smart.empty_newbie": "🙈 <b>¡Te quedaste sin bananas!</b>\n\n¡Te pusiste tan creativo que se acabaron!\n\n👇 Recarga ahora:",
+  "generation.abuse.duplicate_photo_message": "¡Vaya! Te hemos reconocido. Ya has generado esta foto con nosotros. Las generaciones gratuitas se emiten solo una vez. Por favor, recarga tu saldo👇",
+  "generation.abuse.duplicate_photo_button": "Comprar bananas 🍌",
   "generation.err.security": "🔞 <b>¡Filtro de seguridad!</b>\n\nLa IA no generará esto (+18, violencia u otros temas restringidos).\n🍌 <i>Prueba una descripción más suave y segura.</i>",
   "generation.err.validation": "📏 <b>Solicitud demasiado compleja o inválida.</b>\n\nTexto muy largo o ajustes incompatibles.\n🍌 <i>Simplifica e inténtalo de nuevo.</i>",
   "generation.err.gemini": "🎨 <b>No se pudo generar con esta descripción.</b>\n\nLa IA se perdió en los detalles.\n🍌 <i>Repetir el mismo prompt no ayuda. Cambia la redacción y prueba otra vez.</i>",

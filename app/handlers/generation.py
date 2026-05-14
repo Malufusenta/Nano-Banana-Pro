@@ -10,7 +10,15 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ChatAction
 from aiogram import html
 import aiohttp
-from app.services.admin_logger import log_generation, log_error, log_lazy_prompt_interceptor, log_referral, log_security_ban,log_content_filter
+from app.services.admin_logger import (
+    log_content_filter,
+    log_duplicate_photo_interceptor,
+    log_error,
+    log_generation,
+    log_lazy_prompt_interceptor,
+    log_referral,
+    log_security_ban,
+)
 from app.models import User, Broadcast, PostConfig, BananaTransaction
 from app.middlewares.content_filter import ContentFilter, FilterMode, get_filter_message, log_nsfw_to_chat
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -23,6 +31,14 @@ from app.services.user_service import (
     track_banana_transaction, increment_generations_count,
 )
 from app.services.ai_engine import generate_image
+from app.services.image_hash_service import (
+    ImageHashError,
+    apply_duplicate_penalty,
+    compute_phashes_for_urls,
+    find_recent_duplicate_hash,
+    should_run_image_hash_check,
+    store_image_hashes,
+)
 from app.services.kie_pricing import get_kie_credits
 from app.utils import prompts
 from datetime import datetime, timezone, timedelta
@@ -221,6 +237,16 @@ async def get_smart_alert_message(
     builder.button(text=t("menu.free", locale), callback_data="goto_free")
     builder.adjust(1)
     return text, builder
+
+
+def get_duplicate_photo_block_kb(locale: str):
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text=t("generation.abuse.duplicate_photo_button", locale),
+        callback_data="goto_shop",
+    )
+    builder.adjust(1)
+    return builder.as_markup()
 
 # =====================================================================
 # 🔥 COMPLAINT FILTER - Обработка жалоб на сходство
@@ -541,11 +567,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
 
     # 🔥 ПРОВЕРЯЕМ РЕКЛАМНЫЙ СЦЕНАРИЙ
     data = await state.get_data()
-    
-    # Если это обычная генерация (не рассылка, не ссылка) — сбрасываем флаг
-    if not data.get("from_broadcast") and not data.get("from_ad_scenario"):
-        await state.update_data(no_standard_model=False)
-    
+
     from_ad_scenario = data.get("from_ad_scenario", False)
     
     # Если пришли из рекламного сценария - используем его настройки
@@ -583,10 +605,17 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
     
     # 🔥 ОБЫЧНАЯ ЛОГИКА
     force_pro = data.get("force_pro_mode", False)
+    from_broadcast = data.get("from_broadcast", False)
     
     async with async_session() as session:
         pref_model = "pro" if force_pro else await get_user_model_preference(session, user_id)
         user_obj = await get_user(session, user_id)
+        is_new_user = user_obj is None or not user_obj.first_generation_done
+        no_standard_model = from_broadcast or from_ad_scenario or is_new_user
+
+        if no_standard_model and pref_model == "standard":
+            pref_model = "nb2"
+
         saved_ratio = initial_ratio or getattr(user_obj, "last_image_ratio", "1:1") or "1:1"
     
     normalized_urls = normalize_image_urls(image_urls)
@@ -598,6 +627,7 @@ async def start_preflight_check(message: types.Message, state: FSMContext, promp
         pf_ratio=saved_ratio, 
         pf_quality="hd" if pref_model == "nb2" else "2k",
         pf_is_edit_mode=is_edit_mode,
+        no_standard_model=no_standard_model,
     )
     await state.set_state(GenState.preflight_check)
     
@@ -2081,6 +2111,7 @@ async def process_generation(
 ):
     """Основная функция генерации изображений"""
     bot = message.bot
+    final_urls = normalize_image_urls(image_urls)
 
     if not await _korean_trend_generation_allowed(bot, message, user_id, prompt, locale):
         return
@@ -2090,6 +2121,47 @@ async def process_generation(
         locale = await effective_locale(bot, message, user_id, locale, session=session)
         model_type = "pro" if use_pro_model else "nb2" if use_nb2_model else "standard"
         kie_credits = get_kie_credits(model_type, resolution)
+        user = await get_user(session, user_id)
+        image_hashes: list[str] = []
+
+        if final_urls:
+            has_purchases = await has_user_purchased(session, user_id)
+            if should_run_image_hash_check(final_urls, user, has_purchases=has_purchases):
+                try:
+                    image_hashes = await compute_phashes_for_urls(final_urls)
+                except ImageHashError as exc:
+                    logger.warning("Skipping duplicate-photo guard for user %s: %s", user_id, exc)
+                else:
+                    duplicate_hash = await find_recent_duplicate_hash(
+                        session,
+                        hash_values=image_hashes,
+                        user_id=user_id,
+                    )
+                    if duplicate_hash is not None and user is not None:
+                        balance_before = user.generations_balance
+                        await log_duplicate_photo_interceptor(
+                            bot=bot,
+                            user_id=user_id,
+                            username=message.chat.username,
+                            duplicate_owner_id=duplicate_hash.user_id,
+                            image_hash=duplicate_hash.hash,
+                            prompt=prompt,
+                            balance_before=balance_before,
+                        )
+                        apply_duplicate_penalty(user)
+                        await session.commit()
+                        await message.answer(
+                            t("generation.abuse.duplicate_photo_message", locale),
+                            reply_markup=get_duplicate_photo_block_kb(locale),
+                        )
+                        return
+                    if image_hashes:
+                        await store_image_hashes(
+                            session,
+                            hash_values=image_hashes,
+                            user_id=user_id,
+                        )
+
         has_balance, transaction_id = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits)
         balance_left = await get_user_balance(session, user_id)
 
@@ -2104,9 +2176,6 @@ async def process_generation(
             )
             return
 
-    # ✅ Нормализация URL
-    final_urls = normalize_image_urls(image_urls)
-    
     # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: сложный только для Standard (без PRO и NB2)
     is_complex_standard = (not use_pro_model and not use_nb2_model and len(final_urls) >= 2)
     # 🔥 ДЕТЕКТОР ЗАДАЧ ТИПА "ЗАМЕНА/ВСТАВКА"
