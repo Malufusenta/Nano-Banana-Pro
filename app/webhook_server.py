@@ -5,11 +5,11 @@ import logging
 import os
 import ssl
 from datetime import datetime
+from decimal import Decimal
 
 from aiohttp import web
 from aiogram import Bot
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 
 from app import config
 from app.database import async_session
@@ -20,14 +20,12 @@ from app.services.admin_logger import log_payment
 from app.services.crypto_fiat_service import fulfill_crypto_fiat_invoice, parse_fiat_invoice_payload
 from app.services.crypto_pay import crypto_pay
 from app.services.i18n import t
-from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
+from app.services.payment_service import create_purchase_record, finalize_yookassa_purchase
 from app.services.user_service import (
-    add_paid_balance,
     get_user_balance,
     get_user_financial_stats,
-    set_last_payment_method,
 )
-from app.services.yandex_metrica import metrica_service
+from app.services import yandex_metrica
 
 
 WEBHOOK_PORT = 5001
@@ -35,6 +33,132 @@ WEBHOOK_PATH = "/yookassa_webhook"
 WEBHOOK_CRYPTO_PAY_PATH = "/webhooks/crypto-pay"
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_rub_amount(value) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def _parse_yookassa_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _resolve_tariff_by_amount(amount: Decimal):
+    for pkg in PACKAGES.values():
+        package_price = _normalize_rub_amount(pkg["price"])
+        if package_price == amount:
+            return pkg["gens"], f"{pkg['gens']} {pkg['suffix']}", int(pkg["price"])
+    return None
+
+
+async def _resolve_legacy_purchase_id(
+    session,
+    *,
+    payment_id: str,
+    user_id: int,
+    price_rub: int,
+    gens_to_add: int,
+):
+    existing_purchase_id = await session.scalar(
+        select(Purchase.id).where(Purchase.payment_id == payment_id).limit(1)
+    )
+    if existing_purchase_id:
+        return existing_purchase_id
+
+    legacy_purchase = await session.scalar(
+        select(Purchase)
+        .where(
+            Purchase.user_id == user_id,
+            Purchase.price == price_rub,
+            Purchase.status == "pending",
+        )
+        .order_by(Purchase.created_at.desc())
+        .limit(1)
+    )
+    if legacy_purchase:
+        return legacy_purchase.id
+
+    purchase = await create_purchase_record(session, user_id, price_rub, gens_to_add)
+    return purchase.id
+
+
+async def _run_yookassa_post_commit_effects(
+    request,
+    *,
+    user_id: int,
+    amount_rub: int,
+    tariff_name: str,
+    purchase_id: int,
+    gens_to_add: int,
+    is_first_purchase: bool,
+):
+    bot_instance = request.app["bot"]
+    db_user = None
+    stats = None
+    new_bal = None
+    successful_purchases_count = 0
+
+    try:
+        async with async_session() as session:
+            stats = await get_user_financial_stats(session, user_id)
+            new_bal = await get_user_balance(session, user_id)
+            db_user = await session.scalar(select(User).where(User.telegram_id == user_id))
+            if db_user and db_user.yandex_client_id:
+                successful_purchases_count = await session.scalar(
+                    select(func.count(Purchase.id)).where(
+                        Purchase.user_id == user_id,
+                        Purchase.status == "succeeded",
+                    )
+                )
+    except Exception as e:
+        print(f"Webhook side effects preload error: {e}")
+
+    if db_user and stats is not None and new_bal is not None:
+        try:
+            await log_payment(
+                bot_instance,
+                db_user,
+                amount_rub,
+                tariff_name,
+                new_bal,
+                stats=stats,
+            )
+        except Exception as e:
+            print(f"Webhook log payment error: {e}")
+
+    if db_user and db_user.yandex_client_id and yandex_metrica.metrica_service:
+        try:
+            if is_first_purchase and successful_purchases_count == 1:
+                await yandex_metrica.metrica_service.send_purchase_conversion(
+                    client_id=db_user.yandex_client_id,
+                    order_id=purchase_id,
+                    revenue=amount_rub,
+                    tariff_name=tariff_name,
+                )
+                print(f"✅ В Метрику отправлена ПЕРВАЯ покупка юзера {user_id}")
+            else:
+                print(
+                    f"⏭️ Повторная покупка юзера {user_id} "
+                    f"({successful_purchases_count}-я). В Метрику не отправляем."
+                )
+        except Exception as e:
+            print(f"Webhook metrica error: {e}")
+
+    if db_user:
+        try:
+            locale = db_user.locale if db_user.locale else "en"
+            await bot_instance.send_message(
+                user_id,
+                t("payment.success", locale, amount=gens_to_add, suffix="bananas" if locale != "ru" else "бананов"),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            print(f"Webhook notify error: {e}")
 
 
 async def handle_crypto_pay_webhook(request):
@@ -143,155 +267,78 @@ async def handle_yookassa(request):
         data = await request.json()
         event = data.get("event")
         object_ = data.get("object", {})
-        
         if event == "payment.succeeded":
             payment_id = object_.get("id")
-            metadata = object_.get("metadata", {})
-            
-            # Извлекаем реальное время завершения платежа из ЮКассы
-            captured_at_str = object_.get("captured_at")
-            if captured_at_str:
-                completed_at = datetime.fromisoformat(captured_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
-            else:
-                completed_at = datetime.utcnow()
-        
-            # Ищем ID юзера
-            user_id = int(metadata.get("user_id", 0)) if metadata.get("user_id") else 0
-            amount = float(object_.get("amount", {}).get("value", 0.0))
+            if not payment_id:
+                return web.Response(status=200)
 
+            metadata = object_.get("metadata", {}) or {}
+            completed_at = _parse_yookassa_datetime(object_.get("captured_at")) or datetime.utcnow()
+
+            raw_user_id = metadata.get("user_id")
+            user_id = int(raw_user_id) if raw_user_id else 0
+
+            raw_purchase_id = metadata.get("purchase_id")
+            try:
+                purchase_id = int(raw_purchase_id) if raw_purchase_id else None
+            except (TypeError, ValueError):
+                purchase_id = None
+
+            amount = _normalize_rub_amount(object_.get("amount", {}).get("value", 0))
             print(f"🔔 WEBHOOK: Пришла оплата {amount}р от {user_id}")
 
-            if user_id:
-                async with async_session() as session:
-                    # Проверяем дубль ПЕРЕД обработкой
-                    # Проверяем дубль
-                    existing = await session.execute(
-                        select(Purchase).where(
-                            Purchase.payment_id == payment_id,
-                            Purchase.status == 'succeeded'
-                        )
-                    )
-                    if existing.scalar_one_or_none():
-                        print(f"⚠️ WEBHOOK: Дубль {payment_id}, пропускаем")
+            tariff_data = _resolve_tariff_by_amount(amount)
+            if not tariff_data:
+                print(f"⚠️ WEBHOOK: Неизвестная сумма оплаты: {amount}₽ от юзера {user_id}")
+                return web.Response(status=200)
+
+            gens_to_add, tariff_name, price_rub = tariff_data
+            income_amount = object_.get("income_amount", {}).get("value")
+            payment_method = object_.get("payment_method", {}).get("type")
+
+            async with async_session() as session:
+                if purchase_id is None:
+                    if not user_id:
+                        print(f"⚠️ WEBHOOK: legacy payload без purchase_id и user_id для payment_id={payment_id}")
                         return web.Response(status=200)
-        
-                    # Определяем тариф
-                   
-                    tariff_map = {
-                        float(pkg['price']): (pkg['gens'], f"{pkg['gens']} {pkg['suffix']}")
-                        for pkg in PACKAGES.values()
-                    }
-                    
-                    tariff_data = tariff_map.get(amount)
-                    
-                    if not tariff_data:
-                        print(f"⚠️ WEBHOOK: Неизвестная сумма оплаты: {amount}₽ от юзера {user_id}")
-                        return web.Response(status=200)
-                    
-                    gens_to_add, tariff_name = tariff_data
-                    
-                    # 1. Записываем покупку
-                    try:
-                        await mark_purchase_as_succeeded(session, user_id, amount, gens_to_add, completed_at)
 
-                        income_amount = float(object_.get("income_amount", {}).get("value", 0.0))
-                        payment_method = object_.get("payment_method", {}).get("type", None)
-                        
-                        # 2. Обновляем аналитику
-                        await update_purchase_analytics(session, user_id, amount, tariff_name, payment_id,
-                            income_amount=income_amount,
-                            payment_method=payment_method
-)                        
-                        # 3. Начисляем бананы
-                        await add_paid_balance(session, user_id, gens_to_add)
-                        if payment_method == "bank_card":
-                            await set_last_payment_method(session, user_id, "yookassa_card")
-                        elif payment_method == "sbp":
-                            await set_last_payment_method(session, user_id, "yookassa_sbp")
-                        else:
-                            await set_last_payment_method(session, user_id, f"yookassa_{payment_method or 'unknown'}")
-                        await session.commit()
-                    except IntegrityError as e:
-                        await session.rollback()
-                        if "payment_id" in str(e).lower():
-                            print(f"⚠️ WEBHOOK: Дубль payment_id={payment_id}, пропускаем")
-                            return web.Response(status=200)
-                        print(f"🔴 WEBHOOK ERROR (Integrity): {e}")
-                        raise
-                    except Exception as e:
-                        await session.rollback()
-                        print(f"🔴 WEBHOOK ERROR: {e}")
-                        raise
-
-# Дальше код без изменений (получение stats, отправка логов)
-
-                    # ======================================================
-                    # 📊 ВОТ ЭТОГО НЕ ХВАТАЛО В СТАРОЙ ВЕРСИИ
-                    # ======================================================
-                    
-                    # Получаем статистику через user_service (он у нас теперь исправлен)
-                    stats = await get_user_financial_stats(session, user_id)
-                    
-                    # Шлем лог
-                    bot_instance = request.app['bot']
-                    new_bal = await get_user_balance(session, user_id)
-                    
-                    # Ищем объект юзера для лога
-                    u_res = await session.execute(select(User).where(User.telegram_id == user_id))
-                    db_user = u_res.scalar_one_or_none()
-
-                    await log_payment(
-                        bot_instance, 
-                        db_user, 
-                        amount, 
-                        tariff_name, 
-                        new_bal, 
-                        stats=stats
+                    print(f"⚠️ WEBHOOK: legacy fallback для payment_id={payment_id}")
+                    purchase_id = await _resolve_legacy_purchase_id(
+                        session,
+                        payment_id=payment_id,
+                        user_id=user_id,
+                        price_rub=price_rub,
+                        gens_to_add=gens_to_add,
                     )
-                    
-                    # ✨ ОТПРАВКА КОНВЕРСИИ В ЯНДЕКС.МЕТРИКУ
-                    if db_user and db_user.yandex_client_id:
-                        from app.services.yandex_metrica import metrica_service
-                        from sqlalchemy import desc
-                        
-                        # Получаем ID последней покупки
-                        purchase_result = await session.execute(
-                            select(Purchase)
-                            .where(Purchase.user_id == user_id, Purchase.status == "succeeded")
-                            .order_by(desc(Purchase.id))
-                            .limit(1)
-                        )
-                        last_purchase = purchase_result.scalar_one_or_none()
-                        
-                        if last_purchase and metrica_service:
-                            await metrica_service.send_purchase_conversion(
-                                client_id=db_user.yandex_client_id,
-                                order_id=last_purchase.id,
-                                revenue=amount,
-                                tariff_name=tariff_name
-                            )
-                        
-                        # ✨ ОБНОВЛЯЕМ СТАТИСТИКУ РЕКЛАМНОГО СЦЕНАРИЯ
-                        if db_user.active_scenario_id:
-                            from app.models import AdScenario
-                            scenario_result = await session.execute(
-                                select(AdScenario).where(AdScenario.id == db_user.active_scenario_id)
-                            )
-                            scenario = scenario_result.scalar_one_or_none()
-                            if scenario:
-                                scenario.total_purchases += 1
-                                await session.commit()
-                    
-                    # Уведомление юзеру
-                    try:
-                        locale = db_user.locale if db_user and db_user.locale else "en"
-                        await bot_instance.send_message(
-                            user_id,
-                            t("payment.success", locale, amount=gens_to_add, suffix="bananas" if locale != "ru" else "бананов"),
-                            parse_mode="HTML"
-                        )
-                    except:
-                        pass
+
+                result = await finalize_yookassa_purchase(
+                    session,
+                    purchase_id=purchase_id,
+                    payment_id=payment_id,
+                    amount=amount,
+                    payment_method=payment_method,
+                    income_amount=income_amount,
+                    completed_at=completed_at,
+                    tariff_name=tariff_name,
+                )
+
+                if result.status == "applied":
+                    await session.commit()
+                else:
+                    await session.rollback()
+
+            if result.status == "applied":
+                await _run_yookassa_post_commit_effects(
+                    request,
+                    user_id=result.user_id,
+                    amount_rub=result.price,
+                    tariff_name=result.tariff_name or tariff_name,
+                    purchase_id=result.purchase_id,
+                    gens_to_add=result.amount,
+                    is_first_purchase=result.is_first_purchase,
+                )
+            elif result.status in {"already_processed", "conflict", "amount_mismatch", "not_found"}:
+                print(f"⚠️ WEBHOOK: payment_id={payment_id}, result={result.status}")
 
         return web.Response(status=200)
     except Exception as e:

@@ -91,6 +91,7 @@ class YandexMetricaService:
                     url,
                     params=params,
                     timeout=aiohttp.ClientTimeout(total=3),
+                    ssl=False,
                 ) as response:
                     if response.status == 200:
                         logger.info(

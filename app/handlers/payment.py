@@ -1,20 +1,38 @@
-from aiogram import Router, types, F, Bot
-from aiogram.types import LabeledPrice, PreCheckoutQuery
-from aiogram.filters import Command
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from app.database import async_session
-from app.services.user_service import get_bot_stats, find_user_by_input, admin_change_balance, get_user_admin_card_data, add_paid_balance
-from app.services.user_service import get_user_profile_data, admin_change_balance, get_user_balance, get_user_financial_stats, set_last_payment_method
-from app.services.payment_service import create_purchase_record, mark_purchase_as_succeeded, update_purchase_analytics
-from app import config
 from datetime import datetime
-from app.services.payment_api import create_yoo_payment, check_yoo_payment
-from app.services.i18n import resolve_locale, t
-from app.utils.telegram_locale import effective_locale
-from app.services.admin_logger import log_payment
-from app.models import Purchase, User# ← Добавь в начало
-from sqlalchemy import select     # ← Добавь в начало
+
+from aiogram import Bot, F, Router, types
+from aiogram.filters import Command
+from aiogram.types import LabeledPrice, PreCheckoutQuery
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy import func, select
+
+from app import config
+from app.database import async_session
+from app.models import Purchase, User
 from app.packages import PACKAGES, STARS_PACKAGES
+from app.services.admin_logger import log_payment
+from app.services.i18n import resolve_locale, t
+from app.services.payment_api import create_yoo_payment, get_yoo_payment_details
+from app.services.payment_service import (
+    bind_yookassa_payment,
+    create_purchase_record,
+    finalize_yookassa_purchase,
+    mark_purchase_as_succeeded,
+    update_purchase_analytics,
+)
+from app.services.user_service import (
+    add_paid_balance,
+    admin_change_balance,
+    find_user_by_input,
+    get_bot_stats,
+    get_user_admin_card_data,
+    get_user_balance,
+    get_user_financial_stats,
+    get_user_profile_data,
+    set_last_payment_method,
+)
+from app.services import yandex_metrica
+from app.utils.telegram_locale import effective_locale
 
 
 router = Router()
@@ -57,6 +75,63 @@ def get_banana_label(locale: str, count: int) -> str:
     if count == 1:
         return t("banana.one", locale)
     return t("banana.many", locale)
+
+
+def _parse_yookassa_captured_at(captured_at_str: str | None) -> datetime | None:
+    if not captured_at_str:
+        return None
+    try:
+        return datetime.fromisoformat(captured_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+async def _run_yookassa_post_commit_effects(
+    bot: Bot,
+    *,
+    user_id: int,
+    amount_rub: int,
+    item_name: str,
+    purchase_id: int,
+    is_first_purchase: bool,
+):
+    db_user = None
+    stats = None
+    new_bal = None
+    successful_purchases_count = 0
+
+    try:
+        async with async_session() as session:
+            stats = await get_user_financial_stats(session, user_id)
+            new_bal = await get_user_balance(session, user_id)
+            db_user = await session.scalar(select(User).where(User.telegram_id == user_id))
+            if db_user and db_user.yandex_client_id:
+                successful_purchases_count = await session.scalar(
+                    select(func.count(Purchase.id)).where(
+                        Purchase.user_id == user_id,
+                        Purchase.status == "succeeded",
+                    )
+                )
+    except Exception as e:
+        print(f"Payment side effects preload error: {e}")
+
+    if db_user and stats is not None and new_bal is not None:
+        try:
+            await log_payment(bot, db_user, amount_rub, item_name, new_bal, stats=stats)
+        except Exception as e:
+            print(f"Log Error: {e}")
+
+    if db_user and db_user.yandex_client_id and yandex_metrica.metrica_service:
+        try:
+            if is_first_purchase and successful_purchases_count == 1:
+                await yandex_metrica.metrica_service.send_purchase_conversion(
+                    client_id=db_user.yandex_client_id,
+                    order_id=purchase_id,
+                    revenue=amount_rub,
+                    tariff_name=item_name,
+                )
+        except Exception as e:
+            print(f"Metrica Error: {e}")
 
 
 def build_shop_keyboard(locale: str) -> InlineKeyboardBuilder:
@@ -186,7 +261,6 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
         return
 
     payment_type = parts[1]
-
     if payment_type == "stars":
         pkg_key = "_".join(parts[2:])
         await handle_stars_purchase(callback, bot, pkg_key, locale)
@@ -194,69 +268,69 @@ async def cb_buy_package(callback: types.CallbackQuery, bot: Bot):
     if payment_type != "rub":
         await callback.answer(t("shop.tariff_not_found", locale))
         return
-    pkg_key = "_".join(parts[2:])
 
+    pkg_key = "_".join(parts[2:])
     package = PACKAGES.get(pkg_key)
     if not package:
         await callback.answer(t("shop.tariff_not_found", locale))
         return
 
-    user_id = callback.from_user.id
-    desc = f"Покупка {package['gens']} бананов"
+    async def build_payment_url(payment_method: str) -> str | None:
+        try:
+            async with async_session() as session:
+                purchase = await create_purchase_record(session, callback.from_user.id, package["price"], package["gens"])
+                await session.commit()
 
-    # Чтобы пользователь не скучал, пока мы делаем запросы к ЮКассе (это занимает 1-2 сек)
-    # мы можем (опционально) показать часики в кнопке, но пока просто делаем магию.
+            payment = create_yoo_payment(
+                package["price"],
+                f"Покупка {package['gens']} бананов",
+                callback.from_user.id,
+                purchase.id,
+                payment_method=payment_method,
+            )
 
-    # 3. ГЕНЕРИРУЕМ ССЫЛКИ ЗАРАНЕЕ
-    sbp_url = None
-    card_url = None
+            async with async_session() as session:
+                bind_status = await bind_yookassa_payment(session, purchase.id, payment.id)
+                if bind_status not in {"bound", "already_bound"}:
+                    await session.rollback()
+                    raise ValueError(f"Unexpected bind status: {bind_status}")
+                await session.commit()
 
-    # Попытка создать ссылку на СБП
-    try:
-        # Важно: если в тестовом магазине СБП выключен, тут будет ошибка, мы её подавим
-        payment_sbp = create_yoo_payment(package['price'], desc, user_id, payment_method="sbp")
-        sbp_url = payment_sbp.confirmation.confirmation_url
-    except Exception as e:
-        print(f"⚠️ СБП не создан (возможно отключен в настройках): {e}")
+            return payment.confirmation.confirmation_url
+        except Exception as e:
+            print(f"⚠️ Ошибка создания YooKassa платежа ({payment_method}): {e}")
+            return None
 
-    # Попытка создать ссылку на Карту
-    try:
-        payment_card = create_yoo_payment(package['price'], desc, user_id, payment_method="bank_card")
-        card_url = payment_card.confirmation.confirmation_url
-    except Exception as e:
-        print(f"⚠️ Оплата картой не создана: {e}")
+    sbp_url = await build_payment_url("sbp")
+    card_url = await build_payment_url("bank_card")
+
+    if not sbp_url and not card_url:
         await callback.answer(t("shop.payment_error", locale), show_alert=True)
         return
 
-    # 4. СОБИРАЕМ КРАСИВЫЙ ТЕКСТ
     text = (
         "⚡️ <b>Отличный выбор!</b>\n\n"
         f"🍌 Пополнение: <b>+{package['gens']} {package['suffix']}</b>\n"
         f"💳 К оплате: <b>{package['price']}₽</b>\n\n"
-        "📄 <i>Оплачивая, вы принимаете условия <a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.</i>"
+        "📄 <i>Оплачивая, вы принимаете условия "
+        "<a href='https://telegra.ph/PUBLICHNAYA-OFERTA-12-09-5'>Оферты</a>.</i>"
     )
 
-    # 5. СОБИРАЕМ КНОПКИ
     builder = InlineKeyboardBuilder()
-
-    # Кнопка СБП (показываем, только если ссылка успешно создалась)
     if sbp_url:
         builder.button(text="🚀 СБП", url=sbp_url)
-    
-    # Кнопка Карты (основная)
     if card_url:
         builder.button(text="💳 Карта/другое", url=card_url)
-        
     builder.button(text="🔙 Назад", callback_data="goto_shop")
-    builder.adjust(1) # Все кнопки в столбик
+    builder.adjust(1)
 
-    # Отправляем
     await callback.message.edit_text(
-        text, 
-        reply_markup=builder.as_markup(), 
-        parse_mode="HTML", 
-        disable_web_page_preview=True
+        text,
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
     )
+    await callback.answer()
 
 # Создание Stars инвойса
 async def handle_stars_purchase(callback: types.CallbackQuery, bot: Bot, pkg_key: str, locale: str):
@@ -290,76 +364,145 @@ async def handle_stars_purchase(callback: types.CallbackQuery, bot: Bot, pkg_key
 @router.callback_query(F.data.startswith("check_"))
 async def cb_check_payment(callback: types.CallbackQuery, bot: Bot):
     locale = get_user_locale_from_event(callback.from_user)
-    parts = callback.data.split("_")
-    payment_id = parts[1]
-    pkg_key = parts[2]
-    package = PACKAGES.get(pkg_key)
-    if not package: return
+    purchase_id = None
+    payment_id = None
+    bananas_count = 0
+    price_rub = 0
+    tariff_name = None
+
+    if callback.data.startswith("check_purchase:"):
+        try:
+            purchase_id = int(callback.data.split(":", 1)[1])
+        except (TypeError, ValueError):
+            await callback.answer(t("payment.processing_error", locale), show_alert=True)
+            return
+
+        async with async_session() as session:
+            purchase = await session.scalar(select(Purchase).where(Purchase.id == purchase_id))
+        if not purchase:
+            await callback.answer(t("payment.processing_error", locale), show_alert=True)
+            return
+
+        bananas_count = purchase.amount
+        price_rub = purchase.price
+        tariff_name = purchase.tariff_name or f"{purchase.amount} bananas"
+        payment_id = purchase.payment_id
+
+        if purchase.status == "succeeded":
+            await callback.answer("✅")
+            await callback.message.edit_text(
+                t("payment.success", locale, amount=bananas_count, suffix=get_banana_label(locale, bananas_count)),
+                parse_mode="HTML",
+            )
+            return
+
+        if not payment_id:
+            await callback.answer(t("payment.processing_error", locale), show_alert=True)
+            return
+    else:
+        parts = callback.data.split("_")
+        if len(parts) < 3:
+            await callback.answer(t("payment.processing_error", locale), show_alert=True)
+            return
+
+        payment_id = parts[1]
+        pkg_key = parts[2]
+        package = PACKAGES.get(pkg_key)
+        if not package:
+            await callback.answer(t("shop.tariff_not_found", locale), show_alert=True)
+            return
+
+        bananas_count = package["gens"]
+        price_rub = package["price"]
+        tariff_name = f"{package['gens']} bananas"
 
     try:
-        # Проверяем статус в ЮКассе
-        status = check_yoo_payment(payment_id)
-        
-        if status == "succeeded":
-            async with async_session() as session:
-                # Проверяем - может уже обработано?
-                existing = await session.execute(
-                    select(Purchase).where(
-                        Purchase.payment_id == payment_id,
-                        Purchase.status == 'succeeded'
-                    )
-                )
-                if existing.scalar_one_or_none():
-                    await callback.answer("✅")
-                    await callback.message.edit_text(
-                        t("payment.success", locale, amount=package["gens"], suffix=get_banana_label(locale, package["gens"])),
-                        reply_markup=None
-                    )
-                    return
-        
-                await mark_purchase_as_succeeded(session, callback.from_user.id, package['price'], package['gens'])
-                await update_purchase_analytics(
-                    session,
-                    callback.from_user.id,
-                    package["price"],
-                    f"{package['gens']} bananas",
-                    payment_id=payment_id,
-                    payment_method="yookassa_card",
-                )
-                # Начисляем бананы
-                await add_paid_balance(session, callback.from_user.id, package['gens'])
-                await set_last_payment_method(session, callback.from_user.id, "yookassa_card")
-                await session.commit()
-                # Логируем С АНАЛИТИКОЙ
-                try:
-                    new_bal = await get_user_balance(session, callback.from_user.id)
-                    # 👇 1. Получаем статистику по юзеру
-                    stats = await get_user_financial_stats(session, callback.from_user.id)
-                    
-                    # 👇 2. Передаем её в логгер (параметр stats)
-                    await log_payment(
-                        bot, 
-                        callback.from_user, 
-                        package['price'], 
-                        f"{package['gens']} Бананов", 
-                        new_bal, 
-                        stats=stats 
-                    )
-                except Exception as e: 
-                    print(f"Log Error: {e}")
+        payment_details = get_yoo_payment_details(payment_id)
+        status = payment_details["status"]
 
-            # Поздравляем
-            await callback.message.edit_text(
-                t("payment.success", locale, amount=package["gens"], suffix=get_banana_label(locale, package["gens"])),
-                parse_mode="HTML"
-            )
-            
+        if status == "succeeded":
+            completed_at = _parse_yookassa_captured_at(payment_details["captured_at"])
+
+            if purchase_id is None:
+                metadata = payment_details.get("metadata", {}) or {}
+                metadata_purchase_id = metadata.get("purchase_id")
+                if metadata_purchase_id:
+                    try:
+                        purchase_id = int(metadata_purchase_id)
+                    except (TypeError, ValueError):
+                        purchase_id = None
+
+            async with async_session() as session:
+                if purchase_id is None:
+                    purchase = await session.scalar(
+                        select(Purchase).where(Purchase.payment_id == payment_id).limit(1)
+                    )
+                    if not purchase:
+                        purchase = await session.scalar(
+                            select(Purchase)
+                            .where(
+                                Purchase.user_id == callback.from_user.id,
+                                Purchase.price == price_rub,
+                                Purchase.status == "pending",
+                            )
+                            .order_by(Purchase.created_at.desc())
+                            .limit(1)
+                        )
+                    if not purchase:
+                        purchase = await create_purchase_record(
+                            session,
+                            callback.from_user.id,
+                            price_rub,
+                            bananas_count,
+                        )
+                    purchase_id = purchase.id
+
+                result = await finalize_yookassa_purchase(
+                    session,
+                    purchase_id=purchase_id,
+                    payment_id=payment_id,
+                    amount=payment_details["amount"],
+                    payment_method=payment_details["payment_method"],
+                    income_amount=payment_details["income_amount"],
+                    completed_at=completed_at,
+                    tariff_name=tariff_name,
+                )
+
+                if result.status == "applied":
+                    await session.commit()
+                else:
+                    await session.rollback()
+
+            if result.status == "applied":
+                bananas_count = result.amount
+                await _run_yookassa_post_commit_effects(
+                    bot,
+                    user_id=result.user_id,
+                    amount_rub=result.price,
+                    item_name=result.tariff_name or tariff_name,
+                    purchase_id=result.purchase_id,
+                    is_first_purchase=result.is_first_purchase,
+                )
+
+            if result.status in {"applied", "already_processed"}:
+                success_amount = result.amount or bananas_count
+                await callback.answer("✅")
+                await callback.message.edit_text(
+                    t("payment.success", locale, amount=success_amount, suffix=get_banana_label(locale, success_amount)),
+                    parse_mode="HTML",
+                )
+                return
+
+            print(f"Check finalize skipped: status={result.status}, purchase_id={purchase_id}, payment_id={payment_id}")
+            await callback.answer(t("payment.processing_error", locale), show_alert=True)
+            return
+
         elif status == "pending":
             await callback.answer(t("payment.pending", locale), show_alert=True)
-            
+
         elif status == "canceled":
             await callback.message.edit_text(t("payment.cancelled", locale), reply_markup=None)
-            
+
     except Exception as e:
         print(f"Check Error: {e}")
         await callback.answer(t("payment.processing_error", locale), show_alert=True)
