@@ -50,7 +50,11 @@ from app.handlers.payment import get_banana_label
 from app import config
 import asyncio
 import logging
-from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
+from aiogram.exceptions import (
+    TelegramRetryAfter,
+    TelegramForbiddenError,
+    TelegramNetworkError,
+)
 logger = logging.getLogger(__name__)
 content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
@@ -2318,39 +2322,90 @@ async def process_generation(
             # 7. Сжатие для превью
             file_bytes = result_file.data
             compressed_bytes = smart_compress_image(file_bytes)
-            preview_file = types.BufferedInputFile(compressed_bytes, filename="result.png")
-            
-        # 8. Отправка
+
+            # 8. Отправка
             sent_msg = None
             for attempt in range(3):
                 try:
+                    preview_file = types.BufferedInputFile(
+                        compressed_bytes, filename="result.png"
+                    )
                     sent_msg = await message.answer_photo(
-                        preview_file, 
-                        caption=caption, 
-                        parse_mode="HTML"
+                        preview_file,
+                        caption=caption,
+                        parse_mode="HTML",
+                        request_timeout=300,
                     )
                     break
                 except TelegramRetryAfter as e:
-                    logger.warning(f"⏳ FloodWait при отправке фото: ждём {e.retry_after} сек")
+                    logger.warning(
+                        f"⏳ FloodWait при отправке фото: ждём {e.retry_after} сек"
+                    )
                     await asyncio.sleep(e.retry_after)
+                except (TelegramNetworkError, asyncio.TimeoutError) as e:
+                    logger.warning(
+                        f"⚠️ Timeout/network при отправке фото, "
+                        f"попытка {attempt + 1}/3: {e}"
+                    )
+                    if attempt < 2:
+                        await asyncio.sleep(2 * (attempt + 1))
+                        continue
                 except Exception as e:
                     logger.warning(f"⚠️ Ошибка отправки фото: {e}")
-                    try:
-                        sent_msg = await message.answer_document(
-                            result_file, 
-                            caption=caption, 
-                            parse_mode="HTML"
-                        )
-                    except TelegramRetryAfter as e:
-                        logger.warning(f"⏳ FloodWait при отправке документа: ждём {e.retry_after} сек")
-                        await asyncio.sleep(e.retry_after)
-                    except Exception as e:
-                        logger.error(f"❌ Критическая ошибка отправки: {e}")
                     break
 
-            # 9. Сохранение в БД
             if not sent_msg:
-                return
+                for attempt in range(2):
+                    try:
+                        doc_file = types.BufferedInputFile(
+                            file_bytes, filename="result.png"
+                        )
+                        sent_msg = await message.answer_document(
+                            doc_file,
+                            caption=caption,
+                            parse_mode="HTML",
+                            disable_content_type_detection=True,
+                            request_timeout=300,
+                        )
+                        break
+                    except TelegramRetryAfter as e:
+                        logger.warning(
+                            f"⏳ FloodWait при отправке документа: "
+                            f"ждём {e.retry_after} сек"
+                        )
+                        await asyncio.sleep(e.retry_after)
+                    except (TelegramNetworkError, asyncio.TimeoutError) as e:
+                        logger.warning(
+                            f"⚠️ Timeout/network при отправке документа, "
+                            f"попытка {attempt + 1}/2: {e}"
+                        )
+                        if attempt < 1:
+                            await asyncio.sleep(3)
+                            continue
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка отправки документа: {e}")
+                        break
+
+            if not sent_msg and source_url:
+                try:
+                    await message.answer(
+                        t(
+                            "generation.msg.download_fallback_link",
+                            locale,
+                            url=source_url,
+                        ),
+                        parse_mode="HTML",
+                        request_timeout=30,
+                    )
+                except Exception:
+                    pass
+
+            if not sent_msg:
+                raise RuntimeError(
+                    "Telegram delivery timeout while sending generated image"
+                )
+
+            # 9. Сохранение в БД
             sent_file_id = (
                 sent_msg.photo[-1].file_id if sent_msg.photo 
                 else sent_msg.document.file_id
