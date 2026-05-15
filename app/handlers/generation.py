@@ -289,7 +289,7 @@ async def send_complaint_instruction(message: types.Message):
         message.bot,
         message.from_user.id,
         message.from_user.username,
-        message.text
+        message.text or message.caption or "",
     )
 
 class GenState(StatesGroup):
