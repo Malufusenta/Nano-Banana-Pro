@@ -12,9 +12,9 @@ import certifi
 
 logger = logging.getLogger(__name__)
 
-# Виртуальный page-url для достижения JS-цели через hit-счётчик (см. рекомендации Метрики)
-TELEGRAM_START_REFERER = "https://t.me/nan0banana_bot/start"
-WATCH_GOAL_NAME = "BOT_START"
+TELEGRAM_START_DL = "https://t.me/nan0banana_bot/start"
+BOT_START_GOAL_ID = "BOT_START"
+COLLECT_URL = "https://mc.yandex.ru/collect/"
 
 
 class YandexMetricaService:
@@ -26,18 +26,21 @@ class YandexMetricaService:
         token: str,
         enabled: bool = True,
         bot_start_target: str = "",
+        ms_token: str = "",
     ):
         """
         Args:
             counter_id: ID счетчика Яндекс.Метрики
-            token: OAuth токен для API
+            token: OAuth токен для API (офлайн-конверсии)
             enabled: Включена ли отправка
-            bot_start_target: ID JS-цели для старта бота (офлайн CSV, колонка Target)
+            bot_start_target: Target для офлайн CSV (опционально)
+            ms_token: Токен Measurement Protocol для /collect/
         """
         self.counter_id = counter_id
         self.token = token
         self.enabled = enabled
         self.bot_start_target = (bot_start_target or "").strip()
+        self.ms_token = (ms_token or "").strip()
         self.base_url = "https://api-metrika.yandex.net"
 
     async def _post_offline_csv(self, csv_content: str, log_prefix: str) -> bool:
@@ -74,35 +77,51 @@ class YandexMetricaService:
             logger.error(f"❌ {log_prefix}: ошибка загрузки: {e}")
             return False
 
-    async def _send_bot_start_watch_goal(self, client_id: str) -> bool:
-        """
-        Hit на mc.yandex.ru/watch с goal://{counter}/BOT_START в page-url (источник в referer).
-        """
+    async def _send_bot_start_collect_goal(self, client_id: str) -> bool:
+        """JS-цель BOT_START через Measurement Protocol (/collect/)."""
+        if not self.ms_token:
+            logger.warning(
+                "⚠️ BOT_START collect: YANDEX_METRICA_MS_TOKEN не задан — событие не отправлено"
+            )
+            return False
+
         params = {
-            "wmode": 7,
-            "page-url": f"goal://{self.counter_id}/{WATCH_GOAL_NAME}",
-            "client-id": client_id,
-            "referer": TELEGRAM_START_REFERER,
+            "tid": self.counter_id,
+            "cid": client_id,
+            "t": "event",
+            "ea": BOT_START_GOAL_ID,
+            "ms": self.ms_token,
+            "et": str(int(datetime.now().timestamp())),
+            "dl": TELEGRAM_START_DL,
         }
-        url = f"https://mc.yandex.ru/watch/{self.counter_id}"
         try:
-            async with aiohttp.ClientSession() as session:
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            async with aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=ssl_context)
+            ) as session:
                 async with session.get(
-                    url,
+                    COLLECT_URL,
                     params=params,
-                    timeout=aiohttp.ClientTimeout(total=3),
-                    ssl=False,
+                    timeout=aiohttp.ClientTimeout(total=5),
                 ) as response:
-                    if response.status == 200:
+                    body = await response.text()
+                    if response.status in (200, 204):
                         logger.info(
-                            f"✅ BOT_START watch: goal://{self.counter_id}/{WATCH_GOAL_NAME}, "
-                            f"cid={client_id[:12]}..."
+                            f"✅ BOT_START collect (Measurement Protocol): "
+                            f"ea={BOT_START_GOAL_ID}, tid={self.counter_id}, "
+                            f"cid={client_id[:12]}..., status={response.status}"
                         )
                         return True
-                    logger.warning(f"⚠️ BOT_START watch: HTTP {response.status}")
+                    logger.warning(
+                        f"⚠️ BOT_START collect: HTTP {response.status}, "
+                        f"cid={client_id[:12]}..., response={body[:300]}"
+                    )
                     return False
+        except asyncio.TimeoutError:
+            logger.error(f"⏱️ BOT_START collect: timeout, cid={client_id[:12]}...")
+            return False
         except Exception as e:
-            logger.error(f"❌ BOT_START watch: {e}")
+            logger.error(f"❌ BOT_START collect: {e}, cid={client_id[:12]}...")
             return False
 
     async def send_purchase_conversion(
@@ -146,8 +165,8 @@ class YandexMetricaService:
 
     async def send_bot_start_event(self, client_id: str) -> bool:
         """
-        Старт в боте: 1) офлайн CSV (Target = bot_start_target) при наличии токена;
-        2) hit watch с page-url goal://{counter}/BOT_START и referer на Telegram.
+        Старт в боте: Measurement Protocol (/collect/, ea=BOT_START);
+        опционально офлайн CSV (Target = bot_start_target) при наличии OAuth-токена.
         """
         if not self.enabled:
             logger.info("⏭️ BOT_START: Метрика отключена (test mode)")
@@ -169,15 +188,14 @@ class YandexMetricaService:
                 )
         elif self.bot_start_target and not self.token:
             logger.warning(
-                "⚠️ BOT_START: пустой YANDEX_METRICA_TOKEN — офлайн пропущена, только watch"
+                "⚠️ BOT_START: пустой YANDEX_METRICA_TOKEN — офлайн пропущена, только collect"
             )
             offline_ok = False
 
-        watch_ok = await self._send_bot_start_watch_goal(client_id)
+        collect_ok = await self._send_bot_start_collect_goal(client_id)
 
-        # watch — основной путь из ТЗ; офлайн обязателен только если заданы target и token
         need_offline = bool(self.bot_start_target and self.token)
-        return watch_ok and (not need_offline or offline_ok)
+        return collect_ok and (not need_offline or offline_ok)
 
 
 # Глобальный экземпляр
@@ -189,10 +207,18 @@ def init_metrica_service(
     token: str,
     enabled: bool = True,
     bot_start_target: str = "",
+    ms_token: str = "",
 ):
     """Инициализация сервиса"""
     global metrica_service
     metrica_service = YandexMetricaService(
-        counter_id, token, enabled, bot_start_target=bot_start_target
+        counter_id,
+        token,
+        enabled,
+        bot_start_target=bot_start_target,
+        ms_token=ms_token,
     )
-    logger.info(f"📊 Yandex Metrica инициализирован (enabled={enabled})")
+    mp_status = "настроен" if (ms_token or "").strip() else "не задан (YANDEX_METRICA_MS_TOKEN)"
+    logger.info(
+        f"📊 Yandex Metrica инициализирован (enabled={enabled}, collect={mp_status})"
+    )

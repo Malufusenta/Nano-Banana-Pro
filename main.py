@@ -148,6 +148,7 @@ async def main():
         token=config.YANDEX_METRICA_TOKEN,
         enabled=config.YANDEX_METRICA_ENABLED,  # False для теста
         bot_start_target=config.YANDEX_METRICA_BOT_START_TARGET,
+        ms_token=config.YANDEX_METRICA_MS_TOKEN,
     )
 
     logger.info("✅ Бот запущен!")
