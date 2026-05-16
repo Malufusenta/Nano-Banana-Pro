@@ -162,6 +162,11 @@ async def dashboard_stats(request: Request, period: str = "today", date_from: st
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     date_from, date_to = get_period_dates(period)
+
+    # Конвертируем московское время в UTC для запроса к БД
+    date_from = moscow_tz.localize(date_from).astimezone(pytz.utc).replace(tzinfo=None)
+    date_to = moscow_tz.localize(date_to).astimezone(pytz.utc).replace(tzinfo=None)
+
     usd_rate = await get_usd_rate()
 
     async with async_session() as session:
@@ -246,26 +251,30 @@ async def dashboard_chart(request: Request, days: int = 30):
 
     async with async_session() as session:
         result = []
-        now = datetime.utcnow()
+        now = datetime.now(pytz.utc).astimezone(moscow_tz)
 
         for i in range(days - 1, -1, -1):
             day = now - timedelta(days=i)
             date_from = day.replace(hour=0, minute=0, second=0, microsecond=0)
-            date_to = day.replace(hour=23, minute=59, second=59)
+            date_to = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            # Конвертируем в UTC для запроса к БД
+            date_from_utc = date_from.astimezone(pytz.utc).replace(tzinfo=None)
+            date_to_utc = date_to.astimezone(pytz.utc).replace(tzinfo=None)
 
             revenue = await session.scalar(
                 select(func.sum(Purchase.price)).where(
                     Purchase.status == "succeeded",
-                    Purchase.completed_at >= date_from,
-                    Purchase.completed_at <= date_to,
+                    Purchase.completed_at >= date_from_utc,
+                    Purchase.completed_at <= date_to_utc,
                     or_(Purchase.tariff_name != "Telegram Stars", Purchase.tariff_name.is_(None))
                 )
             ) or 0
 
             new_users = await session.scalar(
                 select(func.count(User.id)).where(
-                    User.created_at >= date_from,
-                    User.created_at <= date_to
+                    User.created_at >= date_from_utc,
+                    User.created_at <= date_to_utc
                 )
             ) or 0
 
