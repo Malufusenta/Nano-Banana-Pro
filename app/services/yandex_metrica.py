@@ -6,14 +6,16 @@ import aiohttp
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 import ssl
 import certifi
 
 logger = logging.getLogger(__name__)
 
 TELEGRAM_START_DL = "https://t.me/nan0banana_bot/start"
+TELEGRAM_BOT_DL = "https://t.me/nan0banana_bot"
 BOT_START_GOAL_ID = "BOT_START"
+PURCHASE_GOAL_ID = "PURCHASE"
 COLLECT_URL = "https://mc.yandex.ru/collect/"
 
 
@@ -31,9 +33,9 @@ class YandexMetricaService:
         """
         Args:
             counter_id: ID счетчика Яндекс.Метрики
-            token: OAuth токен для API (офлайн-конверсии)
+            token: OAuth токен для API (офлайн BOT_START, опционально)
             enabled: Включена ли отправка
-            bot_start_target: Target для офлайн CSV (опционально)
+            bot_start_target: Target для офлайн CSV старта (опционально)
             ms_token: Токен Measurement Protocol для /collect/
         """
         self.counter_id = counter_id
@@ -77,23 +79,37 @@ class YandexMetricaService:
             logger.error(f"❌ {log_prefix}: ошибка загрузки: {e}")
             return False
 
-    async def _send_bot_start_collect_goal(self, client_id: str) -> bool:
-        """JS-цель BOT_START через Measurement Protocol (/collect/)."""
+    async def _send_collect_event(
+        self,
+        client_id: str,
+        ea: str,
+        *,
+        dl: str = TELEGRAM_BOT_DL,
+        extra_params: dict[str, Any] | None = None,
+        log_suffix: str = "",
+    ) -> bool:
+        """Отправка JS-цели через Measurement Protocol (/collect/)."""
         if not self.ms_token:
             logger.warning(
-                "⚠️ BOT_START collect: YANDEX_METRICA_MS_TOKEN не задан — событие не отправлено"
+                f"⚠️ {ea} collect: YANDEX_METRICA_MS_TOKEN не задан — событие не отправлено"
             )
             return False
 
-        params = {
+        params: dict[str, str] = {
             "tid": self.counter_id,
             "cid": client_id,
             "t": "event",
-            "ea": BOT_START_GOAL_ID,
+            "ea": ea,
             "ms": self.ms_token,
             "et": str(int(datetime.now().timestamp())),
-            "dl": TELEGRAM_START_DL,
+            "dl": dl,
         }
+        if extra_params:
+            for key, value in extra_params.items():
+                if value is not None:
+                    params[key] = str(value)
+
+        suffix_part = f", {log_suffix}" if log_suffix else ""
         try:
             ssl_context = ssl.create_default_context(cafile=certifi.where())
             async with aiohttp.ClientSession(
@@ -107,21 +123,21 @@ class YandexMetricaService:
                     body = await response.text()
                     if response.status in (200, 204):
                         logger.info(
-                            f"✅ BOT_START collect (Measurement Protocol): "
-                            f"ea={BOT_START_GOAL_ID}, tid={self.counter_id}, "
-                            f"cid={client_id[:12]}..., status={response.status}"
+                            f"✅ {ea} collect (Measurement Protocol): "
+                            f"ea={ea}, tid={self.counter_id}, "
+                            f"cid={client_id[:12]}...{suffix_part}, status={response.status}"
                         )
                         return True
                     logger.warning(
-                        f"⚠️ BOT_START collect: HTTP {response.status}, "
+                        f"⚠️ {ea} collect: HTTP {response.status}, "
                         f"cid={client_id[:12]}..., response={body[:300]}"
                     )
                     return False
         except asyncio.TimeoutError:
-            logger.error(f"⏱️ BOT_START collect: timeout, cid={client_id[:12]}...")
+            logger.error(f"⏱️ {ea} collect: timeout, cid={client_id[:12]}...")
             return False
         except Exception as e:
-            logger.error(f"❌ BOT_START collect: {e}, cid={client_id[:12]}...")
+            logger.error(f"❌ {ea} collect: {e}, cid={client_id[:12]}...")
             return False
 
     async def send_purchase_conversion(
@@ -132,18 +148,17 @@ class YandexMetricaService:
         tariff_name: str = None,
     ) -> bool:
         """
-        Отправка конверсии покупки в Яндекс.Метрику через CSV
+        Отправка конверсии покупки в Яндекс.Метрику через Measurement Protocol.
 
         Args:
             client_id: Yandex ClientID (_ym_uid) пользователя
             order_id: ID покупки из БД
             revenue: Сумма покупки в рублях
-            tariff_name: Название тарифа (опционально)
+            tariff_name: Название тарифа (опционально, для логов)
 
         Returns:
             bool: True если успешно отправлено
         """
-
         if not self.enabled:
             logger.info("⏭️ Отправка в Метрику отключена (test mode)")
             return True
@@ -152,16 +167,16 @@ class YandexMetricaService:
             logger.warning(f"⚠️ ClientID отсутствует для order {order_id}")
             return False
 
-        timestamp = int(datetime.now().timestamp())
-        csv_content = "ClientId,Target,DateTime,Price,Currency\n"
-        csv_content += f"{client_id},PURCHASE,{timestamp},{revenue},RUB\n"
+        log_suffix = f"order={order_id}, revenue={revenue}₽"
+        if tariff_name:
+            log_suffix += f", tariff={tariff_name}"
 
-        ok = await self._post_offline_csv(csv_content, f"PURCHASE order={order_id}")
-        if ok:
-            logger.info(
-                f"✅ Конверсия отправлена: order={order_id}, cid={client_id[:8]}..., sum={revenue}₽"
-            )
-        return ok
+        return await self._send_collect_event(
+            client_id,
+            PURCHASE_GOAL_ID,
+            dl=TELEGRAM_BOT_DL,
+            log_suffix=log_suffix,
+        )
 
     async def send_bot_start_event(self, client_id: str) -> bool:
         """
@@ -192,7 +207,11 @@ class YandexMetricaService:
             )
             offline_ok = False
 
-        collect_ok = await self._send_bot_start_collect_goal(client_id)
+        collect_ok = await self._send_collect_event(
+            client_id,
+            BOT_START_GOAL_ID,
+            dl=TELEGRAM_START_DL,
+        )
 
         need_offline = bool(self.bot_start_target and self.token)
         return collect_ok and (not need_offline or offline_ok)
