@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import ssl
+import time
 from datetime import datetime
 from decimal import Decimal
 
@@ -13,6 +14,7 @@ from sqlalchemy import func, select
 
 from app import config
 from app.database import async_session
+from app.health_routes import handle_health
 from app.kling_webhook import handle_kling_callback
 from app.models import Purchase, User
 from app.packages import PACKAGES
@@ -296,9 +298,11 @@ async def handle_yookassa(request):
 async def start_webhook_server(bot: Bot):
     app = web.Application()
     app["bot"] = bot
+    app["health_started_at"] = time.time()
     app.router.add_post(WEBHOOK_PATH, handle_yookassa)
     app.router.add_post(WEBHOOK_CRYPTO_PAY_PATH, handle_crypto_pay_webhook)
     app.router.add_post("/kling_webhook", handle_kling_callback)
+    app.router.add_get("/health", handle_health)
 
     runner = web.AppRunner(app)
     await runner.setup()

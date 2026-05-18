@@ -178,7 +178,7 @@ async def main():
     scheduler.start()
     logger.info("📅 Планировщик запущен: отчёты будут отправляться в 04:30, image_hashes чистятся каждый час")
 
-    # Запускаем сервер оплат параллельно с ботом
+    # Сервер aiohttp на 5001: вебхуки оплат + публичный GET /health (см. app/webhook_server.py)
     await start_webhook_server(bot)
 
     await dp.start_polling(bot)
