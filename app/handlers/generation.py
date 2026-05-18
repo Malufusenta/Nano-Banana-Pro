@@ -39,7 +39,6 @@ from app.services.image_hash_service import (
     should_run_image_hash_check,
     store_image_hashes,
 )
-from app.services.kie_pricing import get_kie_credits
 from app.utils import prompts
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, update, select
@@ -55,33 +54,38 @@ from aiogram.exceptions import (
     TelegramForbiddenError,
     TelegramNetworkError,
 )
+
+# Утилиты для работы с изображениями и Telegram
+from app.utils.image_utils import smart_compress_image, create_collage, normalize_image_urls
+from app.utils.telegram_utils import get_photo_url, is_image_document
+
+# Клавиатуры
+from app.keyboards.generation import get_preflight_kb, get_ratio_kb, get_result_kb, get_cancel_kb
+
+# Калькулятор стоимости и обработка ошибок
+from app.services.generation import calc_cost, get_kie_credits
+from app.services.generation.model_description import get_model_description
+from app.utils.error_handler import handle_generation_error, handle_null_result_error
+from app.handlers.generation_states import GenState
+from app.utils.prompt_utils import is_blend_request
+
+# Импорт функций из generation_flow для использования в других модулях
+from app.handlers.generation_flow.preflight import (
+    start_preflight_check,
+    get_smart_alert_message,
+    compose_preflight_message_html,
+    compose_preflight_scenario_ready_html,
+    _preflight_locale,
+)
+from app.handlers.generation_flow.video import (
+    offer_video_if_requested,
+    send_video_offer_message,
+    process_video_generation,
+)
 logger = logging.getLogger(__name__)
 content_filter = ContentFilter(
     FilterMode[config.FILTER_MODE.upper()]  # "shadow" -> FilterMode.SHADOW
 )
-
-def get_model_description(model: str, locale: str) -> str:
-    key_map = {
-        "standard": "generation.preflight.model_desc_standard",
-        "nb2": "generation.preflight.model_desc_nb2",
-        "pro": "generation.preflight.model_desc_pro",
-    }
-    key = key_map.get(model)
-    if not key:
-        return ""
-    return t(key, locale)
-
-
-def calc_cost(model_type: str, quality: str) -> int:
-    if model_type == "pro":
-        if quality == "4k": return config.COST_PRO_4K
-        elif quality == "2k": return config.COST_PRO_2K
-        else: return config.COST_PRO_1K
-    elif model_type == "nb2":
-        if quality == "4k": return config.COST_NB2_4K
-        elif quality == "2k": return config.COST_NB2_2K
-        else: return config.COST_NB2_1K
-    return config.COST_STANDARD
 
 router = Router()
 
@@ -96,6 +100,24 @@ IGNORED_TEXTS = [
 ]
 
 PARAM_USER_VALUE_MAX_LEN = 500
+
+
+def _first_photo_file_id(messages: list[types.Message]) -> str | None:
+    for msg in messages:
+        if msg.photo:
+            return msg.photo[-1].file_id
+    return None
+
+
+async def _save_pending_photo(
+    state: FSMContext,
+    image_urls: list[str],
+    photo_file_id: str | None,
+) -> None:
+    payload = {"pending_image_urls": image_urls}
+    if photo_file_id:
+        payload["pending_photo_file_id"] = photo_file_id
+    await state.update_data(**payload)
 
 
 def apply_value_to_main_prompt(main_prompt: str, user_value: str) -> str:
@@ -144,15 +166,6 @@ async def send_param_prompt_photo_before_text_error(
     )
 
 
-def _is_image_document(message: types.Message) -> bool:
-    d = message.document
-    if not d:
-        return False
-    mt = (d.mime_type or "").lower()
-    if mt.startswith("image/"):
-        return True
-    fn = (d.file_name or "").lower()
-    return any(fn.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif"))
 
 
 async def enter_broadcast_generation_preflight(
@@ -201,46 +214,6 @@ async def enter_broadcast_generation_preflight(
         reply_markup=get_preflight_kb(model, ratio, "1k", locale),
         parse_mode="HTML",
     )
-
-
-async def get_smart_alert_message(
-    session, user_id: int, balance: int, cost: int, locale: str
-) -> tuple[str, InlineKeyboardBuilder]:
-    """
-    Возвращает умное сообщение и клавиатуру в зависимости от сценария
-    
-    Returns:
-        (text, keyboard_builder)
-    """
-    has_purchases = await has_user_purchased(session, user_id)
-    
-    builder = InlineKeyboardBuilder()
-    
-    # 🔹 СЦЕНАРИЙ В: Не хватает чуть-чуть (Баланс > 0, но < Цены)
-    if balance > 0 and balance < cost:
-        text = t(
-            "generation.smart.need_more",
-            locale,
-            cost=cost,
-            balance=balance,
-        )
-        builder.button(text=t("menu.buy", locale), callback_data="goto_shop")
-        builder.adjust(1)
-        return text, builder
-    
-    # 🔹 СЦЕНАРИЙ Б: Опытный (Баланс 0, покупки были)
-    if balance == 0 and has_purchases:
-        text = t("generation.smart.empty_buy", locale)
-        builder.button(text=t("menu.buy", locale), callback_data="goto_shop")
-        builder.adjust(1)
-        return text, builder
-    
-    # 🔹 СЦЕНАРИЙ А: Новичок (Баланс 0, покупок не было)
-    text = t("generation.smart.empty_newbie", locale)
-    builder.button(text=t("menu.buy", locale), callback_data="goto_shop")
-    builder.button(text=t("menu.free", locale), callback_data="goto_free")
-    builder.adjust(1)
-    return text, builder
 
 
 def get_duplicate_photo_block_kb(locale: str):
@@ -296,260 +269,17 @@ async def send_complaint_instruction(message: types.Message):
         message.text or message.caption or "",
     )
 
-class GenState(StatesGroup):
-    waiting_for_category_input = State() 
-    waiting_for_caption = State()
-    waiting_for_base_image = State()
-    waiting_for_ref_image = State()
-    waiting_for_replace_object_text = State()
-    free_mode = State()
-    waiting_for_ratio = State()
-    preflight_check = State()
-    selecting_ratio = State()
-    waiting_for_edit_instruction = State()
-    retry_waiting_photos = State()  # 👈 Новое состояние для ретрая
-    waiting_for_video_source = State()  # Ожидание фото для генерации видео
-    waiting_for_prompt_text = State()  # Текстовый ответ на вопрос промпта (рассылка / post link)
-    waiting_for_prompt_photo = State()  # Фото после ответа на вопрос
-
-
 # =====================================================================
-# 🛠 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-# =====================================================================
-def smart_compress_image(file_bytes: bytes) -> bytes:
-    """Сжимает изображение если > 9.5 МБ"""
-    LIMIT_BYTES = 9.5 * 1024 * 1024 
-    
-    if len(file_bytes) <= LIMIT_BYTES:
-        return file_bytes 
-    
-    print(f"⚠️ Файл слишком большой ({len(file_bytes) / 1024 / 1024:.2f} MB). Сжимаю...")
-    
-    try:
-        img = Image.open(io.BytesIO(file_bytes))
-        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-            img = img.convert("RGB")
-            
-        max_dimension = 2560
-        if max(img.size) > max_dimension:
-            img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-            
-        output_io = io.BytesIO()
-        img.save(output_io, format='JPEG', quality=85, optimize=True)
-        return output_io.getvalue()
-    except Exception as e:
-        print(f"❌ Ошибка сжатия: {e}")
-        return file_bytes
-
-def normalize_image_urls(image_urls) -> list:
-    """✅ ЕДИНАЯ функция нормализации URL"""
-    if not image_urls:
-        return []
-    if isinstance(image_urls, str):
-        return [image_urls]
-    if isinstance(image_urls, list):
-        return image_urls
-    return []
-
-def create_collage(images: list, max_size=1024) -> Image.Image:
-    """
-    Создаёт коллаж из 2-4 изображений
-    
-    2 фото: горизонтально [img1][img2]
-    3-4 фото: сетка 2x2
-    """
-    count = len(images)
-    
-    if count == 2:
-        cols, rows = 2, 1
-    elif count <= 4:
-        cols, rows = 2, 2
-    else:
-        raise ValueError("Max 4 images")
-    
-    cell_w = max_size // cols
-    cell_h = max_size // rows
-    
-    canvas = Image.new('RGB', (max_size, max_size), 'white')
-    
-    for idx, img in enumerate(images):
-        img_resized = img.copy()
-        img_resized.thumbnail((cell_w, cell_h), Image.Resampling.LANCZOS)
-        
-        col = idx % cols
-        row = idx // cols
-        
-        x = col * cell_w + (cell_w - img_resized.width) // 2
-        y = row * cell_h + (cell_h - img_resized.height) // 2
-        
-        canvas.paste(img_resized, (x, y))
-    
-    return canvas
-
-async def get_photo_url(bot: Bot, file_id: str) -> str:
-    """Получает URL фото"""
-    if not file_id:
-        return None
-    file_info = await bot.get_file(file_id)
-    return f"https://api.telegram.org/file/bot{bot.token}/{file_info.file_path}"
-
-# =====================================================================
-# 🎛 КЛАВИАТУРЫ
+# 🎛 КЛАВИАТУРЫ (перенесены в app/keyboards/generation/)
 # =====================================================================
 
-def _preflight_locale(user: types.User | None) -> str:
-    return resolve_locale(user.language_code if user else None)
+# =====================================================================
+# 🛫 ПРЕДПОЛЕТНЫЙ ЧЕК (перенесено в generation_flow/preflight.py)
+# =====================================================================
 
-
-def _preflight_prompt_snippet(prompt: str, max_len: int = 35) -> str:
-    raw = (prompt or "")[:max_len]
-    return html.quote(raw) + "..."
-
-
-def compose_preflight_message_html(
-    locale: str,
-    *,
-    prompt_raw: str,
-    cost: int,
-    model: str,
-    has_photo: bool,
-    is_edit_mode: bool,
-    is_broadcast: bool,
-    use_settings_header: bool,
-) -> str:
-    if is_broadcast:
-        return (
-            f"{t('generation.preflight.header_params', locale)}\n\n"
-            f"{t('generation.preflight.broadcast_cta', locale)}"
-        )
-    snippet = _preflight_prompt_snippet(prompt_raw)
-    banana_suffix = get_banana_label(locale, cost)
-    prompt_line = t("generation.preflight.prompt_line", locale, snippet=snippet)
-    cost_line = t("generation.preflight.cost_line", locale, cost=cost, suffix=banana_suffix)
-    footer = t("generation.preflight.footer", locale)
-    model_desc = get_model_description(model, locale)
-    header = (
-        t("generation.preflight.header_settings", locale)
-        if use_settings_header
-        else t("generation.preflight.header_params", locale)
-    )
-    parts = [header, prompt_line, cost_line]
-    if model_desc and not is_edit_mode:
-        parts.append(model_desc)
-    if (not has_photo) or is_edit_mode:
-        parts.append(t("generation.preflight.warning", locale))
-    parts.append(footer)
-    return "\n\n".join(parts)
-
-
-def compose_preflight_scenario_ready_html(locale: str) -> str:
-    return (
-        f"{t('generation.preflight.header_params', locale)}\n\n"
-        f"{t('generation.preflight.scenario_ready', locale)}\n\n"
-        f"{t('generation.preflight.tap_launch', locale)}"
-    )
-
-
-def get_preflight_kb(model_type: str, ratio: str, quality: str, locale: str):
-    builder = InlineKeyboardBuilder()
-
-    if model_type == "pro":
-        model_btn = t("generation.preflight.model_pro", locale)
-    elif model_type == "nb2":
-        model_btn = t("generation.preflight.model_nb2", locale)
-    else:
-        model_btn = t("generation.preflight.model_standard", locale)
-
-    qual_btn = None
-    if model_type == "pro":
-        if quality == "4k":
-            qual_btn = t("generation.preflight.q_pro_4k", locale)
-        elif quality == "2k":
-            qual_btn = t("generation.preflight.q_pro_2k", locale)
-        else:
-            qual_btn = t("generation.preflight.q_pro_hd", locale)
-    elif model_type == "nb2":
-        if quality == "4k":
-            qual_btn = t("generation.preflight.q_nb2_4k", locale)
-        elif quality == "2k":
-            qual_btn = t("generation.preflight.q_nb2_2k", locale)
-        else:
-            qual_btn = t("generation.preflight.q_nb2_hd", locale)
-
-    cost = calc_cost(model_type, quality)
-
-    builder.button(text=model_btn, callback_data="pf_toggle_model")
-    if model_type == "pro":
-        builder.button(text=t("generation.preflight.btn_format", locale, ratio=ratio), callback_data="pf_select_ratio")
-        if qual_btn:
-            builder.button(text=qual_btn, callback_data="pf_toggle_quality")
-    else:
-        if qual_btn:
-            builder.button(text=qual_btn, callback_data="pf_toggle_quality")
-        builder.button(text=t("generation.preflight.btn_format", locale, ratio=ratio), callback_data="pf_select_ratio")
-    builder.button(text=t("generation.preflight.btn_start", locale, cost=cost), callback_data="pf_start")
-
-    if model_type == "pro":
-        builder.adjust(2, 1, 1)
-    elif model_type == "nb2":
-        builder.adjust(1, 2, 1)
-    else:
-        builder.adjust(1, 1, 1)
-
-    return builder.as_markup()
-
-
-def get_ratio_kb(model_type: str = "standard", locale: str = "ru"):
-    builder = InlineKeyboardBuilder()
-
-    if model_type == "nb2":
-        ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
-    else:
-        ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9"]
-
-    for r in ratios:
-        builder.button(text=r, callback_data=f"set_ratio_{r}")
-    builder.button(text=t("shop.back_to_methods", locale), callback_data="pf_back")
-    
-    if model_type == "nb2":
-        builder.adjust(3, 3, 2, 2, 4, 1)
-    else:
-        builder.adjust(3, 3, 2, 2, 1)
-    
-    return builder.as_markup()
-
-def get_cancel_kb(locale: str = "en"):
-    builder = InlineKeyboardBuilder()
-    builder.button(text=t("common.cancel_button", locale), callback_data="cancel_wizard")
-    return builder.as_markup()
-
-def get_result_kb(
-    db_message_id: int,
-    is_pro: bool,
-    cost: int,
-    is_nb2: bool = False,
-    locale: str = "en",
-):
-    builder = InlineKeyboardBuilder()
-    builder.button(
-        text=t("generation.result.btn_reroll", locale, cost=cost),
-        callback_data=f"reroll_{db_message_id}",
-    )
-    builder.button(
-        text=t("generation.result.btn_edit", locale, cost=cost),
-        callback_data=f"edit_{db_message_id}",
-    )
-    builder.button(
-        text=t("generation.video.btn_animate", locale, cost=config.COST_VIDEO),
-        callback_data=f"animate_{db_message_id}",
-    )
-    if is_pro or is_nb2:
-        builder.button(
-            text=t("generation.result.btn_download_lossless", locale),
-            callback_data=f"download_{db_message_id}",
-        )
-    builder.adjust(2, 1, 1) if (is_pro or is_nb2) else builder.adjust(2, 1)
-    return builder.as_markup()
+# =====================================================================
+# 📸 IMAGE FLOW
+# =====================================================================
 
 def get_categories_kb():
     builder = InlineKeyboardBuilder()
@@ -564,388 +294,8 @@ def get_categories_kb():
     return builder.as_markup()
 
 # =====================================================================
-# 🛫 ПРЕДПОЛЕТНЫЙ ЧЕК
+# 🛫 ПРЕДПОЛЕТНЫЙ ЧЕК (перенесено в generation_flow/preflight.py)
 # =====================================================================
-async def start_preflight_check(message: types.Message, state: FSMContext, prompt: str, image_urls=None, is_edit_mode=False, initial_ratio=None):
-    user_id = message.from_user.id
-
-    # 🔥 ПРОВЕРЯЕМ РЕКЛАМНЫЙ СЦЕНАРИЙ
-    data = await state.get_data()
-
-    from_ad_scenario = data.get("from_ad_scenario", False)
-    
-    # Если пришли из рекламного сценария - используем его настройки
-    if from_ad_scenario:
-        scenario_prompt = data.get("ad_scenario_prompt")
-        scenario_model = data.get("ad_scenario_model", "standard")
-        scenario_ratio = data.get("ad_scenario_ratio", "1:1")
-        
-        # Объединяем промт пользователя с промтом сценария
-        combined_prompt = f"{scenario_prompt}, {prompt}" if prompt else scenario_prompt
-        
-        # Очищаем флаг
-        await state.update_data(from_ad_scenario=False)
-        
-        # Нормализуем URL
-        normalized_urls = normalize_image_urls(image_urls)
-        
-        await state.update_data(
-            pf_prompt=combined_prompt,
-            pf_image_urls=normalized_urls,
-            pf_model=scenario_model,
-            pf_ratio=scenario_ratio,
-            pf_quality="hd" if scenario_model == "nb2" else "2k"
-        )
-
-        locale = _preflight_locale(message.from_user)
-        text = compose_preflight_scenario_ready_html(locale)
-
-        await message.answer(
-            text,
-            reply_markup=get_preflight_kb(scenario_model, scenario_ratio, "2k", locale),
-            parse_mode="HTML",
-        )
-        return
-    
-    # 🔥 ОБЫЧНАЯ ЛОГИКА
-    force_pro = data.get("force_pro_mode", False)
-    from_broadcast = data.get("from_broadcast", False)
-    
-    async with async_session() as session:
-        pref_model = "pro" if force_pro else await get_user_model_preference(session, user_id)
-        user_obj = await get_user(session, user_id)
-        is_new_user = user_obj is None or not user_obj.first_generation_done
-        no_standard_model = from_broadcast or from_ad_scenario or is_new_user
-
-        if no_standard_model and pref_model == "standard":
-            pref_model = "nb2"
-
-        saved_ratio = initial_ratio or getattr(user_obj, "last_image_ratio", "1:1") or "1:1"
-    
-    normalized_urls = normalize_image_urls(image_urls)
-    
-    await state.update_data(
-        pf_prompt=prompt, 
-        pf_image_urls=normalized_urls,
-        pf_model=pref_model, 
-        pf_ratio=saved_ratio, 
-        pf_quality="hd" if pref_model == "nb2" else "2k",
-        pf_is_edit_mode=is_edit_mode,
-        no_standard_model=no_standard_model,
-    )
-    await state.set_state(GenState.preflight_check)
-    
-    quality = "2k"  # дефолтное качество при инициализации
-    if pref_model == "pro":
-        if quality == "4k": cost = config.COST_PRO_4K
-        elif quality == "2k": cost = config.COST_PRO_2K
-        else: cost = config.COST_PRO_1K
-    elif pref_model == "nb2":
-        if quality == "4k": cost = config.COST_NB2_4K
-        elif quality == "2k": cost = config.COST_NB2_2K
-        else: cost = config.COST_NB2_1K
-    else:
-        cost = config.COST_STANDARD
-    has_photo = normalized_urls is not None and len(normalized_urls) > 0
-    locale = _preflight_locale(message.from_user)
-    if not has_photo or is_edit_mode:
-        cost = calc_cost(pref_model, "hd")
-        text = compose_preflight_message_html(
-            locale,
-            prompt_raw=prompt or "",
-            cost=cost,
-            model=pref_model,
-            has_photo=has_photo,
-            is_edit_mode=is_edit_mode,
-            is_broadcast=False,
-            use_settings_header=True,
-        )
-    else:
-        cost = calc_cost(pref_model, "hd")
-        text = compose_preflight_message_html(
-            locale,
-            prompt_raw=prompt or "",
-            cost=cost,
-            model=pref_model,
-            has_photo=has_photo,
-            is_edit_mode=is_edit_mode,
-            is_broadcast=False,
-            use_settings_header=False,
-        )
-
-    await message.answer(
-        text,
-        reply_markup=get_preflight_kb(pref_model, saved_ratio, "hd", locale),
-        parse_mode="HTML",
-    )
-
-@router.callback_query(GenState.preflight_check, F.data == "pf_toggle_model")
-async def cb_pf_toggle_model(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    current_model = data.get("pf_model", "standard")
-    
-    if data.get("no_standard_model"):
-        new_model = "pro" if current_model == "nb2" else "nb2"
-    else:
-        if current_model == "standard":
-            new_model = "nb2"
-        elif current_model == "nb2":
-            new_model = "pro"
-        else:
-            new_model = "standard"
-    
-    await state.update_data(pf_model=new_model)
-    
-    async with async_session() as session: 
-        await set_user_model_preference(session, callback.from_user.id, new_model, manual=True)
-    
-    ratio = data.get("pf_ratio", "1:1")
-    quality = data.get("pf_quality", "hd")
-    
-    # При переключении на nb2 сбрасываем качество на HD
-    if new_model == "nb2":
-        quality = "hd"
-        await state.update_data(pf_quality="hd")
-    
-    if new_model == "pro":
-        if quality == "4k": cost = config.COST_PRO_4K
-        elif quality == "2k": cost = config.COST_PRO_2K
-        else: cost = config.COST_PRO_1K
-    elif new_model == "nb2":
-        if quality == "4k": cost = config.COST_NB2_4K
-        elif quality == "2k": cost = config.COST_NB2_2K
-        else: cost = config.COST_NB2_1K
-    else:
-        cost = config.COST_STANDARD
-
-    is_broadcast = data.get("is_broadcast_gen", False)
-    has_photo = bool(data.get("pf_image_urls"))
-    is_edit_mode = data.get("pf_is_edit_mode", False)
-    locale = _preflight_locale(callback.from_user)
-
-    if is_broadcast:
-        text = compose_preflight_message_html(
-            locale,
-            prompt_raw="",
-            cost=0,
-            model=new_model,
-            has_photo=True,
-            is_edit_mode=False,
-            is_broadcast=True,
-            use_settings_header=False,
-        )
-    else:
-        prompt_raw = data.get("pf_prompt", "") or ""
-        cost = calc_cost(new_model, quality)
-        text = compose_preflight_message_html(
-            locale,
-            prompt_raw=prompt_raw,
-            cost=cost,
-            model=new_model,
-            has_photo=has_photo,
-            is_edit_mode=is_edit_mode,
-            is_broadcast=False,
-            use_settings_header=False,
-        )
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=get_preflight_kb(new_model, ratio, quality, locale),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-@router.callback_query(GenState.preflight_check, F.data == "pf_toggle_quality")
-async def cb_pf_toggle_quality(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    current_q = data.get("pf_quality", "2k")
-    
-    # ЦИКЛ: HD -> 2K -> 4K -> HD
-    if current_q == "hd":
-        new_q = "2k"
-    elif current_q == "2k":
-        new_q = "4k"
-    else:
-        new_q = "hd"
-        
-    await state.update_data(pf_quality=new_q)
-    
-    model = data.get("pf_model", "standard")
-    ratio = data.get("pf_ratio", "1:1")
-
-    locale = _preflight_locale(callback.from_user)
-    prompt_raw = data.get("pf_prompt", "") or ""
-    cost = calc_cost(model, new_q)
-    has_photo = bool(data.get("pf_image_urls"))
-    is_edit_mode = data.get("pf_is_edit_mode", False)
-    text = compose_preflight_message_html(
-        locale,
-        prompt_raw=prompt_raw,
-        cost=cost,
-        model=model,
-        has_photo=has_photo,
-        is_edit_mode=is_edit_mode,
-        is_broadcast=False,
-        use_settings_header=False,
-    )
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=get_preflight_kb(model, ratio, new_q, locale),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-@router.callback_query(GenState.preflight_check, F.data == "pf_select_ratio")
-async def cb_pf_select_ratio(callback: types.CallbackQuery, state: FSMContext):
-    await state.set_state(GenState.selecting_ratio)
-    data = await state.get_data()
-    model_type = data.get("pf_model", "standard")
-    locale = _preflight_locale(callback.from_user)
-    await callback.message.edit_text(
-        t("generation.preflight.pick_ratio", locale),
-        reply_markup=get_ratio_kb(model_type, locale),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-@router.callback_query(GenState.selecting_ratio, F.data == "pf_back")
-async def cb_pf_ratio_back(callback: types.CallbackQuery, state: FSMContext):
-    await state.set_state(GenState.preflight_check)
-    data = await state.get_data()
-    model = data.get("pf_model")
-    quality = data.get("pf_quality", "hd")
-    if model == "pro":
-        if quality == "4k": cost = config.COST_PRO_4K
-        elif quality == "2k": cost = config.COST_PRO_2K
-        else: cost = config.COST_PRO_1K
-    elif model == "nb2":
-        if quality == "4k": cost = config.COST_NB2_4K
-        elif quality == "2k": cost = config.COST_NB2_2K
-        else: cost = config.COST_NB2_1K
-    else:
-        cost = config.COST_STANDARD
-
-    # 🔥 ПРОВЕРЯЕМ ФЛАГ BROADCAST 🔥
-    is_broadcast = data.get("is_broadcast_gen", False)
-    locale = _preflight_locale(callback.from_user)
-
-    if is_broadcast:
-        text = compose_preflight_message_html(
-            locale,
-            prompt_raw="",
-            cost=0,
-            model=model,
-            has_photo=True,
-            is_edit_mode=False,
-            is_broadcast=True,
-            use_settings_header=False,
-        )
-    else:
-        prompt_raw = data.get("pf_prompt", "") or ""
-        cost = calc_cost(data.get("pf_model"), data.get("pf_quality"))
-        has_photo = bool(data.get("pf_image_urls"))
-        is_edit_mode = data.get("pf_is_edit_mode", False)
-        text = compose_preflight_message_html(
-            locale,
-            prompt_raw=prompt_raw,
-            cost=cost,
-            model=data.get("pf_model", "standard"),
-            has_photo=has_photo,
-            is_edit_mode=is_edit_mode,
-            is_broadcast=False,
-            use_settings_header=False,
-        )
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=get_preflight_kb(
-            data.get("pf_model"),
-            data.get("pf_ratio"),
-            data.get("pf_quality"),
-            locale,
-        ),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-@router.callback_query(GenState.selecting_ratio, F.data.startswith("set_ratio_"))
-async def cb_pf_set_ratio(callback: types.CallbackQuery, state: FSMContext):
-    new_ratio = callback.data.split("_")[2]
-    await state.update_data(pf_ratio=new_ratio)
-    
-    # Сохраняем в БД
-    async with async_session() as session:
-        user_obj = await get_user(session, callback.from_user.id)
-        if user_obj:
-            user_obj.last_image_ratio = new_ratio
-            await session.commit()
-    
-    await cb_pf_ratio_back(callback, state)
-
-# 👇 ЗАМЕНИ ФУНКЦИЮ cb_pf_start НА ЭТУ 👇
-
-@router.callback_query(GenState.preflight_check, F.data == "pf_start")
-async def cb_pf_start(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    
-    prompt = data.get("pf_prompt")
-    image_urls = data.get("pf_image_urls")
-    model_type = data.get("pf_model")
-    ratio = data.get("pf_ratio")
-    quality = data.get("pf_quality")
-    
-    if model_type == "pro":
-        if quality == "4k": cost = config.COST_PRO_4K
-        elif quality == "2k": cost = config.COST_PRO_2K
-        else: cost = config.COST_PRO_1K
-    elif model_type == "nb2":
-        if quality == "4k": cost = config.COST_NB2_4K
-        elif quality == "2k": cost = config.COST_NB2_2K
-        else: cost = config.COST_NB2_1K
-    else:
-        cost = config.COST_STANDARD
-    
-    use_pro = (model_type == "pro")
-    use_nb2 = (model_type == "nb2")
-    
-    # Логика разрешения
-    resolution = "1K"
-    if use_pro or use_nb2:
-        if quality == "4k": resolution = "4K"
-        elif quality == "2k": resolution = "2K"
-    
-    await callback.answer(t("generation.preflight.starting", _preflight_locale(callback.from_user)), show_alert=False)
-    
-    await process_generation(
-        callback.message,
-        callback.from_user.id,
-        prompt,
-        image_urls,
-        aspect_ratio=ratio,
-        cost=cost,
-        use_pro_model=use_pro,
-        use_nb2_model=use_nb2,
-        resolution=resolution,
-        is_blend_mode=data.get("is_blend_mode", False),
-        post_id=data.get("current_post_id"),
-        locale=_preflight_locale(callback.from_user),
-    )
-
-    from_retry_flow = data.get("force_pro_mode", False)
-    if from_retry_flow:
-        await state.update_data(force_pro_mode=False)
-        
-        from app.services.admin_logger import log_order_from_retry
-        await log_order_from_retry(
-            callback.bot,
-            callback.from_user.id,
-            cost,
-            model_type
-        )
-    
-    # ⚠️ ВАЖНО: Мы НЕ делаем await state.clear()
-    # Состояние остается активным, чтобы кнопки в меню продолжали работать
 
 # =====================================================================
 # ВХОДНЫЕ ТОЧКИ
@@ -985,13 +335,16 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
     
     image_urls = []
     full_caption = ""
-    
+    first_photo_file_id = None
+
     for msg in messages:
         if msg.photo:
+            if first_photo_file_id is None:
+                first_photo_file_id = msg.photo[-1].file_id
             url = await get_photo_url(bot, msg.photo[-1].file_id)
             if url:
                 image_urls.append(url)
-        if msg.caption and not full_caption: 
+        if msg.caption and not full_caption:
             full_caption = msg.caption
     
     if not image_urls:
@@ -1055,43 +408,31 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         return
     # 🔥 КОНЕЦ BROADCAST ЛОГИКИ 🔥
     
-    # Обычный флоу
+    # Обычный флоу (1 или несколько фото)
+    if full_caption:
+        if await offer_video_if_requested(
+            message, state, full_caption,
+            photo_file_id=first_photo_file_id,
+            clear_state=True,
+            locale=locale,
+        ):
+            return
+
+        if is_lazy_prompt(full_caption):
+            await send_lazy_prompt_message(message)
+            return
+
+        await start_preflight_check(message, state, full_caption, image_urls)
+        return
+
+    await _save_pending_photo(state, image_urls, first_photo_file_id)
+    await state.set_state(GenState.waiting_for_caption)
     if count == 1:
-        if full_caption:
-            # ... тут твой код для одного фото ...
-            # (оставь как есть, если там всё работает)
-            pass 
-        else:
-            await state.update_data(pending_image_urls=image_urls)
-            await state.set_state(GenState.waiting_for_caption)
-            await message.reply(
-                t("generation.msg.photo_ready_write_task", locale),
-                parse_mode="HTML",
-            )
-            
-    else:  # >= 2 фото
-        await state.update_data(pending_image_urls=image_urls)
-        
-        # 1. Сначала проверяем, есть ли подпись
-        if full_caption:
-            # 🎬 Проверка на видео
-            video_keywords = ["оживи", "оживить", "анимация", "видео", "видио", "video", "animate", "анимируй", "ожевить"]
-            if any(keyword in full_caption.lower() for keyword in video_keywords):
-                await send_video_offer_message(message, state, has_photo=True, photo_file_id=image_urls[0] if image_urls else None)
-                return # 👈 ВАЖНО: выходим
-
-            # 🚫 Проверка на ленивый промпт
-            if is_lazy_prompt(full_caption):
-                await send_lazy_prompt_message(message)
-                return # 👈 ВАЖНО: выходим
-
-            # ✅ Запускаем генерацию
-            await start_preflight_check(message, state, full_caption, image_urls)
-            return  # 🔥 САМОЕ ГЛАВНОЕ: ОСТАНАВЛИВАЕМ ФУНКЦИЮ ЗДЕСЬ 🔥
-
-        # 2. Если подписи НЕТ нигде — просим задачу
-        # Этот код выполнится ТОЛЬКО если full_caption пустой
-        await state.set_state(GenState.waiting_for_caption)
+        await message.reply(
+            t("generation.msg.photo_ready_write_task", locale),
+            parse_mode="HTML",
+        )
+    else:
         await message.answer(
             t("generation.msg.album_received_n_photos_task", locale, count=count),
             parse_mode="HTML",
@@ -1214,6 +555,16 @@ async def handle_new_prompt_during_settings(message: types.Message, state: FSMCo
         await send_lazy_prompt_message(message)
         return
 
+    data = await state.get_data()
+    if await offer_video_if_requested(
+        message,
+        state,
+        message.text,
+        photo_file_id=data.get("pending_photo_file_id"),
+        clear_state=True,
+    ):
+        return
+
     # 2. Сбрасываем старые данные (предыдущий промпт и настройки)
     await state.clear()
     
@@ -1249,16 +600,20 @@ async def handle_new_photo_during_settings(message: types.Message, state: FSMCon
     url = await get_photo_url(bot, message.photo[-1].file_id)
     
     if message.caption:
-        # 🚫 ДОБАВЬ ЭТУ ПРОВЕРКУ 👇
+        if await offer_video_if_requested(
+            message,
+            state,
+            message.caption,
+            photo_file_id=message.photo[-1].file_id,
+            clear_state=True,
+        ):
+            return
         if is_lazy_prompt(message.caption):
             await send_lazy_prompt_message(message)
             return
-        # 👆 КОНЕЦ ВСТАВКИ
-        # Если есть подпись — сразу в настройки
         await start_preflight_check(message, state, message.caption, [url])
     else:
-        # Если подписи нет — просим ввести
-        await state.update_data(pending_image_urls=[url])
+        await _save_pending_photo(state, [url], message.photo[-1].file_id)
         await state.set_state(GenState.waiting_for_caption)
         locale = resolve_locale(message.from_user.language_code if message.from_user else None)
         await message.reply(
@@ -1350,6 +705,12 @@ async def handle_waiting_for_prompt_text_answer(message: types.Message, state: F
     if message.text in IGNORED_TEXTS:
         return
     data = await state.get_data()
+    photo_fid = data.get("pending_param_photo_file_id") or data.get("pending_photo_file_id")
+    if await offer_video_if_requested(
+        message, state, message.text, photo_file_id=photo_fid, clear_state=True
+    ):
+        return
+
     main_prompt = data.get("param_main_prompt_template")
     if not main_prompt or not str(main_prompt).strip():
         await state.set_state(GenState.free_mode)
@@ -1422,7 +783,7 @@ async def handle_waiting_for_prompt_text_photo(message: types.Message, state: FS
 
 @router.message(GenState.waiting_for_prompt_text, F.document)
 async def handle_waiting_for_prompt_text_document(message: types.Message, state: FSMContext):
-    if not _is_image_document(message):
+    if not is_image_document(message):
         locale = resolve_locale(message.from_user.language_code if message.from_user else None)
         await message.answer(t("prompt.text_or_image_required", locale))
         return
@@ -1458,7 +819,7 @@ async def handle_waiting_for_prompt_photo_photo(message: types.Message, state: F
 
 @router.message(GenState.waiting_for_prompt_photo, F.document)
 async def handle_waiting_for_prompt_photo_document(message: types.Message, state: FSMContext, bot: Bot):
-    if not _is_image_document(message):
+    if not is_image_document(message):
         locale = resolve_locale(message.from_user.language_code if message.from_user else None)
         await message.answer(t("prompt.image_required", locale))
         return
@@ -1504,12 +865,9 @@ async def handle_free_text(message: types.Message, state: FSMContext):
     if message.text in IGNORED_TEXTS: 
         return
     
-    # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО
-    video_keywords = ["оживи", "оживить", "анимация", "видео", "видио", "video", "animate","анимируй", "ожевить"]
-    if any(keyword in message.text.lower() for keyword in video_keywords):
-        await send_video_offer_message(message, state, has_photo=False)
+    if await offer_video_if_requested(message, state, message.text, clear_state=True):
         return
-    
+
         # 🛡️ ФИЛЬТР КОНТЕНТА (добавь ПЕРЕД lazy_prompt)
     if await check_content_filter(message, message.text):
         return
@@ -1587,12 +945,16 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
         return
     
     if message.caption:
-        # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО (ПРОВЕРЯЕМ ПЕРВЫМ!)
-        video_keywords = ["оживи", "оживить", "анимация", "видео", "видио", "video", "animate","анимируй", "ожевить"]
-        if any(keyword in message.caption.lower() for keyword in video_keywords):
-            await send_video_offer_message(message, state, has_photo=True, photo_file_id=message.photo[-1].file_id)
+        if await offer_video_if_requested(
+            message,
+            state,
+            message.caption,
+            photo_file_id=message.photo[-1].file_id,
+            clear_state=True,
+            locale=locale,
+        ):
             return
-        
+
         # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ
         lazy_check = is_lazy_prompt(message.caption)  
         if lazy_check:
@@ -1608,10 +970,7 @@ async def handle_general_photo(message: types.Message, state: FSMContext, bot: B
         if force_pro_mode:
             await state.update_data(force_pro_mode=True)
 
-        await state.update_data(
-            pending_image_urls=[url],
-            pending_photo_file_id=message.photo[-1].file_id  # ← СОХРАНЯЕМ FILE_ID
-        )
+        await _save_pending_photo(state, [url], message.photo[-1].file_id)
         await state.set_state(GenState.waiting_for_caption)
 
         await message.reply(
@@ -1631,12 +990,19 @@ async def handle_retry_photos(message: types.Message, state: FSMContext, bot: Bo
     locale = resolve_locale(message.from_user.language_code if message.from_user else None)
 
     if message.caption:
-        # Если есть подпись - сразу в preflight
+        if await offer_video_if_requested(
+            message,
+            state,
+            message.caption,
+            photo_file_id=message.photo[-1].file_id,
+            clear_state=True,
+            locale=locale,
+        ):
+            return
         await state.update_data(pf_image_urls=[url])
         await start_preflight_check(message, state, message.caption, [url])
     else:
-        # Если подписи нет - просим промпт
-        await state.update_data(pending_image_urls=[url])
+        await _save_pending_photo(state, [url], message.photo[-1].file_id)
         await message.reply(
             t("generation.msg.photo_accepted_face_rules", locale),
             parse_mode="HTML"
@@ -1654,12 +1020,21 @@ async def handle_retry_text_prompt(message: types.Message, state: FSMContext):
     
     data = await state.get_data()
     image_urls = data.get("pending_image_urls")
-    
+
     if not image_urls:
         locale = resolve_locale(message.from_user.language_code if message.from_user else None)
         await message.answer(t("generation.msg.need_photo_first", locale))
         return
-    
+
+    if await offer_video_if_requested(
+        message,
+        state,
+        message.text,
+        photo_file_id=data.get("pending_photo_file_id"),
+        clear_state=True,
+    ):
+        return
+
     await start_preflight_check(message, state, message.text, image_urls)
 
 @router.message(GenState.waiting_for_caption, F.text)
@@ -1671,14 +1046,16 @@ async def handle_delayed_caption(message: types.Message, state: FSMContext):
     if await check_content_filter(message, message.text):
         return
     
-    # 🎬 ПЕРЕХВАТ СЛОВ ДЛЯ ВИДЕО
-    video_keywords = ["оживи", "оживить", "анимация", "видео", "видио", "video", "animate","анимируй", "ожевить"]
-    if any(keyword in user_prompt.lower() for keyword in video_keywords):
-        data = await state.get_data()
-        file_id = data.get("pending_photo_file_id")
-        await send_video_offer_message(message, state, has_photo=True, photo_file_id=file_id)
+    data = await state.get_data()
+    if await offer_video_if_requested(
+        message,
+        state,
+        user_prompt,
+        photo_file_id=data.get("pending_photo_file_id"),
+        clear_state=True,
+    ):
         return
-    
+
         # 🚫 ПЕРЕХВАТЧИК ЛЕНИВЫХ ПРОМПТОВ 👇
     if is_lazy_prompt(user_prompt):
         await send_lazy_prompt_message(message)
@@ -1877,9 +1254,15 @@ async def cb_edit_result(callback: types.CallbackQuery, state: FSMContext, bot: 
             use_nb2 = False
             ratio = "1:1"
         
-        if use_pro: cost = config.COST_PRO_1K
-        elif use_nb2: cost = config.COST_NB2_1K
-        else: cost = config.COST_STANDARD
+        # Определяем тип модели для расчета стоимости
+        if use_pro:
+            model_type = "pro"
+        elif use_nb2:
+            model_type = "nb2"
+        else:
+            model_type = "standard"
+        
+        cost = calc_cost(model_type, "hd")
         
         original_ratio = ratio
         
@@ -1907,12 +1290,17 @@ async def handle_edit_instruction(message: types.Message, state: FSMContext, bot
     instruction = message.text
     data = await state.get_data()
     file_id = data.get("editing_file_id")
-    
+
     if not file_id:
         await message.answer(t("generation.msg.source_photo_not_found", locale))
         await state.clear()
         return
-    
+
+    if await offer_video_if_requested(
+        message, state, instruction, photo_file_id=file_id, clear_state=True, locale=locale
+    ):
+        return
+
     img_url = await get_photo_url(bot, file_id)
     
     if not img_url:
@@ -1984,23 +1372,6 @@ async def cb_select_category(callback: types.CallbackQuery, state: FSMContext):
             t("generation.msg.category_selected", locale),
             parse_mode="HTML",
         )
-
-# ==============================================================================
-# 🎨 BLEND DETECTOR
-# ==============================================================================
-BLEND_TRIGGERS = [
-    "смешай", "смешать", "микс", "mix", "blend",
-    "соедини", "соединить", "объедини", "объединить","обьедини","обьедени","объедени","обьединить","объеденить",
-    "скрестить", "скрести", "составь","совмести"
-    "вариация", "variation", "комбинируй", "combine",
-    "слей", "merge", "креатив", "creative"
-]
-
-def is_blend_request(prompt: str) -> bool:
-    """Проверяет, хочет ли пользователь смешивание (а не замену лица)"""
-    prompt_lower = prompt.lower()
-    return any(trigger in prompt_lower for trigger in BLEND_TRIGGERS)
-
 
 KOREAN_TREND_STOP_WORDS = [
     "spotv",
@@ -2113,14 +1484,28 @@ async def process_generation(
     post_id: str = None,
     locale: str | None = None,
 ):
-    """Основная функция генерации изображений"""
+    """
+    Оркестратор генерации изображений.
+    Координирует все этапы: проверка -> подготовка -> генерация -> сохранение
+    """
+    from app.services.generation import (
+        build_collage_if_needed,
+        execute_ai_generation,
+        save_generation_result,
+        award_referral_bonus,
+    )
+    
     bot = message.bot
     final_urls = normalize_image_urls(image_urls)
 
+    # =====================================================================
+    # ШАГ 1: ПРЕДВАРИТЕЛЬНЫЕ ПРОВЕРКИ
+    # =====================================================================
+    
     if not await _korean_trend_generation_allowed(bot, message, user_id, prompt, locale):
         return
 
-    # 1. Проверка и списание баланса
+    # Проверка и списание баланса
     async with async_session() as session:
         locale = await effective_locale(bot, message, user_id, locale, session=session)
         model_type = "pro" if use_pro_model else "nb2" if use_nb2_model else "standard"
@@ -2128,6 +1513,7 @@ async def process_generation(
         user = await get_user(session, user_id)
         image_hashes: list[str] = []
 
+        # Проверка дубликатов фото
         if final_urls:
             has_purchases = await has_user_purchased(session, user_id)
             if should_run_image_hash_check(final_urls, user, has_purchases=has_purchases):
@@ -2166,13 +1552,17 @@ async def process_generation(
                             user_id=user_id,
                         )
 
-        has_balance, transaction_id = await check_and_deduct_balance(session, user_id, amount=cost, post_id=post_id, model_type=model_type, kie_credits_cost=kie_credits)
+        # Списание баланса
+        has_balance, transaction_id = await check_and_deduct_balance(
+            session, user_id, amount=cost, post_id=post_id,
+            model_type=model_type, kie_credits_cost=kie_credits
+        )
         balance_left = await get_user_balance(session, user_id)
 
         if not has_balance:
-            # 🔥 SMART ALERT: Определяем сценарий и показываем умное уведомление
-            alert_text, alert_kb = await get_smart_alert_message(session, user_id, balance_left, cost, locale)
-            
+            alert_text, alert_kb = await get_smart_alert_message(
+                session, user_id, balance_left, cost, locale
+            )
             await message.answer(
                 alert_text,
                 reply_markup=alert_kb.as_markup(),
@@ -2180,476 +1570,120 @@ async def process_generation(
             )
             return
 
-    # 🔥 ОПРЕДЕЛЯЕМ СЦЕНАРИЙ: сложный только для Standard (без PRO и NB2)
-    is_complex_standard = (not use_pro_model and not use_nb2_model and len(final_urls) >= 2)
-    # 🔥 ДЕТЕКТОР ЗАДАЧ ТИПА "ЗАМЕНА/ВСТАВКА"
-    swap_keywords = [
-        'поменя', 'замен', 'положи', 'помести', 'вставь', 'перенес', 
-        'возьми', 'бери', 'со второ', 'из второ', 'с друго', 'из друго',
-        'swap', 'replace', 'put', 'place', 'take from'
-    ]
-    is_swap_task = any(keyword in prompt.lower() for keyword in swap_keywords)
-    # 🔥 ДЕТЕКТОР BLEND (СМЕШИВАНИЕ)
-    is_blend_task = is_blend_mode or is_blend_request(prompt)
-
-    # 🔥 AUTO-COLLAGE ТОЛЬКО ДЛЯ НЕ-SWAP ЗАДАЧ
-    if is_complex_standard and len(final_urls) >= 2 and not is_swap_task and not is_blend_task:
-        try:
-            print(f"🎨 Создаю коллаж из {len(final_urls)} фото...") 
-            
-            # 1. Скачиваем все изображения
-            images = []
-            timeout = aiohttp.ClientTimeout(total=30)
-            connector = aiohttp.TCPConnector(ssl=False)
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                for url in final_urls:
-                    async with session.get(url) as resp:
-                        if resp.status == 200:
-                            img_data = await resp.read()
-                            img = Image.open(io.BytesIO(img_data))
-                            images.append(img)
-            
-            if len(images) < len(final_urls):
-                print(f"⚠️ Не все фото загрузились: {len(images)}/{len(final_urls)}")
-            
-            if not images:
-                print("❌ Ни одно фото не загрузилось для коллажа")
-                raise Exception("No images loaded")
-            
-            # 2. Создаём коллаж (синхронная функция)
-            collage = create_collage(images, max_size=1024)
-            
-            # 3. Конвертируем в bytes
-            collage_bytes = io.BytesIO()
-            collage.save(collage_bytes, format='PNG')
-            collage_bytes.seek(0)
-            
-            # 4. Загружаем коллаж в Telegram (БЕЗ уведомления)
-            temp_msg = await bot.send_photo(
-                chat_id=user_id,
-                photo=types.BufferedInputFile(collage_bytes.read(), "collage.png"),
-                disable_notification=True  # 👈 БЕЗ ЗВУКА
-)
-            
-            # 5. Получаем URL коллажа
-            collage_url = await get_photo_url(bot, temp_msg.photo[-1].file_id)
-            
-            # 6. Удаляем временное сообщение
-            try:
-                await temp_msg.delete()
-            except:
-                pass
-            
-            # 7. ВАЖНО: Заменяем final_urls на коллаж
-            final_urls = [collage_url]
-            
-            # 🔥 МОДИФИЦИРУЕМ ПРОМПТ ДЛЯ КОЛЛАЖА
-            
-            if len(images) == 2:
-                prompt = f"{prompt}. IMPORTANT: Combine both subjects into a SINGLE unified scene. They should interact naturally, standing together. Do NOT keep the collage structure - merge them into one cohesive image."
-            elif len(images) >= 3:
-                prompt = f"{prompt}. IMPORTANT: Create a SINGLE unified composition with all {len(images)} subjects together in one scene. Remove the grid layout - merge into one natural photo."
-            
-            print(f"✅ Коллаж создан: {collage_url[:50]}...")
-            print(f"📝 Промпт изменён: {prompt[:150]}...")
-            
-        except Exception as e:
-            print(f"⚠️ Ошибка создания коллажа: {e}")
-            import traceback
-            traceback.print_exc()
-            # Продолжаем с оригинальными URL (fallback)
+    # =====================================================================
+    # ШАГ 2: СООБЩЕНИЕ О СТАРТЕ
+    # =====================================================================
     
-    # 2. Сообщение о старте (РАЗНОЕ для простого/сложного)
+    is_complex_standard = (
+        not use_pro_model and not use_nb2_model and len(final_urls) >= 2
+    )
+    
     if is_complex_standard:
-        # 📌 СЦЕНАРИЙ Б: Сложный (Standard + много фото) - С ПРЕДУПРЕЖДЕНИЕМ
         wait_msg = await message.answer(
             t("generation.msg.creating_complex_standard", locale),
             parse_mode="HTML",
         )
-        should_delete_wait_msg = False  # НЕ УДАЛЯЕМ
+        should_delete_wait_msg = False
     else:
-        # 📌 СЦЕНАРИЙ А: Простой - ТОЛЬКО статус
         wait_msg = await message.answer(
             t("generation.msg.creating_simple", locale),
             parse_mode="HTML",
         )
-        should_delete_wait_msg = True  # УДАЛЯЕМ
+        should_delete_wait_msg = True
 
+    # =====================================================================
+    # ШАГ 3: ГЕНЕРАЦИЯ (обёрнута в try/except)
+    # =====================================================================
+    
     try:
         await bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_PHOTO)
         
-        # 4. Генерация
-        result_data = await generate_image(
-            bot, prompt, final_urls, False, 
-            aspect_ratio, use_pro_model, use_nb2_model, None, resolution
+        # Подготовка изображений (коллаж если нужно)
+        final_urls, prompt = await build_collage_if_needed(
+            bot=bot,
+            user_id=user_id,
+            final_urls=final_urls,
+            prompt=prompt,
+            use_pro_model=use_pro_model,
+            use_nb2_model=use_nb2_model,
+            is_blend_mode=is_blend_mode,
         )
         
-        # 5. Обработка результата
-        result_file = None
-        source_url = None
-        kie_task_id = None
-
-        if result_data and isinstance(result_data, tuple):
-            if len(result_data) == 3:
-                result_file, source_url, kie_task_id = result_data
-            else:
-                result_file, source_url = result_data
-        elif result_data:
-            result_file = result_data
-
-        # Обновляем post_id в транзакции реальным taskId от KieAI
-        if kie_task_id and transaction_id:
-            from sqlalchemy import update as sa_update
-            async with async_session() as upd_session:
-                await upd_session.execute(
-                    sa_update(BananaTransaction)
-                    .where(BananaTransaction.id == transaction_id)
-                    .values(post_id=kie_task_id)
-                )
-                await upd_session.commit()
+        # Вызов AI API
+        result_file, source_url, kie_task_id = await execute_ai_generation(
+            bot=bot,
+            prompt=prompt,
+            final_urls=final_urls,
+            aspect_ratio=aspect_ratio,
+            use_pro_model=use_pro_model,
+            use_nb2_model=use_nb2_model,
+            resolution=resolution,
+            transaction_id=transaction_id,
+        )
+        
+        # =====================================================================
+        # ШАГ 4: ОБРАБОТКА РЕЗУЛЬТАТА
+        # =====================================================================
         
         if result_file:
-            # 🔥 УДАЛЯЕМ СООБЩЕНИЕ ТОЛЬКО ДЛЯ ПРОСТОГО СЦЕНАРИЯ
+            # Удаляем сообщение ожидания (если нужно)
             if should_delete_wait_msg:
-                try: 
+                try:
                     await wait_msg.delete()
-                except: 
+                except:
                     pass
             
-            # 6. Формирование caption (итоговый вариант)
-            caption = t("generation.msg.result_caption", locale, balance=balance_left)
-            
-            # 7. Сжатие для превью
-            file_bytes = result_file.data
-            compressed_bytes = smart_compress_image(file_bytes)
-
-            # 8. Отправка
-            sent_msg = None
-            for attempt in range(3):
-                try:
-                    preview_file = types.BufferedInputFile(
-                        compressed_bytes, filename="result.png"
-                    )
-                    sent_msg = await message.answer_photo(
-                        preview_file,
-                        caption=caption,
-                        parse_mode="HTML",
-                        request_timeout=300,
-                    )
-                    break
-                except TelegramRetryAfter as e:
-                    logger.warning(
-                        f"⏳ FloodWait при отправке фото: ждём {e.retry_after} сек"
-                    )
-                    await asyncio.sleep(e.retry_after)
-                except (TelegramNetworkError, asyncio.TimeoutError) as e:
-                    logger.warning(
-                        f"⚠️ Timeout/network при отправке фото, "
-                        f"попытка {attempt + 1}/3: {e}"
-                    )
-                    if attempt < 2:
-                        await asyncio.sleep(2 * (attempt + 1))
-                        continue
-                except Exception as e:
-                    logger.warning(f"⚠️ Ошибка отправки фото: {e}")
-                    break
-
-            if not sent_msg:
-                for attempt in range(2):
-                    try:
-                        doc_file = types.BufferedInputFile(
-                            file_bytes, filename="result.png"
-                        )
-                        sent_msg = await message.answer_document(
-                            doc_file,
-                            caption=caption,
-                            parse_mode="HTML",
-                            disable_content_type_detection=True,
-                            request_timeout=300,
-                        )
-                        break
-                    except TelegramRetryAfter as e:
-                        logger.warning(
-                            f"⏳ FloodWait при отправке документа: "
-                            f"ждём {e.retry_after} сек"
-                        )
-                        await asyncio.sleep(e.retry_after)
-                    except (TelegramNetworkError, asyncio.TimeoutError) as e:
-                        logger.warning(
-                            f"⚠️ Timeout/network при отправке документа, "
-                            f"попытка {attempt + 1}/2: {e}"
-                        )
-                        if attempt < 1:
-                            await asyncio.sleep(3)
-                            continue
-                    except Exception as e:
-                        logger.error(f"❌ Ошибка отправки документа: {e}")
-                        break
-
-            if not sent_msg and source_url:
-                try:
-                    await message.answer(
-                        t(
-                            "generation.msg.download_fallback_link",
-                            locale,
-                            url=source_url,
-                        ),
-                        parse_mode="HTML",
-                        request_timeout=30,
-                    )
-                except Exception:
-                    pass
-
-            if not sent_msg:
-                raise RuntimeError(
-                    "Telegram delivery timeout while sending generated image"
-                )
-
-            # 9. Сохранение в БД
-            sent_file_id = (
-                sent_msg.photo[-1].file_id if sent_msg.photo 
-                else sent_msg.document.file_id
-            )
-
-            await log_generation(
-                bot, 
-                message.chat,
-                prompt=prompt, 
-                model="PRO" if use_pro_model else "NB2" if use_nb2_model else "Standard",
-                photo_file_id=sent_file_id
+            # Отправка и сохранение результата
+            db_id, sent_file_id = await save_generation_result(
+                bot=bot,
+                message=message,
+                user_id=user_id,
+                prompt=prompt,
+                final_urls=final_urls,
+                result_file=result_file,
+                source_url=source_url,
+                balance_left=balance_left,
+                cost=cost,
+                use_pro_model=use_pro_model,
+                use_nb2_model=use_nb2_model,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                is_blend_mode=is_blend_mode,
+                locale=locale,
             )
             
-            meta_data = json.dumps({
-                "prompt": prompt,
-                "image_urls": final_urls,
-                "ratio": aspect_ratio,
-                "cost": cost,
-                "pro": use_pro_model,
-                "nb2": use_nb2_model,
-                "resolution": resolution,
-                "is_blend_mode": is_blend_mode
-
-            })
-            
-            async with async_session() as session:
-                await add_history(
-                    session, user_id, "user", prompt, 
-                    has_image=bool(final_urls)
-                )
-                await increment_generations_count(session, user_id)
-
-                
-                model_type = "pro" if use_pro_model else "nb2" if use_nb2_model else "standard"
-                kie_credits = get_kie_credits(model_type, resolution)
-
-
-                model_msg = await add_history(
-                    session, user_id, "model", meta_data, 
-                    has_image=True, 
-                    file_id=sent_file_id, 
-                    image_url=source_url
-                )
-                db_id = model_msg.id
-            
-            # 10. Добавление кнопок
-            if db_id:
-                await sent_msg.edit_reply_markup(
-                    reply_markup=get_result_kb(
-                        db_id,
-                        use_pro_model,
-                        cost,
-                        is_nb2=use_nb2_model,
-                        locale=locale,
-                    )
-                )
-            
-            async with async_session() as session:
-                user = await get_user(session, user_id)
-                
-                # Если это первая генерация пользователя
-                if user and not user.first_generation_done:
-                    user.first_generation_done = True
-                    await session.commit()
-                    
-                    # Если у него есть реферер - начисляем бонус
-                    if user.referrer_id:
-# ======================================================
-                        # 🕒 БЕЗОПАСНАЯ ПРОВЕРКА ДАТЫ (Smart Fix)
-                        # ======================================================
-                        # 1. Берем текущее время (в UTC)
-                        now_utc = datetime.now(timezone.utc)
-                        
-                        # 2. Берем дату регистрации
-                        reg_date = user.created_at
-                        
-                        # 3. ГЛАВНЫЙ ФИКС: Если дата "голая" (без зоны), даем ей UTC
-                        if reg_date.tzinfo is None:
-                            reg_date = reg_date.replace(tzinfo=timezone.utc)
-                            
-                        # 4. Теперь вычитаем (ошибки не будет)
-                        days_since_creation = (now_utc - reg_date).days
-                        # ======================================================
-                        if days_since_creation <= 7:  # Только свежие рефералы!
-                            try:
-                                await admin_change_balance(session, user.referrer_id, 2)
-                                await track_banana_transaction(
-                                    session, 
-                                    user.referrer_id, 
-                                    2, 
-                                    "earned_ref", 
-                                    f"Active referral from {user_id}"
-                                )
-                                await session.commit()
-                                
-                                # Получаем обновленный баланс реферера
-                                referrer = await get_user(session, user.referrer_id)
-                                new_balance = referrer.generations_balance if referrer else 0
-                                
-                                # Создаем кнопку
-                                from aiogram.utils.keyboard import InlineKeyboardBuilder
-                                builder = InlineKeyboardBuilder()
-                                builder.button(text=t("generation.referral.btn_invite_more", locale), callback_data="goto_free")
-                                
-                                # Отправляем уведомление реферу
-                                await bot.send_message(
-                                    user.referrer_id,
-                                    t("generation.msg.referrer_bonus", locale, new_balance=new_balance),
-                                    parse_mode="HTML",
-                                    reply_markup=builder.as_markup()
-                                )
-                                
-                                # Создаем объект для логгера
-                                from types import SimpleNamespace
-                                new_user_obj = SimpleNamespace(
-                                    id=user.telegram_id,
-                                    username=user.username,
-                                    full_name=user.full_name
-                                )
-                                await log_referral(bot, user.referrer_id, new_user_obj)
-                            except Exception as e:
-                                print(f"⚠️ Ошибка начисления реферального бонуса: {e}")
+            # Начисление реферального бонуса (если первая генерация)
+            await award_referral_bonus(
+                bot=bot,
+                user_id=user_id,
+                locale=locale,
+            )
         else:
             # ❌ NULL ОТВЕТ - ВОЗВРАТ ДЕНЕГ
-            print("❌ API вернул NULL")
-
-            await log_error(
-                bot, 
-                user_id,               # ✅ Берем ID из аргумента функции (он точный)
-                message.chat.username, # ✅ Берем юзернейм из чата
-                prompt, 
-                error_text="API returned NULL (Blocked?)"
+            await handle_null_result_error(
+                bot=bot,
+                user_id=user_id,
+                username=message.chat.username,
+                prompt=prompt,
+                cost=cost,
+                locale=locale,
+                wait_message=wait_msg,
+                reply_message=message,
             )
-
-            async with async_session() as session: 
-                await admin_change_balance(session, user_id, cost)
-            # Логируем возврат
-            from app.services.admin_logger import log_banana_refund
-            await log_banana_refund(bot, user_id, message.chat.username, cost, "API вернул NULL (Blocked?)")
-            
-            try: 
-                await wait_msg.edit_text(
-                    t("generation.msg.gen_error_null", locale, cost=cost),
-                    parse_mode="HTML",
-                )
-            except: 
-                await message.answer(
-                    t("generation.msg.gen_error_null", locale, cost=cost),
-                    parse_mode="HTML",
-                )
                 
     except Exception as e:
-        # 1. Логируем ошибку в консоль и админу
-        print(f"❌ Критическая ошибка: {e}")
-        
-        # Отправляем в канал логов (чтобы ты видел реальную причину)
-        await log_error(
-            bot, 
-            user_id,               
-            message.chat.username, 
-            prompt, 
-            error_text=f"CRASH: {str(e)[:100]}"
+        # Универсальная обработка ошибок генерации
+        await handle_generation_error(
+            bot=bot,
+            user_id=user_id,
+            username=message.chat.username,
+            prompt=prompt,
+            cost=cost,
+            error=e,
+            locale=locale,
+            wait_message=wait_msg,
+            reply_message=message,
         )
-        
-        # 2. Возвращаем деньги
-        async with async_session() as session: 
-            await admin_change_balance(session, user_id, cost)
-        # Логируем возврат
-        from app.services.admin_logger import log_banana_refund
-        await log_banana_refund(bot, user_id, message.chat.username, cost, f"Ошибка генерации: {str(e)[:50]}")
-        
-# 3. 🛡️ ПЕРЕВОДЧИК ОШИБОК ДЛЯ ПОЛЬЗОВАТЕЛЯ
-        err_msg = str(e).lower()
-
-        # Лог в консоль для отладки
-        print(f"❌ API ERROR: {err_msg}")
-
-        # --- ГРУППА 1: Цензура и контент ---
-        if any(x in err_msg for x in ["sensitive", "nsfw", "safety", "banned", "content found", "violated", "policy", "prohibited"]):
-            # Предполагается, что функция log_security_ban у тебя уже определена
-            await log_security_ban(bot, user_id, message.chat.username, prompt, source="API Filter")
-            user_friendly_text = t("generation.err.security", locale)
-
-        # --- ГРУППА 2: Ошибки ввода пользователя (422) ---
-        elif "422" in err_msg or "validation error" in err_msg:
-            user_friendly_text = t("generation.err.validation", locale)
-
-            # --- ГРУППА 2.5: Специфичная ошибка Gemini (Неудачный промпт) ---
-        elif "gemini could not generate" in err_msg or "different prompt" in err_msg:
-            user_friendly_text = t("generation.err.gemini", locale)
-
-            # --- ГРУППА 2.6: Публичная личность (Kie REJECT specific) ---
-        elif (
-            "kie reject" in err_msg
-            and "request blocked" in err_msg
-            and ("prominent public figure" in err_msg or "public figure" in err_msg)
-        ):
-            user_friendly_text = t("generation.err.public_figure", locale)
-
-            # --- ГРУППА 2.7: Отказ провайдера (Kie REJECT общий) ---
-        elif "kie reject" in err_msg or "failed to generate image" in err_msg:
-            user_friendly_text = t("generation.err.kie_reject", locale)
-
-            # --- ГРУППА 2.8: Протухшая ссылка на файл в Telegram (404 Client Error) ---
-        elif "api.telegram.org/file/" in err_msg and "404" in err_msg:
-            user_friendly_text = t("generation.err.telegram_expired", locale)
-
-            # --- ГРУППА 2.9: Мягкий отказ нейросети (Copilot / DALL-E / Bing) ---
-        elif any(x in err_msg for x in ["unable to help you with that", "对不起", "generation failed: sorry"]):
-            user_friendly_text = t("generation.err.copyright", locale)
-
-        # --- ГРУППА 3: Временные проблемы на сервере (Попробуй позже) ---
-        # Добавили 502 и 503 (Ошибки шлюзов и AI Studio)
-        elif any(x in err_msg for x in ["429", "455", "500", "501", "502", "503", "internal", "reject", "timeout", "busy", "queue"]):
-            user_friendly_text = t("generation.err.server_busy", locale)
-
-        # --- ГРУППА 4: Критические ошибки (401, 402, 404, 505) ---
-        elif any(x in err_msg for x in ["401", "402", "404", "505", "unauthorized", "insufficient credits"]):
-            user_friendly_text = t("generation.err.maintenance", locale)
-            # # Обязательно шлем алерт тебе!
-            # # Убедись, что переменная ADMIN_ID задана (твой Telegram ID)
-            # try:
-            #     await bot.send_message(
-            #         ADMIN_IDS, 
-            #         f"🚨 <b>АЛЯРМ в Nano Banana!</b>\nОшибка оплаты, лимитов или ключа API!\n\n<code>{err_msg}</code>",
-            #         parse_mode="HTML"
-            #     )
-            # except Exception as admin_e:
-            #     print(f"Не удалось отправить алерт админу: {admin_e}")
-
-        # --- ГРУППА 5: Всё остальное (Неизвестная ошибка) ---
-        else:
-            user_friendly_text = t("generation.err.unknown", locale)
-            
-        # И в конце отправляем user_friendly_text пользователю:
-        # await message.answer(user_friendly_text, parse_mode="HTML")
-
-        # 4. Финал: Отправка сообщения + Возврат средств
-        final_text = user_friendly_text + t("generation.msg.refund_footer", locale, cost=cost)
-
-        try: 
-            await wait_msg.edit_text(final_text, parse_mode="HTML")
-        except: 
-            await message.answer(final_text, parse_mode="HTML")
 @router.callback_query(F.data.regexp(r"^bc_\d+$"))  # только bc_123, не bc_model_
 async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext):
     """Обработка нажатия кнопки генерации из рассылки"""
@@ -2715,258 +1749,8 @@ async def cb_broadcast_generate(callback: types.CallbackQuery, state: FSMContext
     await callback.answer()
 
     # =====================================================================
-# 🎬 VIDEO GENERATION HANDLERS
+# 🎬 VIDEO GENERATION HANDLERS (перенесено в generation_flow/video.py)
 # =====================================================================
-
-async def send_video_offer_message(
-    message: types.Message,
-    state: FSMContext,
-    has_photo: bool = False,
-    photo_file_id: str = None,
-    locale: str | None = None,
-):
-    """
-    Отправляет предложение создать видео
-    """
-    bot = message.bot
-    async with async_session() as session:
-        locale = await effective_locale(bot, message, message.chat.id, locale, session=session)
-    builder = InlineKeyboardBuilder()
-    
-    # Добавляем file_id в callback_data если есть
-    # Всегда используем просто "video_start"
-    # file_id сохраним в state
-    callback_data = "video_start"
-    
-    builder.button(
-        text=t("generation.video.btn_animate", locale, cost=config.COST_VIDEO),
-        callback_data=callback_data,
-    )
-    builder.button(text=t("common.cancel_button", locale), callback_data="video_cancel")
-    builder.adjust(1)
-    
-    text = t("generation.msg.video_offer", locale, cost=config.COST_VIDEO)
-    
-    if has_photo and photo_file_id:
-        await state.update_data(pending_video_photo=photo_file_id)
-    
-    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-@router.callback_query(F.data.startswith("video_start"))
-async def cb_video_start(callback: types.CallbackQuery, state: FSMContext):
-    """Начало процесса создания видео"""
-    
-    # Отвечаем на callback СРАЗУ (иначе устареет)
-    try:
-        await callback.answer()
-    except:
-        pass  # Игнорируем если уже устарел
-    
-    # Достаем file_id из state
-    data = await state.get_data()
-    photo_file_id = data.get("pending_video_photo")
-    
-    if photo_file_id:
-        # Фото уже есть - переходим к генерации
-        # НЕ очищаем state здесь! Пусть process_video_generation сам решает
-        await process_video_generation(
-            callback.message,
-            callback.from_user.id,
-            photo_file_id,
-            state,
-            username=callback.from_user.username,
-            locale=_preflight_locale(callback.from_user),
-        )
-    else:
-        # Фото нет - просим прислать
-        await state.set_state(GenState.waiting_for_video_source)
-        locale = resolve_locale(callback.from_user.language_code if callback.from_user else None)
-        
-        builder = InlineKeyboardBuilder()
-        builder.button(text=t("common.cancel_button", locale), callback_data="video_cancel")
-        
-        await callback.message.answer(
-            t("generation.msg.video_need_photo", locale),
-            reply_markup=builder.as_markup(),
-        )
-@router.callback_query(F.data == "video_cancel")
-async def cb_video_cancel(callback: types.CallbackQuery, state: FSMContext):
-    """Отмена создания видео"""
-    await state.clear()
-    await state.update_data(pending_video_photo=None)
-    locale = resolve_locale(callback.from_user.language_code if callback.from_user else None)
-    
-    await callback.message.answer(
-        t("generation.msg.video_cancelled", locale),
-    )
-    
-    await callback.answer()
-
-@router.message(GenState.waiting_for_video_source, F.photo)
-async def handle_video_source_photo(message: types.Message, state: FSMContext):
-    """Обработка фото для генерации видео"""
-    photo_file_id = message.photo[-1].file_id
-    await state.clear()  # ← ДОБАВЬ! Очищаем состояние
-
-    await process_video_generation(message, message.from_user.id, photo_file_id, state, username=message.from_user.username)
-@router.callback_query(F.data.startswith("animate_"))
-async def cb_animate_result(callback: types.CallbackQuery, state: FSMContext):
-    """Оживление существующего результата"""
-    await callback.answer()
-    locale = resolve_locale(callback.from_user.language_code if callback.from_user else None)
-    
-    try:
-        db_id = int(callback.data.split("_")[1])
-        
-        async with async_session() as session:
-            history_item = await get_history_message_by_id(session, db_id)
-        
-        if not history_item or not history_item.file_id:
-            await callback.answer(t("generation.alert.source_not_found", locale), show_alert=True)
-            return
-        
-        photo_file_id = history_item.file_id
-        await process_video_generation(
-            callback.message,
-            callback.from_user.id,
-            photo_file_id,
-            state,
-            from_result_button=True,
-            username=callback.from_user.username,
-            locale=locale,
-        )
-    except Exception as e:
-        print(f"❌ Ошибка animate: {e}")
-        await callback.answer(t("generation.alert.video_animate_failed", locale), show_alert=True)
-
-async def process_video_generation(
-    message: types.Message,
-    user_id: int,
-    photo_file_id: str,
-    state: FSMContext,
-    from_result_button: bool = False,
-    username: str = None,
-    locale: str | None = None,
-):
-    """
-    Основная функция обработки генерации видео
-    """
-    from app.services.video_service import create_video_generation_task
-    from app.services.user_service import check_and_deduct_balance, get_user_balance
-
-    COST = config.COST_VIDEO
-    bot = message.bot
-
-    # Проверка баланса
-    async with async_session() as session:
-        locale = await effective_locale(bot, message, user_id, locale, session=session)
-        has_balance, _ = await check_and_deduct_balance(session, user_id, amount=COST)
-        balance_left = await get_user_balance(session, user_id)
-
-        if not has_balance:
-            alert_text, alert_kb = await get_smart_alert_message(session, user_id, balance_left, COST, locale)
-            await message.answer(alert_text, reply_markup=alert_kb.as_markup(), parse_mode="HTML")
-            return
-    
-# Списали деньги - запускаем генерацию
-    if from_result_button:
-        wait_text = t("generation.msg.video_wait_kling", locale)
-    else:
-        wait_text = t("generation.msg.video_wait_simple", locale)
-    
-    wait_msg = await message.answer(wait_text, parse_mode="HTML")
-    
-    # Webhook URL
-    webhook_url = "https://aaa123.site/kling_webhook"  # ← Меняй с ngrok на прод
-    
-    try:
-        # Создаем задачу
-        async with async_session() as session:
-            result = await create_video_generation_task(
-                session=session,
-                user_id=user_id,
-                image_file_id=photo_file_id,
-                bot=message.bot,
-                webhook_url=webhook_url
-            )
-        
-        if result["success"]:
-            print(f"✅ Video task created: {result['task_id']}")
-            
-            # 📊 Логируем запуск
-            from app.services.admin_logger import log_video_generation_start
-            await log_video_generation_start(
-                message.bot,
-                user_id,
-                username,
-                COST,
-                result['task_id']
-            )
-        else:
-            # Ошибка создания задачи - возвращаем деньги
-            async with async_session() as session:
-                from app.services.user_service import admin_change_balance
-                await admin_change_balance(session, user_id, COST)
-                # Логируем возврат
-            from app.services.admin_logger import log_banana_refund
-            await log_banana_refund(message.bot, user_id, username, COST, "Сервис генерации видео недоступен")
-            
-            await wait_msg.edit_text(
-                t("generation.msg.video_service_down", locale, cost=COST),
-                parse_mode="HTML",
-            )
-    
-    except Exception as e:
-        print(f"❌ Ошибка process_video_generation: {e}")
-        
-        # Возвращаем деньги
-        async with async_session() as session:
-            from app.services.user_service import admin_change_balance
-            await admin_change_balance(session, user_id, COST)
-        # Логируем возврат
-        from app.services.admin_logger import log_banana_refund
-        await log_banana_refund(message.bot, user_id, username, COST, f"Ошибка запуска видео: {str(e)[:50]}")
-        
-        await wait_msg.edit_text(
-            t("generation.msg.video_crash_refund", locale, cost=COST),
-            parse_mode="HTML",
-        )
-    
-    finally:
-        # Очищаем pending_video_photo только после успешного старта
-        if 'result' in locals() and result.get("success"):
-            await state.update_data(pending_video_photo=None)
-
-@router.callback_query(F.data.startswith("reanimate_"))
-async def cb_reanimate_video(callback: types.CallbackQuery, state: FSMContext):
-    """Повторная генерация видео (ещё раз)"""
-    locale = resolve_locale(callback.from_user.language_code if callback.from_user else None)
-    await callback.answer(t("generation.alert.reroll_starting", locale), show_alert=False)
-    
-    try:
-        task_id = callback.data.split("_", 1)[1]
-        
-        # Получаем исходную задачу из БД
-        async with async_session() as session:
-            from app.services.video_service import get_task_by_id
-            original_task = await get_task_by_id(session, task_id)
-        
-        if not original_task or not original_task.source_image_file_id:
-            await callback.answer(t("generation.alert.source_not_found", locale), show_alert=True)
-            return
-        
-        # Запускаем новую генерацию с тем же фото
-        await process_video_generation(
-            callback.message,
-            callback.from_user.id,
-            original_task.source_image_file_id,
-            state,
-            username=callback.from_user.username,
-            locale=locale,
-        )
-        
-    except Exception as e:
-        print(f"❌ Ошибка reanimate: {e}")
-        await callback.answer(t("generation.alert.reanimate_failed", locale), show_alert=True)
 
 @router.message(F.text, StateFilter(GenState.free_mode))
 async def handle_text_in_free_mode(message: types.Message, state: FSMContext):

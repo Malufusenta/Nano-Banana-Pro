@@ -59,6 +59,7 @@ sys.stdout = PrintLogger(logger)
 from aiogram import Bot, Dispatcher
 from app.database import engine, Base, async_session
 from app.handlers import start, generation, payment, crypto_payment, menu_actions, admin, admin_scenarios
+from app.handlers.generation_flow import preflight_router, video_router
 from app.middlewares.album import AlbumMiddleware
 from app.middlewares.admin_spy import AdminSpyMiddleware
 from app.middlewares.antifraud import AntiFraudMiddleware
@@ -139,6 +140,8 @@ async def main():
     dp.include_router(crypto_payment.router)
     dp.include_router(payment.router)
     dp.include_router(menu_actions.router)
+    dp.include_router(preflight_router)
+    dp.include_router(video_router)
     dp.include_router(generation.router)
     
 
