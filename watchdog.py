@@ -17,8 +17,6 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.database import normalize_async_database_url
-
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 logger = logging.getLogger("watchdog")
@@ -81,9 +79,13 @@ async def _one_check(
 
 
 async def watchdog_loop() -> None:
-    database_url = normalize_async_database_url(_require_env("DATABASE_URL"))
     token = _require_env("WATCHDOG_BOT_TOKEN")
     admin_chat_id = _require_env("ADMIN_TG_ID")
+
+    database_url = _require_env("DATABASE_URL")
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
+    database_url = database_url.replace("postgres://", "postgresql+asyncpg://")
+    logger.info(f"DB URL driver: {database_url[:30]}...")
 
     engine = create_async_engine(
         database_url,
