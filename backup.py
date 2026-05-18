@@ -6,11 +6,14 @@ PostgreSQL backup → gzip → Cloudflare R2.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote, urlparse
 
@@ -64,7 +67,7 @@ def parse_database_url(url: str) -> dict[str, str]:
     }
 
 
-def run_pg_dump(db: dict[str, str], output_path: str) -> None:
+def run_pg_dump(db: dict[str, str], output_path: str) -> float:
     """Создать сжатый SQL-дамп через pg_dump | gzip."""
     env = os.environ.copy()
     if db["password"]:
@@ -120,6 +123,7 @@ def run_pg_dump(db: dict[str, str], output_path: str) -> None:
 
     size_mb = os.path.getsize(output_path) / (1024 * 1024)
     LOG.info("Дамп создан: %s (%.2f MB)", output_path, size_mb)
+    return size_mb
 
 
 def get_r2_client() -> boto3.client:
@@ -189,6 +193,67 @@ def prune_old_backups() -> None:
         LOG.info("Удалено объектов: %d", deleted)
     else:
         LOG.info("Старых бэкапов для удаления не найдено")
+    return deleted
+
+
+def send_telegram_message(text: str) -> bool:
+    """Отправить сообщение в чат/группу (BOT_TOKEN + BACKUP_NOTIFY_CHAT_ID)."""
+    token = os.getenv("BOT_TOKEN")
+    chat_id = os.getenv("BACKUP_NOTIFY_CHAT_ID")
+    if not token or not chat_id:
+        LOG.info(
+            "Telegram-уведомление пропущено: задайте BOT_TOKEN и BACKUP_NOTIFY_CHAT_ID"
+        )
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = json.loads(response.read().decode())
+        if not body.get("ok"):
+            LOG.warning("Telegram API вернул ok=false: %s", body)
+            return False
+        LOG.info("Уведомление отправлено в Telegram (chat_id=%s)", chat_id)
+        return True
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode(errors="replace")
+        LOG.warning("Не удалось отправить в Telegram: HTTP %s — %s", exc.code, err_body)
+        return False
+    except urllib.error.URLError as exc:
+        LOG.warning("Не удалось отправить в Telegram: %s", exc.reason)
+        return False
+
+
+def notify_backup_success(
+    *,
+    db_name: str,
+    object_key: str,
+    size_mb: float,
+    pruned_count: int,
+) -> None:
+    bucket = os.environ.get("R2_BUCKET_NAME", "?")
+    text = (
+        "✅ Бэкап PostgreSQL выполнен\n\n"
+        f"🗄 База: {db_name}\n"
+        f"📦 Файл: {object_key}\n"
+        f"📊 Размер: {size_mb:.2f} MB\n"
+        f"☁️ R2: {bucket}\n"
+        f"🧹 Удалено старых (> {RETENTION_DAYS} дн.): {pruned_count}"
+    )
+    send_telegram_message(text)
+
+
+def notify_backup_failure(error: str) -> None:
+    text = f"❌ Ошибка бэкапа PostgreSQL\n\n{error}"
+    send_telegram_message(text)
 
 
 def main() -> int:
@@ -209,7 +274,7 @@ def main() -> int:
 
     try:
         db = parse_database_url(db_url)
-        run_pg_dump(db, local_path)
+        size_mb = run_pg_dump(db, local_path)
         upload_to_r2(local_path, object_key)
 
         try:
@@ -223,15 +288,24 @@ def main() -> int:
             except OSError:
                 pass
 
-        prune_old_backups()
+        pruned_count = prune_old_backups()
+        notify_backup_success(
+            db_name=db["dbname"],
+            object_key=object_key,
+            size_mb=size_mb,
+            pruned_count=pruned_count,
+        )
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         LOG.error("%s", exc)
+        notify_backup_failure(str(exc))
         return 1
     except (BotoCoreError, ClientError) as exc:
         LOG.error("Ошибка R2/S3: %s", exc)
+        notify_backup_failure(f"R2/S3: {exc}")
         return 1
     except subprocess.SubprocessError as exc:
         LOG.error("Ошибка subprocess: %s", exc)
+        notify_backup_failure(f"subprocess: {exc}")
         return 1
 
     LOG.info("Бэкап успешно завершён: %s", object_key)
