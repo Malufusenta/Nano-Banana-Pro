@@ -322,3 +322,12 @@ class CampaignMapping(Base):
     utm_sources: Mapped[str] = mapped_column(Text, nullable=False)
     # JSON-массив: ["yandex_rsya_3", "ad_yandex_rsya_3__cid", "ad_yandex_rsya_3"]
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class SystemStatus(Base):
+    """Единственная строка id=1: пульс основного бота для watchdog (Railway)."""
+
+    __tablename__ = "system_status"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_heartbeat: Mapped[datetime] = mapped_column(DateTime, nullable=False)

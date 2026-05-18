@@ -9,9 +9,7 @@ sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..'
 # Импортируем Базу и ТВОИ модели
 from app.database import Base
 # Важно импортировать сами модели, чтобы они зарегистрировались
-from app.models import User, Purchase, MessageHistory, GenerationTask 
-
-from app.models import User, Purchase, MessageHistory, GenerationTask 
+from app.models import User, Purchase, MessageHistory, GenerationTask, SystemStatus
 
 target_metadata = Base.metadata
 

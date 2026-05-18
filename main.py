@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -57,7 +57,10 @@ sys.stdout = PrintLogger(logger)
 
 # Импорты после настройки логирования
 from aiogram import Bot, Dispatcher
+from sqlalchemy import update
+
 from app.database import engine, Base, async_session
+from app.models import SystemStatus
 from app.handlers import start, generation, payment, crypto_payment, menu_actions, admin, admin_scenarios
 from app.handlers.generation_flow import preflight_router, video_router
 from app.middlewares.album import AlbumMiddleware
@@ -110,6 +113,27 @@ async def cleanup_image_hashes_job() -> None:
         deleted_rows = await cleanup_expired_hashes(session)
     if deleted_rows:
         logger.info("🧹 Removed %s expired image hashes", deleted_rows)
+
+
+async def heartbeat_worker() -> None:
+    """Пишет UTC-время в system_status каждые 60 с; сбой не роняет основной процесс."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            async with async_session() as session:
+                await session.execute(
+                    update(SystemStatus)
+                    .where(SystemStatus.id == 1)
+                    .values(
+                        last_heartbeat=datetime.now(timezone.utc).replace(tzinfo=None)
+                    )
+                )
+                await session.commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("Heartbeat update failed (ignored): %s", e, exc_info=True)
+
 
 async def main():
     
@@ -177,6 +201,9 @@ async def main():
     # Запускаем планировщик
     scheduler.start()
     logger.info("📅 Планировщик запущен: отчёты будут отправляться в 04:30, image_hashes чистятся каждый час")
+
+    asyncio.create_task(heartbeat_worker(), name="heartbeat_worker")
+    logger.info("💓 Heartbeat worker scheduled (system_status every 60s)")
 
     # Сервер aiohttp на 5001: вебхуки оплат + публичный GET /health (см. app/webhook_server.py)
     await start_webhook_server(bot)
