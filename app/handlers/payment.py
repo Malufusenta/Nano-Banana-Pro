@@ -685,14 +685,15 @@ async def process_successful_payment(message: types.Message, bot: Bot):
         try:
             new_bal = await get_user_balance(session, user_id)
             stats = await get_user_financial_stats(session, user_id)
-            
+            db_user = await session.scalar(select(User).where(User.telegram_id == user_id))
+
             await log_payment(
-                bot, 
-                message.from_user, 
-                f"{total_amount} ⭐️", 
-                f"{bananas_count} {suffix} (Stars)", 
-                new_bal, 
-                stats=stats
+                bot,
+                db_user or message.from_user,
+                f"{total_amount} ⭐️",
+                f"{bananas_count} {suffix} (Stars)",
+                new_bal,
+                stats=stats,
             )
         except Exception as e:
             print(f"Log Error: {e}")

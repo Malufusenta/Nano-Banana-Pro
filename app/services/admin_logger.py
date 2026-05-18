@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from aiogram import Bot, html
 from app import config
 import logging
@@ -184,10 +184,31 @@ async def log_new_user(bot: Bot, user, deep_link: str = None):
     )
     asyncio.create_task(send_log(bot, text))
 
+def _format_member_since_line(stats: dict | None, user) -> str:
+    member_since = stats.get("member_since") if stats else None
+    days = stats.get("days_with_us") if stats else None
+    if not member_since and getattr(user, "created_at", None):
+        member_since = user.created_at
+        try:
+            days = (
+                datetime.now(timezone.utc) - member_since.replace(tzinfo=timezone.utc)
+            ).days
+        except Exception:
+            days = (datetime.now() - member_since).days
+    if not member_since:
+        return ""
+    reg_date = member_since.strftime("%d.%m.%Y")
+    if days is not None:
+        return f"С нами: <b>{reg_date}</b> ({days} дн.)\n"
+    return f"С нами: <b>{reg_date}</b>\n"
+
+
 # 👇 ЗАМЕНИТЬ ФУНКЦИЮ log_payment НА ЭТУ
 
 async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dict = None, currency: str = None):
     username = f"@{user.username}" if user.username else "Нет"
+    display_id = getattr(user, "telegram_id", None) or user.id
+    member_line = _format_member_since_line(stats, user)
     
     # Анализируем статус
     count = stats.get("count", 1) if stats else 1
@@ -230,7 +251,8 @@ async def log_payment(bot: Bot, user, amount, item_name, new_balance, stats: dic
         "💰 <b>НОВАЯ ПРОДАЖА!</b>\n"
         "➖➖➖➖➖➖➖\n"
         # 👇 УБРАЛ <code>, так как твой send_log теперь делает это сам!
-        f"Клиент: {username} (ID: {user.id})\n" 
+        f"Клиент: {username} (ID: {display_id})\n"
+        f"{member_line}"
         f"Сумма: <b>{amount} {currency}</b>\n"
         f"Товар: {item_name}\n"
         f"----------------\n"

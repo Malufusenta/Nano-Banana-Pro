@@ -17,7 +17,7 @@ from app.services.admin_logger import log_video_generation_success
 from app.models import User
 from sqlalchemy import select
 from app.models import VideoGenerationTask, User
-from app.services.user_service import add_paid_balance
+from app.services.user_service import add_paid_balance, get_user_locale
 from app.config import KLING_API_KEY, BOT_TOKEN
 from app.services.i18n import t
 
@@ -306,11 +306,14 @@ async def download_and_send_video(
     video_url: str,
     session: AsyncSession,
     task_id: str,
-    locale: str = "en",
+    locale: str | None = None,
 ):
     """
     Скачивает видео и отправляет пользователю
     """
+    if locale is None:
+        locale = await get_user_locale(session, user_id)
+
     temp_file = None
     
     try:

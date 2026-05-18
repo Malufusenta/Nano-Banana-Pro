@@ -67,6 +67,7 @@ class ComplaintFilterMiddleware(BaseMiddleware):
         "это не я",
         "совсем не я",
         "вообще не я",
+        "говно",
     ]
 
     GENERATION_VERBS = [

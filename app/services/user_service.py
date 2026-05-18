@@ -352,12 +352,25 @@ async def get_user_financial_stats(session, user_id: int):
     result = await session.execute(stmt)
     count, total_spent = result.fetchone()
 
+    member_since = None
+    days_with_us = None
+    if user and user.created_at:
+        member_since = user.created_at
+        try:
+            days_with_us = (
+                datetime.now(timezone.utc) - member_since.replace(tzinfo=timezone.utc)
+            ).days
+        except Exception:
+            days_with_us = (datetime.now() - member_since).days
+
     return {
         "count": count or 0,
         "total_spent": total_spent or 0,
         "total_spent_usd": float(user.total_revenue_usd) if user else 0.0,
         "total_spent_ton": float(user.total_revenue_ton) if user else 0.0,
-        "source": source
+        "source": source,
+        "member_since": member_since,
+        "days_with_us": days_with_us,
     }
 
 async def get_user_admin_card_data(session: AsyncSession, user_id: int):
