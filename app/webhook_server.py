@@ -33,7 +33,6 @@ from app.services import yandex_metrica
 WEBHOOK_PORT = 5001
 WEBHOOK_PATH = "/yookassa_webhook"
 WEBHOOK_CRYPTO_PAY_PATH = "/webhooks/crypto-pay"
-UPTIMEROBOT_ALERT_PATH = "/uptimerobot-alert"
 
 logger = logging.getLogger(__name__)
 
@@ -296,112 +295,6 @@ async def handle_yookassa(request):
         print(f"🔴 Webhook Error: {e}")
         return web.Response(status=500)
 
-
-async def _parse_uptimerobot_payload(request) -> dict:
-    content_type = (request.content_type or "").lower()
-
-    if "application/json" in content_type:
-        try:
-            data = await request.json()
-            return data if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, ValueError):
-            return {}
-
-    if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
-        try:
-            post_data = await request.post()
-            return dict(post_data)
-        except Exception:
-            return {}
-
-    try:
-        data = await request.json()
-        return data if isinstance(data, dict) else {}
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    try:
-        post_data = await request.post()
-        return dict(post_data)
-    except Exception:
-        return {}
-
-
-def _uptimerobot_field(payload: dict, *keys: str) -> str:
-    for key in keys:
-        raw = payload.get(key)
-        if raw is None:
-            continue
-        if isinstance(raw, (list, tuple)):
-            raw = raw[0] if raw else ""
-        return str(raw)
-    return ""
-
-
-def _uptimerobot_alert_type(payload: dict) -> int | None:
-    raw = payload.get("alertType") or payload.get("alert_type")
-    if raw is None:
-        return None
-    if isinstance(raw, (list, tuple)):
-        raw = raw[0] if raw else None
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
-
-
-async def handle_uptimerobot_alert(request):
-    try:
-        payload = await _parse_uptimerobot_payload(request)
-        logger.info(
-            "UptimeRobot webhook: method=%s path=%s content_type=%s payload=%s",
-            request.method,
-            request.path_qs,
-            request.content_type,
-            payload,
-        )
-
-        monitor_name = _uptimerobot_field(payload, "monitorFriendlyName", "monitor_friendly_name") or "—"
-        alert_details = _uptimerobot_field(payload, "alertDetails", "alert_details")
-        alert_type = _uptimerobot_alert_type(payload)
-
-        if alert_type == 1:
-            text = f"🔴 СЕРВЕР УПАЛ!\n{monitor_name}\n{alert_details}"
-        elif alert_type == 2:
-            text = f"✅ СЕРВЕР ВОССТАНОВИЛСЯ!\n{monitor_name}\n{alert_details}"
-        else:
-            logger.warning("UptimeRobot webhook: unknown alertType=%s", payload.get("alertType"))
-            return web.json_response({"ok": True})
-
-        admin_tg_id = config.ADMIN_TG_ID
-        if not admin_tg_id:
-            logger.warning("UptimeRobot webhook: ADMIN_TG_ID is not set, notification skipped")
-            return web.json_response({"ok": True})
-
-        if not config.BOT_TOKEN:
-            logger.warning("UptimeRobot webhook: BOT_TOKEN is not set, notification skipped")
-            return web.json_response({"ok": True})
-
-        try:
-            admin_chat_id = int(admin_tg_id)
-        except (TypeError, ValueError):
-            logger.warning("UptimeRobot webhook: invalid ADMIN_TG_ID=%r", admin_tg_id)
-            return web.json_response({"ok": True})
-
-        bot_instance = request.app["bot"]
-        await bot_instance.send_message(admin_chat_id, text)
-        logger.info(
-            "UptimeRobot alert sent to admin chat_id=%s alertType=%s monitor=%s",
-            admin_chat_id,
-            alert_type,
-            monitor_name,
-        )
-        return web.json_response({"ok": True})
-    except Exception as e:
-        logger.exception("UptimeRobot webhook error: %s", e)
-        return web.Response(status=500)
-
-
 async def start_webhook_server(bot: Bot):
     app = web.Application()
     app["bot"] = bot
@@ -409,7 +302,6 @@ async def start_webhook_server(bot: Bot):
     app.router.add_post(WEBHOOK_PATH, handle_yookassa)
     app.router.add_post(WEBHOOK_CRYPTO_PAY_PATH, handle_crypto_pay_webhook)
     app.router.add_post("/kling_webhook", handle_kling_callback)
-    app.router.add_post(UPTIMEROBOT_ALERT_PATH, handle_uptimerobot_alert)
     app.router.add_get("/health", handle_health)
 
     runner = web.AppRunner(app)
