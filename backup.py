@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,15 @@ LOG = logging.getLogger("backup")
 
 MAX_BACKUPS = int(os.getenv("MAX_BACKUPS", "7"))
 R2_PREFIX = os.getenv("BACKUP_R2_PREFIX", "postgres/")
+
+_DELETE_OLD_MESSAGES_SQL = """
+DELETE FROM message_history
+WHERE id IN (
+    SELECT id FROM message_history
+    WHERE created_at < NOW() - INTERVAL '14 days'
+    LIMIT 10000
+)
+""".strip()
 
 
 def setup_logging() -> None:
@@ -67,11 +77,79 @@ def parse_database_url(url: str) -> dict[str, str]:
     }
 
 
-def run_pg_dump(db: dict[str, str], output_path: str) -> float:
-    """Создать сжатый SQL-дамп через pg_dump | gzip."""
+def _pg_env(db: dict[str, str]) -> dict[str, str]:
     env = os.environ.copy()
     if db["password"]:
         env["PGPASSWORD"] = db["password"]
+    return env
+
+
+def _run_psql_sql(db: dict[str, str], sql: str) -> int:
+    """Выполнить SQL через psql; для DELETE вернуть число удалённых строк."""
+    cmd = [
+        "psql",
+        "-h",
+        db["host"],
+        "-p",
+        db["port"],
+        "-U",
+        db["user"],
+        "-d",
+        db["dbname"],
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        sql,
+    ]
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        env=_pg_env(db),
+        check=False,
+    )
+    if result.returncode != 0:
+        err = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"psql завершился с кодом {result.returncode}: {err}")
+
+    combined = f"{result.stdout}\n{result.stderr}"
+    match = re.search(r"DELETE\s+(\d+)", combined, re.IGNORECASE)
+    return int(match.group(1)) if match else 0
+
+
+def prune_old_message_history(db: dict[str, str]) -> int:
+    """Удалить message_history старше 14 дней батчами по 10000 до полной очистки."""
+    LOG.info("Очистка message_history старше 14 дней (батчи по 10000)")
+    total_deleted = 0
+    batch = 0
+
+    while True:
+        deleted = _run_psql_sql(db, _DELETE_OLD_MESSAGES_SQL)
+        if deleted == 0:
+            break
+        batch += 1
+        total_deleted += deleted
+        LOG.info(
+            "message_history: батч %d — удалено %d (всего %d)",
+            batch,
+            deleted,
+            total_deleted,
+        )
+
+    if total_deleted:
+        LOG.info(
+            "Очистка message_history завершена: всего удалено %d записей",
+            total_deleted,
+        )
+    else:
+        LOG.info("Очистка message_history: старых записей не найдено")
+
+    return total_deleted
+
+
+def run_pg_dump(db: dict[str, str], output_path: str) -> float:
+    """Создать сжатый SQL-дамп через pg_dump | gzip."""
+    env = _pg_env(db)
 
     cmd = [
         "pg_dump",
@@ -253,6 +331,7 @@ def notify_backup_success(
     object_key: str,
     size_mb: float,
     pruned_count: int,
+    messages_deleted: int,
 ) -> None:
     bucket = os.environ.get("R2_BUCKET_NAME", "?")
     text = (
@@ -261,6 +340,7 @@ def notify_backup_success(
         f"📦 Файл: {object_key}\n"
         f"📊 Размер: {size_mb:.2f} MB\n"
         f"☁️ R2: {bucket}\n"
+        f"💬 message_history (>14 дн.): удалено {messages_deleted}\n"
         f"🧹 Удалено лишних (лимит {MAX_BACKUPS}): {pruned_count}"
     )
     send_telegram_message(text)
@@ -289,6 +369,7 @@ def main() -> int:
 
     try:
         db = parse_database_url(db_url)
+        messages_deleted = prune_old_message_history(db)
         size_mb = run_pg_dump(db, local_path)
         upload_to_r2(local_path, object_key)
 
@@ -309,6 +390,7 @@ def main() -> int:
             object_key=object_key,
             size_mb=size_mb,
             pruned_count=pruned_count,
+            messages_deleted=messages_deleted,
         )
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         LOG.error("%s", exc)
