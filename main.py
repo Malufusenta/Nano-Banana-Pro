@@ -116,10 +116,10 @@ async def cleanup_image_hashes_job() -> None:
 
 
 async def heartbeat_worker() -> None:
-    """Пишет UTC-время в system_status каждые 60 с; сбой не роняет основной процесс."""
+    """Пишет UTC-время в system_status каждые 30 с; сбой не роняет основной процесс."""
     while True:
         try:
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
             async with async_session() as session:
                 await session.execute(
                     update(SystemStatus)
@@ -203,7 +203,7 @@ async def main():
     logger.info("📅 Планировщик запущен: отчёты будут отправляться в 04:30, image_hashes чистятся каждый час")
 
     asyncio.create_task(heartbeat_worker(), name="heartbeat_worker")
-    logger.info("💓 Heartbeat worker scheduled (system_status every 60s)")
+    logger.info("💓 Heartbeat worker scheduled (system_status every 30s)")
 
     # Сервер aiohttp на 5001: вебхуки оплат + публичный GET /health (см. app/webhook_server.py)
     await start_webhook_server(bot)

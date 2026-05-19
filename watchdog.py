@@ -22,8 +22,9 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 logger = logging.getLogger("watchdog")
 
 CHECK_INTERVAL_SEC = int(os.getenv("CHECK_INTERVAL_SEC", str(5 * 60)))
-STALE_AFTER = timedelta(minutes=5)
-ALERT_TEXT = "🚨 БОТ ЗАВИС! Пульс не обновлялся 5+ мин"
+STALE_AFTER = timedelta(minutes=1)
+ALERT_TEXT = "🚨 БОТ ЗАВИС! Пульс не обновлялся 1+ мин"
+ALERT_RECOVERED = "✅ Бот восстановился!"
 
 
 def _require_env(name: str) -> str:
@@ -78,8 +79,11 @@ async def send_alert(
 
 
 async def _one_check(
-    session_maker: async_sessionmaker, token: str, alert_chat_ids: list[str | int]
-) -> None:
+    session_maker: async_sessionmaker,
+    token: str,
+    alert_chat_ids: list[str | int],
+    bot_was_alive: bool,
+) -> bool:
     now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
     async with session_maker() as session:
         result = await session.execute(
@@ -91,7 +95,7 @@ async def _one_check(
         logger.info(
             "No row system_status id=1 (run alembic upgrade); skip alert this cycle"
         )
-        return
+        return bot_was_alive
 
     age = now_utc_naive - last
     if age > STALE_AFTER:
@@ -102,8 +106,20 @@ async def _one_check(
         )
         async with httpx.AsyncClient() as client:
             await send_alert(client, token, alert_chat_ids, ALERT_TEXT)
-    else:
-        logger.info("Pulse OK: last_heartbeat=%s age=%s", last, age)
+        return False
+
+    if not bot_was_alive:
+        logger.info(
+            "Bot recovered: last_heartbeat=%s age=%s — sending Telegram alert",
+            last,
+            age,
+        )
+        async with httpx.AsyncClient() as client:
+            await send_alert(client, token, alert_chat_ids, ALERT_RECOVERED)
+        return True
+
+    logger.info("Pulse OK: last_heartbeat=%s age=%s", last, age)
+    return True
 
 
 async def watchdog_loop() -> None:
@@ -130,10 +146,14 @@ async def watchdog_loop() -> None:
         alert_chat_ids,
     )
 
+    bot_was_alive = True
+
     try:
         while True:
             try:
-                await _one_check(session_maker, token, alert_chat_ids)
+                bot_was_alive = await _one_check(
+                    session_maker, token, alert_chat_ids, bot_was_alive
+                )
             except Exception:
                 logger.exception("Watchdog check failed")
             await asyncio.sleep(CHECK_INTERVAL_SEC)
