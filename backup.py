@@ -14,7 +14,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from urllib.parse import unquote, urlparse
 
 import boto3
@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 LOG = logging.getLogger("backup")
 
-RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "7"))
+MAX_BACKUPS = int(os.getenv("MAX_BACKUPS", "7"))
 R2_PREFIX = os.getenv("BACKUP_R2_PREFIX", "postgres/")
 
 
@@ -162,38 +162,53 @@ def upload_to_r2(local_path: str, object_key: str) -> None:
     LOG.info("Загрузка завершена успешно")
 
 
-def prune_old_backups() -> None:
-    """Удалить объекты в R2 старше RETENTION_DAYS дней."""
+def prune_old_backups() -> int:
+    """Оставить в R2 только последние MAX_BACKUPS файлов с префиксом BACKUP_R2_PREFIX."""
     bucket = os.environ["R2_BUCKET_NAME"]
     client = get_r2_client()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
 
     LOG.info(
-        "Очистка бэкапов в R2 старше %d дн. (префикс %r)",
-        RETENTION_DAYS,
+        "Очистка бэкапов в R2: оставить не более %d (префикс %r)",
+        MAX_BACKUPS,
         R2_PREFIX,
     )
 
     paginator = client.get_paginator("list_objects_v2")
-    deleted = 0
+    objects: list[dict] = []
 
     for page in paginator.paginate(Bucket=bucket, Prefix=R2_PREFIX):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            last_modified = obj["LastModified"]
-            if last_modified.tzinfo is None:
-                last_modified = last_modified.replace(tzinfo=timezone.utc)
+        objects.extend(page.get("Contents", []))
 
-            if last_modified < cutoff:
-                client.delete_object(Bucket=bucket, Key=key)
-                LOG.info("Удалён старый бэкап: %s (%s)", key, last_modified.date())
-                deleted += 1
+    if not objects:
+        LOG.info("Объектов с префиксом %r не найдено", R2_PREFIX)
+        return 0
 
-    if deleted:
-        LOG.info("Удалено объектов: %d", deleted)
-    else:
-        LOG.info("Старых бэкапов для удаления не найдено")
-    return deleted
+    objects.sort(key=lambda obj: obj["LastModified"])
+    excess = len(objects) - MAX_BACKUPS
+    if excess <= 0:
+        LOG.info(
+            "В bucket %d файл(ов), лимит %d — удаление не требуется",
+            len(objects),
+            MAX_BACKUPS,
+        )
+        return 0
+
+    to_delete = objects[:excess]
+    for obj in to_delete:
+        key = obj["Key"]
+        last_modified = obj["LastModified"]
+        if last_modified.tzinfo is None:
+            last_modified = last_modified.replace(tzinfo=timezone.utc)
+        client.delete_object(Bucket=bucket, Key=key)
+        LOG.info("Удалён старый бэкап: %s (%s)", key, last_modified.isoformat())
+
+    LOG.info(
+        "Удалено объектов: %d (осталось %d из %d)",
+        len(to_delete),
+        len(objects) - len(to_delete),
+        len(objects),
+    )
+    return len(to_delete)
 
 
 def send_telegram_message(text: str) -> bool:
@@ -246,7 +261,7 @@ def notify_backup_success(
         f"📦 Файл: {object_key}\n"
         f"📊 Размер: {size_mb:.2f} MB\n"
         f"☁️ R2: {bucket}\n"
-        f"🧹 Удалено старых (> {RETENTION_DAYS} дн.): {pruned_count}"
+        f"🧹 Удалено лишних (лимит {MAX_BACKUPS}): {pruned_count}"
     )
     send_telegram_message(text)
 
