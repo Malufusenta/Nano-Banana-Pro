@@ -176,22 +176,32 @@ async def enter_broadcast_generation_preflight(
     prompt: str,
     ratio: str,
     model: str,
-    file_id: str,
+    file_id: str | None = None,
+    file_ids: list[str] | None = None,
 ) -> None:
     """Собраны промпт + фото (рассылка/post link) → preflight как при обычной отправке фото."""
     locale_pf = _preflight_locale(message.from_user)
-    url = await get_photo_url(bot, file_id)
-    if not url:
+    ids = list(file_ids or [])
+    if file_id:
+        ids.append(file_id)
+    image_urls: list[str] = []
+    for fid in ids:
+        url = await get_photo_url(bot, fid)
+        if url:
+            image_urls.append(url)
+    if not image_urls:
         await message.answer(t("generation.msg.photo_fetch_failed", locale_pf))
         return
     await state.update_data(
         from_broadcast=False,
         broadcast_prompt=None,
         broadcast_ratio=None,
+        pending_param_photo_file_id=None,
+        pending_param_photo_file_ids=None,
     )
     await state.update_data(
         pf_prompt=prompt,
-        pf_image_urls=[url],
+        pf_image_urls=image_urls,
         pf_ratio=ratio,
         pf_model=model,
         is_broadcast_gen=True,
@@ -300,9 +310,48 @@ def get_categories_kb():
 # =====================================================================
 # ВХОДНЫЕ ТОЧКИ
 # =====================================================================
-@router.message(F.chat.type == "private", F.media_group_id, StateFilter(GenState.free_mode, None, GenState.preflight_check, GenState.selecting_ratio, GenState.retry_waiting_photos))
+@router.message(
+    F.chat.type == "private",
+    F.media_group_id,
+    StateFilter(
+        GenState.free_mode,
+        None,
+        GenState.preflight_check,
+        GenState.selecting_ratio,
+        GenState.retry_waiting_photos,
+        GenState.waiting_for_prompt_photo,
+        GenState.waiting_for_prompt_text,
+    ),
+)
 async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot, album: list[types.Message] = None):
     """Обработка альбомов (2-10 фото)"""
+
+    messages = album if album else [message]
+    current_state = await state.get_state()
+
+    # Post link / рассылка: альбом до ответа на вопрос с {value}
+    if current_state == GenState.waiting_for_prompt_text.state:
+        data = await state.get_data()
+        q = (data.get("param_question_text") or "").strip()
+        locale = _preflight_locale(message.from_user)
+        if not q:
+            await message.answer(t("prompt.answer_first", locale))
+            return
+        file_ids = []
+        for msg in messages:
+            if msg.photo:
+                file_ids.append(msg.photo[-1].file_id)
+        if not file_ids:
+            await message.answer(t("generation.msg.photo_fetch_failed", locale))
+            return
+        await state.update_data(
+            pending_param_photo_file_ids=file_ids,
+            pending_param_photo_file_id=file_ids[0],
+        )
+        await send_param_prompt_photo_before_text_error(
+            message.bot, message.chat.id, q, locale=locale
+        )
+        return
 
     # 🔥 СОХРАНЯЕМ BROADCAST ДАННЫЕ ДО ОЧИСТКИ STATE 🔥
     data = await state.get_data()
@@ -324,8 +373,7 @@ async def handle_album_input(message: types.Message, state: FSMContext, bot: Bot
         # 🔥 ВОССТАНАВЛИВАЕМ force_pro_mode ЕСЛИ БЫЛ
     if force_pro_mode:
         await state.update_data(force_pro_mode=True)
-    
-    messages = album if album else [message]
+
     count = len(messages)
     locale = _preflight_locale(message.from_user)
     
@@ -723,20 +771,24 @@ async def handle_waiting_for_prompt_text_answer(message: types.Message, state: F
     final_prompt = apply_value_to_main_prompt(main_prompt, raw)
     ratio = data.get("broadcast_ratio", "1:1")
     model = data.get("broadcast_model", "standard")
+    cached_fids = list(data.get("pending_param_photo_file_ids") or [])
     cached_fid = data.get("pending_param_photo_file_id")
+    if cached_fid and cached_fid not in cached_fids:
+        cached_fids.append(cached_fid)
 
-    if cached_fid:
+    if cached_fids:
         await state.update_data(
             param_main_prompt_template=None,
             param_question_text=None,
             pending_param_photo_file_id=None,
+            pending_param_photo_file_ids=None,
         )
         await enter_broadcast_generation_preflight(
             message, state, message.bot,
             prompt=final_prompt,
             ratio=ratio,
             model=model,
-            file_id=cached_fid,
+            file_ids=cached_fids,
         )
         return
 
@@ -765,7 +817,10 @@ async def _cache_photo_while_waiting_for_prompt_text(
         locale = resolve_locale(message.from_user.language_code if message.from_user else None)
         await message.answer(t("prompt.answer_first", locale))
         return
-    await state.update_data(pending_param_photo_file_id=file_id)
+    await state.update_data(
+        pending_param_photo_file_id=file_id,
+        pending_param_photo_file_ids=[file_id],
+    )
     loc = resolve_locale(message.from_user.language_code if message.from_user else None)
     await send_param_prompt_photo_before_text_error(
         message.bot, message.chat.id, q, locale=loc

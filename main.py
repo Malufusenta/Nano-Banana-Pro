@@ -71,6 +71,7 @@ from app.middlewares.locale import LocaleMiddleware
 from app.services.yandex_metrica import init_metrica_service
 from app.services.analytics_service import get_analytics_report, format_report_message
 from app.services.image_hash_service import cleanup_expired_hashes
+from app.services.db_monitor import run_db_monitoring
 from app.webhook_server import start_webhook_server
 from app import config
 
@@ -204,6 +205,9 @@ async def main():
 
     asyncio.create_task(heartbeat_worker(), name="heartbeat_worker")
     logger.info("💓 Heartbeat worker scheduled (system_status every 30s)")
+
+    asyncio.create_task(run_db_monitoring(bot), name="db_monitor")
+    logger.info("🔍 DB monitoring started")
 
     # Сервер aiohttp на 5001: вебхуки оплат + публичный GET /health (см. app/webhook_server.py)
     await start_webhook_server(bot)
