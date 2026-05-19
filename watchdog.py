@@ -21,7 +21,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 logger = logging.getLogger("watchdog")
 
-CHECK_INTERVAL_SEC = 5 * 60
+CHECK_INTERVAL_SEC = int(os.getenv("CHECK_INTERVAL_SEC", str(5 * 60)))
 STALE_AFTER = timedelta(minutes=5)
 ALERT_TEXT = "🚨 БОТ ЗАВИС! Пульс не обновлялся 5+ мин"
 
@@ -33,8 +33,26 @@ def _require_env(name: str) -> str:
     return val
 
 
-async def _send_telegram_alert(
-    client: httpx.AsyncClient, token: str, chat_id: str, message: str
+def _parse_chat_id(raw: str) -> str | int:
+    raw = raw.strip()
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    return raw
+
+
+def _resolve_alert_chat_ids() -> list[str | int]:
+    """ALERT_CHAT_IDS (через запятую) или один ADMIN_TG_ID."""
+    raw = os.getenv("ALERT_CHAT_IDS", "").strip()
+    if raw:
+        chat_ids = [_parse_chat_id(part) for part in raw.split(",") if part.strip()]
+        if not chat_ids:
+            raise RuntimeError("ALERT_CHAT_IDS is set but contains no valid IDs")
+        return chat_ids
+    return [_parse_chat_id(_require_env("ADMIN_TG_ID"))]
+
+
+async def _send_telegram_message(
+    client: httpx.AsyncClient, token: str, chat_id: str | int, message: str
 ) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     response = await client.post(
@@ -45,8 +63,22 @@ async def _send_telegram_alert(
     response.raise_for_status()
 
 
+async def send_alert(
+    client: httpx.AsyncClient,
+    token: str,
+    chat_ids: list[str | int],
+    message: str,
+) -> None:
+    for chat_id in chat_ids:
+        try:
+            await _send_telegram_message(client, token, chat_id, message)
+            logger.info("Telegram alert sent to chat_id=%s", chat_id)
+        except Exception:
+            logger.exception("Failed to send Telegram alert to chat_id=%s", chat_id)
+
+
 async def _one_check(
-    session_maker: async_sessionmaker, token: str, admin_chat_id: str
+    session_maker: async_sessionmaker, token: str, alert_chat_ids: list[str | int]
 ) -> None:
     now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
     async with session_maker() as session:
@@ -68,19 +100,15 @@ async def _one_check(
             last,
             age,
         )
-        try:
-            async with httpx.AsyncClient() as client:
-                await _send_telegram_alert(client, token, admin_chat_id, ALERT_TEXT)
-            logger.info("Telegram alert sent to chat_id=%s", admin_chat_id)
-        except Exception:
-            logger.exception("Failed to send Telegram alert")
+        async with httpx.AsyncClient() as client:
+            await send_alert(client, token, alert_chat_ids, ALERT_TEXT)
     else:
         logger.info("Pulse OK: last_heartbeat=%s age=%s", last, age)
 
 
 async def watchdog_loop() -> None:
     token = _require_env("WATCHDOG_BOT_TOKEN")
-    admin_chat_id = _require_env("ADMIN_TG_ID")
+    alert_chat_ids = _resolve_alert_chat_ids()
 
     database_url = _require_env("DATABASE_URL")
     database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
@@ -95,15 +123,17 @@ async def watchdog_loop() -> None:
     session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
     logger.info(
-        "Watchdog started: check every %ss, alert if last_heartbeat older than %s min",
+        "Watchdog started: check every %ss, alert if last_heartbeat older than %s min, "
+        "alert chats=%s",
         CHECK_INTERVAL_SEC,
         int(STALE_AFTER.total_seconds() // 60),
+        alert_chat_ids,
     )
 
     try:
         while True:
             try:
-                await _one_check(session_maker, token, admin_chat_id)
+                await _one_check(session_maker, token, alert_chat_ids)
             except Exception:
                 logger.exception("Watchdog check failed")
             await asyncio.sleep(CHECK_INTERVAL_SEC)
