@@ -4,6 +4,7 @@
 """
 import aiohttp
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Any, Optional
@@ -144,20 +145,21 @@ class YandexMetricaService:
         self,
         client_id: str,
         order_id: int,
-        revenue: float,
+        revenue: float = 0.0,
         tariff_name: str = None,
+        currency: str = "RUB",
+        purchase_id: int = None,
     ) -> bool:
         """
         Отправка конверсии покупки в Яндекс.Метрику через Measurement Protocol.
 
         Args:
-            client_id: Yandex ClientID (_ym_uid) пользователя
-            order_id: ID покупки из БД
-            revenue: Сумма покупки в рублях
-            tariff_name: Название тарифа (опционально, для логов)
-
-        Returns:
-            bool: True если успешно отправлено
+            client_id:   Yandex ClientID (_ym_uid) пользователя
+            order_id:    ID покупки из БД (используется, если purchase_id не задан)
+            revenue:     Сумма покупки в рублях (передаётся как ценность цели ev)
+            tariff_name: Название тарифа (для логов)
+            currency:    Валюта (cu); всегда должна быть 'RUB' после конвертации
+            purchase_id: ID покупки для трассировки в params и логах
         """
         if not self.enabled:
             logger.info("⏭️ Отправка в Метрику отключена (test mode)")
@@ -167,14 +169,23 @@ class YandexMetricaService:
             logger.warning(f"⚠️ ClientID отсутствует для order {order_id}")
             return False
 
-        log_suffix = f"order={order_id}, revenue={revenue}₽"
+        pid = purchase_id or order_id
+        log_suffix = f"purchase_id={pid}, revenue={revenue}₽, currency={currency}"
         if tariff_name:
             log_suffix += f", tariff={tariff_name}"
+
+        extra: dict[str, Any] = {}
+        if revenue:
+            extra["ev"] = str(round(revenue, 2))
+            extra["cu"] = currency
+        if pid:
+            extra["params"] = json.dumps({"purchase_id": pid})
 
         return await self._send_collect_event(
             client_id,
             PURCHASE_GOAL_ID,
             dl=TELEGRAM_BOT_DL,
+            extra_params=extra or None,
             log_suffix=log_suffix,
         )
 
@@ -215,6 +226,63 @@ class YandexMetricaService:
 
         need_offline = bool(self.bot_start_target and self.token)
         return collect_ok and (not need_offline or offline_ok)
+
+
+async def _run_first_purchase_metrika_effects(
+    db_user,
+    *,
+    purchase_id: int,
+    original_revenue: float,
+    currency: str,
+    payment_system: str,
+    is_first_purchase: bool,
+) -> None:
+    """
+    Отправляет ценность первой покупки в Яндекс.Метрику.
+
+    Конвертирует исходную валюту в RUB и вызывает send_purchase_conversion.
+    TON и прочие неизвестные активы не отправляются (warning в лог).
+    Безопасен: всё обёрнуто в try/except.
+    """
+    if not (db_user and getattr(db_user, "yandex_client_id", None) and is_first_purchase):
+        return
+    if not metrica_service:
+        return
+
+    try:
+        from app.services.currency import stars_to_rub, usd_to_rub
+
+        currency_upper = (currency or "").upper()
+        if currency_upper == "XTR":
+            revenue = await stars_to_rub(int(original_revenue))
+        elif currency_upper in ("USD", "USDT"):
+            revenue = await usd_to_rub(original_revenue)
+        elif currency_upper == "TON":
+            logger.warning(
+                f"⚠️ Metrica: TON конвертация не поддерживается — "
+                f"purchase_id={purchase_id}, user={db_user.telegram_id}. Пропускаем."
+            )
+            return
+        else:
+            revenue = float(original_revenue)
+
+        await metrica_service.send_purchase_conversion(
+            client_id=db_user.yandex_client_id,
+            order_id=purchase_id,
+            revenue=revenue,
+            tariff_name=payment_system,
+            currency="RUB",
+            purchase_id=purchase_id,
+        )
+        logger.info(
+            f"✅ Metrica PURCHASE: user={db_user.telegram_id}, "
+            f"purchase_id={purchase_id}, revenue={revenue}₽, system={payment_system}"
+        )
+    except Exception as e:
+        logger.error(
+            f"❌ Metrica first purchase error: user={db_user.telegram_id}, "
+            f"purchase_id={purchase_id}, err={e}"
+        )
 
 
 # Глобальный экземпляр

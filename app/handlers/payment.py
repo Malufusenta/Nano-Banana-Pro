@@ -99,20 +99,12 @@ async def _run_yookassa_post_commit_effects(
     db_user = None
     stats = None
     new_bal = None
-    successful_purchases_count = 0
 
     try:
         async with async_session() as session:
             stats = await get_user_financial_stats(session, user_id)
             new_bal = await get_user_balance(session, user_id)
             db_user = await session.scalar(select(User).where(User.telegram_id == user_id))
-            if db_user and db_user.yandex_client_id:
-                successful_purchases_count = await session.scalar(
-                    select(func.count(Purchase.id)).where(
-                        Purchase.user_id == user_id,
-                        Purchase.status == "succeeded",
-                    )
-                )
     except Exception as e:
         print(f"Payment side effects preload error: {e}")
 
@@ -122,17 +114,14 @@ async def _run_yookassa_post_commit_effects(
         except Exception as e:
             print(f"Log Error: {e}")
 
-    if db_user and db_user.yandex_client_id and yandex_metrica.metrica_service:
-        try:
-            if is_first_purchase and successful_purchases_count == 1:
-                await yandex_metrica.metrica_service.send_purchase_conversion(
-                    client_id=db_user.yandex_client_id,
-                    order_id=purchase_id,
-                    revenue=amount_rub,
-                    tariff_name=item_name,
-                )
-        except Exception as e:
-            print(f"Metrica Error: {e}")
+    await yandex_metrica._run_first_purchase_metrika_effects(
+        db_user,
+        purchase_id=purchase_id,
+        original_revenue=float(amount_rub),
+        currency="RUB",
+        payment_system=item_name,
+        is_first_purchase=is_first_purchase,
+    )
 
 
 def build_shop_keyboard(locale: str) -> InlineKeyboardBuilder:
@@ -663,30 +652,31 @@ async def process_successful_payment(message: types.Message, bot: Bot):
     
     # Начисляем бананы
     async with async_session() as session:
-        await create_purchase_record(session, user_id, total_amount, bananas_count)
+        purchase = await create_purchase_record(session, user_id, total_amount, bananas_count)
+        purchase_id = purchase.id
         await mark_purchase_as_succeeded(session, user_id, total_amount, bananas_count)
-        await session.commit()  # ← ДОБАВЬ ЭТУ СТРОКУ!
+        await session.commit()
 
-        # Обновляем аналитику для Stars
+        # Обновляем аналитику для Stars (здесь выставляется is_first_purchase)
         await update_purchase_analytics(
-            session, 
-            user_id, 
+            session,
+            user_id,
             total_amount,
-            "Telegram Stars",  # ← Чтобы отличить от рублей
+            "Telegram Stars",
             payment_id=None,
             payment_method="telegram_stars"
         )
         await admin_change_balance(session, user_id, bananas_count)
         await set_last_payment_method(session, user_id, "telegram_stars")
-        await session.commit()  # ← И ЕЩЁ ОДИН COMMIT В КОНЦЕ
+        await session.commit()
 
-        
-        # Логируем платеж
+        db_user = None
+        purchase_row = None
         try:
             new_bal = await get_user_balance(session, user_id)
             stats = await get_user_financial_stats(session, user_id)
             db_user = await session.scalar(select(User).where(User.telegram_id == user_id))
-
+            purchase_row = await session.scalar(select(Purchase).where(Purchase.id == purchase_id))
             await log_payment(
                 bot,
                 db_user or message.from_user,
@@ -697,6 +687,19 @@ async def process_successful_payment(message: types.Message, bot: Bot):
             )
         except Exception as e:
             print(f"Log Error: {e}")
+
+        try:
+            if db_user and purchase_row:
+                await yandex_metrica._run_first_purchase_metrika_effects(
+                    db_user,
+                    purchase_id=purchase_id,
+                    original_revenue=float(total_amount),
+                    currency="XTR",
+                    payment_system="Telegram Stars",
+                    is_first_purchase=bool(purchase_row.is_first_purchase),
+                )
+        except Exception as e:
+            print(f"Metrica Error Stars: {e}")
     
     await message.answer(
         t("payment.success", locale, amount=bananas_count, suffix=suffix),

@@ -72,20 +72,12 @@ async def _run_yookassa_post_commit_effects(
     db_user = None
     stats = None
     new_bal = None
-    successful_purchases_count = 0
 
     try:
         async with async_session() as session:
             stats = await get_user_financial_stats(session, user_id)
             new_bal = await get_user_balance(session, user_id)
             db_user = await session.scalar(select(User).where(User.telegram_id == user_id))
-            if db_user and db_user.yandex_client_id:
-                successful_purchases_count = await session.scalar(
-                    select(func.count(Purchase.id)).where(
-                        Purchase.user_id == user_id,
-                        Purchase.status == "succeeded",
-                    )
-                )
     except Exception as e:
         print(f"Webhook side effects preload error: {e}")
 
@@ -102,23 +94,14 @@ async def _run_yookassa_post_commit_effects(
         except Exception as e:
             print(f"Webhook log payment error: {e}")
 
-    if db_user and db_user.yandex_client_id and yandex_metrica.metrica_service:
-        try:
-            if is_first_purchase and successful_purchases_count == 1:
-                await yandex_metrica.metrica_service.send_purchase_conversion(
-                    client_id=db_user.yandex_client_id,
-                    order_id=purchase_id,
-                    revenue=amount_rub,
-                    tariff_name=tariff_name,
-                )
-                print(f"✅ В Метрику отправлена ПЕРВАЯ покупка юзера {user_id}")
-            else:
-                print(
-                    f"⏭️ Повторная покупка юзера {user_id} "
-                    f"({successful_purchases_count}-я). В Метрику не отправляем."
-                )
-        except Exception as e:
-            print(f"Webhook metrica error: {e}")
+    await yandex_metrica._run_first_purchase_metrika_effects(
+        db_user,
+        purchase_id=purchase_id,
+        original_revenue=float(amount_rub),
+        currency="RUB",
+        payment_system=tariff_name,
+        is_first_purchase=is_first_purchase,
+    )
 
     if db_user:
         try:
@@ -198,6 +181,7 @@ async def handle_crypto_pay_webhook(request):
                 bot=bot_instance,
             )
             if result:
+                purchase_id_crypto, is_first_crypto = result
                 logger.info(
                     f"✅ Crypto Pay начислено: user_id={parsed['user_id']}, bananas={parsed['bananas']}, "
                     f"invoice_id={invoice_id}, paid_asset={inv.get('paid_asset')}, "
@@ -220,6 +204,14 @@ async def handle_crypto_pay_webhook(request):
                     new_bal,
                     stats=stats,
                     currency=paid_asset,
+                )
+                await yandex_metrica._run_first_purchase_metrika_effects(
+                    db_user,
+                    purchase_id=purchase_id_crypto,
+                    original_revenue=price_usd,
+                    currency=paid_asset,
+                    payment_system=f"Crypto Pay {paid_asset}",
+                    is_first_purchase=is_first_crypto,
                 )
             else:
                 logger.warning(

@@ -5,7 +5,7 @@ import calendar
 from datetime import datetime, timedelta
 from app.models import VideoGenerationTask, FixedExpense
 from app import config
-from app.services.currency import get_usd_rate
+from app.services.currency import get_usd_rate, stars_to_rub
 
 
 async def get_analytics_report(session: AsyncSession, date_from: datetime, date_to: datetime):
@@ -72,13 +72,12 @@ async def get_analytics_report(session: AsyncSession, date_from: datetime, date_
     stars_revenue = float(stars_data.stars_revenue or 0)
     stars_count = stars_data.stars_count or 0
 
-    # Конвертация Stars в рубли: 1 звезда = $0.013, минус комиссия Telegram 30%
-    from app.services.currency import get_usd_rate
+    # Конвертация Stars в рубли: Gross-сумма (без вычета 30% комиссии)
     usd_rate = await get_usd_rate()
     stars_revenue_usd = round(stars_revenue * 0.013, 2)
-    stars_revenue_rub = round(stars_revenue_usd * usd_rate, 2)
-    stars_net_usd = stars_revenue_usd  # без комиссии
-    stars_net_rub = stars_revenue_rub  # без комиссии
+    stars_revenue_rub = await stars_to_rub(stars_revenue)
+    stars_net_usd = stars_revenue_usd
+    stars_net_rub = stars_revenue_rub
 
     # Рублевая выручка (revenue_query уже исключил Stars)
     rub_revenue = total_revenue

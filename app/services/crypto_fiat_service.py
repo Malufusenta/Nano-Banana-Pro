@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app import config
-from app.models import CryptoPayInvoice, User
+from app.models import CryptoPayInvoice, Purchase, User
 from app.services.i18n import t
 from app.services.payment_service import mark_purchase_as_succeeded, update_purchase_analytics
 from app.services.user_service import add_paid_balance, set_last_payment_method
@@ -59,9 +59,11 @@ async def fulfill_crypto_fiat_invoice(
     paid_asset: str = "USDT",
     paid_amount: float = 0.0,
     bot: Bot | None = None,
-) -> bool:
+) -> "tuple[int, bool] | bool":
     """
-    Идемпотентное начисление по fiat-инвойсу. True — начисление выполнено впервые.
+    Идемпотентное начисление по fiat-инвойсу.
+    Возвращает (purchase_id, is_first_purchase) при первичном начислении,
+    False при дубликате.
     """
     row = CryptoPayInvoice(
         invoice_id=invoice_id,
@@ -98,6 +100,15 @@ async def fulfill_crypto_fiat_invoice(
     await set_last_payment_method(session, user_id, "crypto_pay")
     await session.commit()
 
+    # Читаем purchase после коммита, чтобы получить id и флаг is_first_purchase
+    purchase_row = await session.scalar(
+        select(Purchase)
+        .where(Purchase.user_id == user_id, Purchase.payment_id == payment_id)
+        .limit(1)
+    )
+    purchase_result_id = purchase_row.id if purchase_row else 0
+    is_first = bool(purchase_row.is_first_purchase) if purchase_row else False
+
     if bot:
         res = await session.execute(select(User).where(User.telegram_id == user_id))
         db_user = res.scalar_one_or_none()
@@ -112,4 +123,4 @@ async def fulfill_crypto_fiat_invoice(
         except Exception:
             pass
 
-    return True
+    return (purchase_result_id, is_first)
